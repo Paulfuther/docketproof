@@ -1,13 +1,10 @@
 import pytest
 
-from arl.quiz.json_import import (
+from arl.quiz.json_schema import (
     QuizJSONImportError,
-    import_quiz_from_json,
     load_quiz_json_bytes,
     parse_quiz_json,
 )
-
-pytestmark = pytest.mark.django_db
 
 
 def test_parse_document_purpose_and_item_titles():
@@ -76,7 +73,10 @@ def test_long_question_text_is_truncated():
     assert len(questions[0]) == 255
 
 
+@pytest.mark.django_db
 def test_import_creates_quiz_questions_and_yes_no_answers():
+    from arl.quiz.json_import import import_quiz_from_json
+
     quiz, questions = import_quiz_from_json(
         {
             "name": "Site Quiz",

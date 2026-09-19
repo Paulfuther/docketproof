@@ -21,7 +21,7 @@ from .models import (
 
 from arl.user.models import Store
 
-from .json_import import QuizJSONImportError, load_quiz_json_bytes, parse_quiz_json
+from .json_schema import QuizJSONImportError, load_quiz_json_bytes, parse_quiz_json
 
 
 class QuizForm(forms.ModelForm):
