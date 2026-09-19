@@ -5,9 +5,10 @@ db.sqlite3
 .vscode/
 htmlcov/
 .coverage
-*.md
+commands.md
+prod_config.md
 __pycache__
-*.md
+commands.md
 private.key
 *.key
 config.json
@@ -15,6 +16,7 @@ local_settings.py
 db.json
 google.json
 commands.md
+oldstuff.md
 # Django #
 *.log
 *.pot
