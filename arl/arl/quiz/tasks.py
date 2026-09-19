@@ -18,6 +18,7 @@ from arl.helpers import (
 )
 from arl.msg.helpers import create_master_email
 from arl.quiz.models import Checklist, SaltLog
+from arl.quiz.store_address import store_report_context
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
 from django.conf import settings
@@ -168,7 +169,9 @@ def generate_checklist_pdf_task(self, checklist_id: int):
 
     try:
         checklist = (
-            Checklist.objects.select_related("created_by", "submitted_by")
+            Checklist.objects.select_related(
+                "created_by", "submitted_by", "template"
+            )
             .prefetch_related("items")
             .get(pk=checklist_id)
         )
@@ -200,7 +203,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         logger.info("[PDF] fresh pdf_size_bytes=%d (key=%s)", len(pdf_bytes), temp_key)
         # ================== /CHANGED ==================
 
-        # Build Dropbox path (unchanged)
+        # Build Dropbox path: company, checklist type, store, then date
         company_name = slugify(
             getattr(
                 getattr(checklist.created_by, "employer", None), "name", "no-company"
@@ -211,9 +214,24 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         month = today.strftime("%m-%B")
         slug = checklist.slug or slugify(checklist.title) or f"checklist-{checklist.id}"
         filename = f"{store_segment}_{slug}-{checklist.id}.pdf"
-        folder_path = f"/CHECKLISTS/{company_name}/{year}/{month}/{store_segment}"
+        template_name = getattr(getattr(checklist, "template", None), "name", None)
+        checklist_folder = (
+            slugify(template_name or "")
+            or slugify(checklist.title or "")
+            or slugify(checklist.slug or "")
+            or f"checklist-{checklist.id}"
+        )
+        folder_path = (
+            f"/CHECKLISTS/{company_name}/{checklist_folder}/{store_segment}"
+            f"/{year}/{month}"
+        )
         full_file_path = f"{folder_path}/{filename}"
-        logger.info("[PDF] upload_path=%s", full_file_path)
+        logger.info(
+            "[PDF] upload_path=%s checklist_folder=%s store_segment=%s",
+            full_file_path,
+            checklist_folder,
+            store_segment,
+        )
 
         # Upload to Dropbox (unchanged)
         ok, msg = master_upload_file_to_dropbox(pdf_buffer.getvalue(), full_file_path)
@@ -432,8 +450,7 @@ def generate_fresh_checklist_pdf(checklist_id):
         {
             "checklist": checklist,
             "items": items,
-            "store_number": getattr(checklist.store, "number", None),
-            "store_name": getattr(checklist.store, "name", None),
+            **store_report_context(checklist.store),
         },
     )
     logger.debug("[PDF] Rendered HTML for checklist_id=%s", checklist.id)
