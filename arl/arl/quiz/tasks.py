@@ -168,7 +168,9 @@ def generate_checklist_pdf_task(self, checklist_id: int):
 
     try:
         checklist = (
-            Checklist.objects.select_related("created_by", "submitted_by")
+            Checklist.objects.select_related(
+                "created_by", "submitted_by", "template"
+            )
             .prefetch_related("items")
             .get(pk=checklist_id)
         )
@@ -200,7 +202,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         logger.info("[PDF] fresh pdf_size_bytes=%d (key=%s)", len(pdf_bytes), temp_key)
         # ================== /CHANGED ==================
 
-        # Build Dropbox path (includes a folder named after the checklist)
+        # Build Dropbox path: company, then checklist type, then date/store
         company_name = slugify(
             getattr(
                 getattr(checklist.created_by, "employer", None), "name", "no-company"
@@ -211,14 +213,16 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         month = today.strftime("%m-%B")
         slug = checklist.slug or slugify(checklist.title) or f"checklist-{checklist.id}"
         filename = f"{store_segment}_{slug}-{checklist.id}.pdf"
+        template_name = getattr(getattr(checklist, "template", None), "name", None)
         checklist_folder = (
-            slugify(checklist.title)
+            slugify(template_name or "")
+            or slugify(checklist.title or "")
             or slugify(checklist.slug or "")
             or f"checklist-{checklist.id}"
         )
         folder_path = (
-            f"/CHECKLISTS/{company_name}/{year}/{month}"
-            f"/{store_segment}/{checklist_folder}"
+            f"/CHECKLISTS/{company_name}/{checklist_folder}/{year}/{month}"
+            f"/{store_segment}"
         )
         full_file_path = f"{folder_path}/{filename}"
         logger.info(
