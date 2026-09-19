@@ -153,3 +153,29 @@ class ParseChecklistTemplatePayloadTests(unittest.TestCase):
     def test_invalid_json_bytes_raise(self):
         with self.assertRaises(ChecklistImportError):
             parse_checklist_template_bytes(b"{not json")
+
+
+class StoreReportContextTests(unittest.TestCase):
+    def test_joins_nonempty_address_parts(self):
+        from types import SimpleNamespace
+
+        from .store_address import store_report_context
+
+        store = SimpleNamespace(
+            number=123,
+            name=None,
+            address="123 Main St",
+            address_two="",
+            city="London",
+            province="ON",
+        )
+        ctx = store_report_context(store)
+        self.assertEqual(ctx["store_number"], 123)
+        self.assertEqual(ctx["store_address_line"], "123 Main St, London, ON")
+
+    def test_empty_when_store_missing(self):
+        from .store_address import store_report_context
+
+        ctx = store_report_context(None)
+        self.assertEqual(ctx["store_address_line"], "")
+        self.assertIsNone(ctx["store_number"])

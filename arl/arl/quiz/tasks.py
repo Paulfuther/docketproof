@@ -18,6 +18,7 @@ from arl.helpers import (
 )
 from arl.msg.helpers import create_master_email
 from arl.quiz.models import Checklist, SaltLog
+from arl.quiz.store_address import store_report_context
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
 from django.conf import settings
@@ -449,8 +450,7 @@ def generate_fresh_checklist_pdf(checklist_id):
         {
             "checklist": checklist,
             "items": items,
-            "store_number": getattr(checklist.store, "number", None),
-            "store_name": getattr(checklist.store, "name", None),
+            **store_report_context(checklist.store),
         },
     )
     logger.debug("[PDF] Rendered HTML for checklist_id=%s", checklist.id)
