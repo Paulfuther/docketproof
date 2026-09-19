@@ -202,7 +202,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         logger.info("[PDF] fresh pdf_size_bytes=%d (key=%s)", len(pdf_bytes), temp_key)
         # ================== /CHANGED ==================
 
-        # Build Dropbox path: company, then checklist type, then date/store
+        # Build Dropbox path: company, checklist type, store, then date
         company_name = slugify(
             getattr(
                 getattr(checklist.created_by, "employer", None), "name", "no-company"
@@ -221,14 +221,15 @@ def generate_checklist_pdf_task(self, checklist_id: int):
             or f"checklist-{checklist.id}"
         )
         folder_path = (
-            f"/CHECKLISTS/{company_name}/{checklist_folder}/{year}/{month}"
-            f"/{store_segment}"
+            f"/CHECKLISTS/{company_name}/{checklist_folder}/{store_segment}"
+            f"/{year}/{month}"
         )
         full_file_path = f"{folder_path}/{filename}"
         logger.info(
-            "[PDF] upload_path=%s checklist_folder=%s",
+            "[PDF] upload_path=%s checklist_folder=%s store_segment=%s",
             full_file_path,
             checklist_folder,
+            store_segment,
         )
 
         # Upload to Dropbox (unchanged)
