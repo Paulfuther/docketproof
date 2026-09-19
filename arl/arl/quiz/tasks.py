@@ -409,17 +409,22 @@ def generate_fresh_checklist_pdf(checklist_id):
 
     # Build items
     items = []
-    for it in checklist.items.all().order_by("order", "id"):
+    for it in checklist.items.select_related("action_item").order_by("order", "id"):
         photo_url = None
         if it.photo and it.photo.name:
             orig = get_signed_url_for_key(it.photo.name, expires_in=900)
             photo_url = _downscale_for_pdf(orig, max_px=800, jpeg_quality=75)
+        action = it.get_action_item()
         items.append(
             {
                 "text": it.text,
                 "result": it.result,
+                "answer": it.answer,
+                "responsibility": it.responsibility,
+                "text_value": it.text_value,
                 "comment": it.comment,
                 "photo_url": photo_url,
+                "action": action,
             }
         )
     logger.info(
@@ -434,6 +439,7 @@ def generate_fresh_checklist_pdf(checklist_id):
             "items": items,
             "store_number": getattr(checklist.store, "number", None),
             "store_name": getattr(checklist.store, "name", None),
+            "action_items": checklist.action_items.select_related("checklist_item"),
         },
     )
     logger.debug("[PDF] Rendered HTML for checklist_id=%s", checklist.id)

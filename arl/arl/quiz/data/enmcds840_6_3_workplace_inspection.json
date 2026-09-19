@@ -1,0 +1,2379 @@
+{
+  "document": "Workplace Inspection Checklist (BC & ON)",
+  "document_id": "ENMCDS840-6.3",
+  "parent_sop": "ENMCDS840",
+  "parent_sop_title": "Workplace Violence and Harassment Prevention",
+  "effective_date": "2026-02-02",
+  "last_reviewed": "2026-02-02",
+  "purpose": "Tick yes (Y) or no (N) to indicate if items are available or present in your workplace, or N/A for items that do not apply to your workplace. L means this item is the responsibility of the Associate, direct employer, or franchisee, and S means that the item is the responsibility of the supplier, owner, franchisor, employer or gas company.",
+  "instructions": "Once you have completed the inspection checklist, the next step is to create an action plan to address items you answered “No” to above. Refer to section 6.4 Site Security Action Plan Form.",
+  "response_legend": {
+    "Y": "Yes — item available or present",
+    "N": "No — gap; create Site Security Action Plan item (6.4)",
+    "N/A": "Does not apply to this workplace",
+    "L": "Responsibility of Associate / direct employer / franchisee",
+    "S": "Responsibility of supplier / owner / franchisor / gas company"
+  },
+  "schema_hints": {
+    "answer": "Y | N | N/A",
+    "responsibility": "L | S (required when answer is Y or N; optional for N/A)",
+    "on_answer_N": "Create or link ChecklistActionItem (6.4 fields: action_item, action_required, when, who, completion_date, done)"
+  },
+  "pages": 5,
+  "item_count": 80,
+  "yes_no_na_count": 74,
+  "items": [
+    {
+      "id": "WI-001",
+      "section": "Site header",
+      "title": "Site Number & Location",
+      "description": "Site Number & Location",
+      "wording": "Site Number & Location",
+      "notes": null,
+      "response_type": "text",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-002",
+      "section": "Site header",
+      "title": "Completed By (Name)",
+      "description": "Completed By (Name)",
+      "wording": "Completed By (Name)",
+      "notes": null,
+      "response_type": "text",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-003",
+      "section": "Site header",
+      "title": "Position",
+      "description": "Position",
+      "wording": "Position",
+      "notes": null,
+      "response_type": "text",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-004",
+      "section": "Site header",
+      "title": "Completed on (Date)",
+      "description": "Completed on (Date)",
+      "wording": "Completed on (Date)",
+      "notes": null,
+      "response_type": "date",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-005",
+      "section": "Worker Training and Safety",
+      "title": "Have young or new workers been provided with orientation?",
+      "description": "Have young or new workers been provided with orientation?",
+      "wording": "Have young or new workers been provided with orientation?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-006",
+      "section": "Worker Training and Safety",
+      "title": "Do workers understand the hazards and risks of the workplace?",
+      "description": "Do workers understand the hazards and risks of the workplace?",
+      "wording": "Do workers understand the hazards and risks of the workplace?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-007",
+      "section": "Worker Training and Safety",
+      "title": "Have workers been instructed on how to handle potentially violent incidents as specified in Ontario and B.C. Occupational Health and Safety Acts and Regulations and as specified in your workplace violence policies and procedures?",
+      "description": "Have workers been instructed on how to handle potentially violent incidents as specified in Ontario and B.C. Occupational Health and Safety Acts and Regulations and as specified in your workplace violence policies and procedures?",
+      "wording": "Have workers been instructed on how to handle potentially violent incidents as specified in Ontario and B.C. Occupational Health and Safety Acts and Regulations and as specified in your workplace violence policies and procedures?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-008",
+      "section": "Worker Training and Safety",
+      "title": "Have workers been provided with phone numbers and a procedure in the event of an emergency or violent encounter?",
+      "description": "Have workers been provided with phone numbers and a procedure in the event of an emergency or violent encounter?",
+      "wording": "Have workers been provided with phone numbers and a procedure in the event of an emergency or violent encounter?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-009",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware of their responsibilities under the Ontario Occupational Health and Safety Act and Section 116 of the B.C. Workers Compensation Act?",
+      "description": "Are workers aware of their responsibilities under the Ontario Occupational Health and Safety Act and Section 116 of the B.C. Workers Compensation Act?",
+      "wording": "Are workers aware of their responsibilities under the Ontario Occupational Health and Safety Act and Section 116 of the B.C. Workers Compensation Act?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-010",
+      "section": "Worker Training and Safety",
+      "title": "Have workers been provided with propane training if pertinent?",
+      "description": "Have workers been provided with propane training if pertinent?",
+      "wording": "Have workers been provided with propane training if pertinent?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-011",
+      "section": "Worker Training and Safety",
+      "title": "Have workers been provided with high visibility safety vests, and do they understand that they must wear them at all times when outside in proximity to moving vehicles?",
+      "description": "Have workers been provided with high visibility safety vests, and do they understand that they must wear them at all times when outside in proximity to moving vehicles?",
+      "wording": "Have workers been provided with high visibility safety vests, and do they understand that they must wear them at all times when outside in proximity to moving vehicles?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-012",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware that they have the right to consult a physician if they are experiencing symptoms as a result of a violent incident as stated in section 4.2 of the B.C. Occupational Health and Safety Regulation?",
+      "description": "Suncor Energy also offers Associates and Employees access to trauma counselling through Suncor Employee Assistance Professionals.",
+      "wording": "Are workers aware that they have the right to consult a physician if they are experiencing symptoms as a result of a violent incident as stated in section 4.2 of the B.C. Occupational Health and Safety Regulation?",
+      "notes": "Suncor Energy also offers Associates and Employees access to trauma counselling through Suncor Employee Assistance Professionals.",
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-013",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware of a process for reporting and correcting unsafe work situations?",
+      "description": "Are workers aware of a process for reporting and correcting unsafe work situations?",
+      "wording": "Are workers aware of a process for reporting and correcting unsafe work situations?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-014",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware of the process for refusing unsafe work?",
+      "description": "Are workers aware of the process for refusing unsafe work?",
+      "wording": "Are workers aware of the process for refusing unsafe work?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-015",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware of the location of a copy of the Ontario Occupational Health and Safety Act or the B.C. Workers Compensation Act and the location of a notice advising where the copy is available?",
+      "description": "Are workers aware of the location of a copy of the Ontario Occupational Health and Safety Act or the B.C. Workers Compensation Act and the location of a notice advising where the copy is available?",
+      "wording": "Are workers aware of the location of a copy of the Ontario Occupational Health and Safety Act or the B.C. Workers Compensation Act and the location of a notice advising where the copy is available?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-016",
+      "section": "Worker Training and Safety",
+      "title": "Are workers aware they must cooperate with Ontario Ministry of Labour inspectors or WorkSafeBC and its officers?",
+      "description": "Are workers aware they must cooperate with Ontario Ministry of Labour inspectors or WorkSafeBC and its officers?",
+      "wording": "Are workers aware they must cooperate with Ontario Ministry of Labour inspectors or WorkSafeBC and its officers?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 1,
+      "reference_image_path": "pages/page-1.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-017",
+      "section": "Workers Working Alone",
+      "title": "Does someone contact workers regularly to ensure they are okay?",
+      "description": "Check-in times may be based on certain location variables. For example:\n• Station in a secluded area\n• Near a forest\n• In a residential area with nearby houses\n• Near other businesses open late at night\n\nTypes of check-ins could include:\n• Call services\n• Secondary gas stations\n• Nearby businesses",
+      "wording": "Does someone contact workers regularly to ensure they are okay?",
+      "notes": "Check-in times may be based on certain location variables. For example:\n• Station in a secluded area\n• Near a forest\n• In a residential area with nearby houses\n• Near other businesses open late at night\n\nTypes of check-ins could include:\n• Call services\n• Secondary gas stations\n• Nearby businesses",
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-018",
+      "section": "Workers Working Alone",
+      "title": "Is there a plan if the worker does not respond to a check-in such as a phone check?",
+      "description": "Is there a plan if the worker does not respond to a check-in such as a phone check?",
+      "wording": "Is there a plan if the worker does not respond to a check-in such as a phone check?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-019",
+      "section": "Workers Working Alone",
+      "title": "Is there adequate supervision of the day and night shifts to ensure workers are following procedures? (i.e., checking periodically to make sure they have locked the doors or are wearing their Personal Emergency Transmitters)",
+      "description": "Is there adequate supervision of the day and night shifts to ensure workers are following procedures? (i.e., checking periodically to make sure they have locked the doors or are wearing their Personal Emergency Transmitters)",
+      "wording": "Is there adequate supervision of the day and night shifts to ensure workers are following procedures? (i.e., checking periodically to make sure they have locked the doors or are wearing their Personal Emergency Transmitters)",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-020",
+      "section": "Workers Working Alone",
+      "title": "What does this supervision involve? (answer in the space below)",
+      "description": "What does this supervision involve? (answer in the space below)",
+      "wording": "What does this supervision involve? (answer in the space below)",
+      "notes": null,
+      "response_type": "text",
+      "required": false,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-021",
+      "section": "Workers Working Alone",
+      "title": "Are back doors ever open or unlocked when a worker is alone?",
+      "description": "Are back doors ever open or unlocked when a worker is alone?",
+      "wording": "Are back doors ever open or unlocked when a worker is alone?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-022",
+      "section": "Workers Working Alone",
+      "title": "Do workers take out garbage alone at night?",
+      "description": "Do workers take out garbage alone at night?",
+      "wording": "Do workers take out garbage alone at night?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-023",
+      "section": "Workers Working Alone",
+      "title": "Is the garbage bin in a well-lit place?",
+      "description": "Is the garbage bin in a well-lit place?",
+      "wording": "Is the garbage bin in a well-lit place?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-024",
+      "section": "Workers Working Alone",
+      "title": "Do the workers follow your working alone procedures?",
+      "description": "Do the workers follow your working alone procedures?",
+      "wording": "Do the workers follow your working alone procedures?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-025",
+      "section": "Building Layout and Design",
+      "title": "Is it easy to distinguish public areas from private areas (such as offices)?",
+      "description": "Is it easy to distinguish public areas from private areas (such as offices)?",
+      "wording": "Is it easy to distinguish public areas from private areas (such as offices)?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-026",
+      "section": "Building Layout and Design",
+      "title": "Is access to worker-only areas controlled with locks?",
+      "description": "Is access to worker-only areas controlled with locks?",
+      "wording": "Is access to worker-only areas controlled with locks?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-027",
+      "section": "Building Layout and Design",
+      "title": "Is the cash-handling area separate from the general workplace?",
+      "description": "Is the cash-handling area separate from the general workplace?",
+      "wording": "Is the cash-handling area separate from the general workplace?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-028",
+      "section": "Building Layout and Design",
+      "title": "Do counters have an elevated place for cash registers?",
+      "description": "Do counters have an elevated place for cash registers?",
+      "wording": "Do counters have an elevated place for cash registers?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-029",
+      "section": "Building Layout and Design",
+      "title": "Are anti-jump barriers fitted in front of cash-handling devices?",
+      "description": "Are anti-jump barriers fitted in front of cash-handling devices?",
+      "wording": "Are anti-jump barriers fitted in front of cash-handling devices?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-030",
+      "section": "Building Layout and Design",
+      "title": "Is alternative access to the building blocked (aside from fire exits)?",
+      "description": "Is alternative access to the building blocked (aside from fire exits)?",
+      "wording": "Is alternative access to the building blocked (aside from fire exits)?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-031",
+      "section": "Building Layout and Design",
+      "title": "Is public access to washrooms controlled?",
+      "description": "Is public access to washrooms controlled?",
+      "wording": "Is public access to washrooms controlled?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-032",
+      "section": "Building Layout and Design",
+      "title": "Are there bushes or unlit or overgrown areas where someone could hide?",
+      "description": "Are there bushes or unlit or overgrown areas where someone could hide?",
+      "wording": "Are there bushes or unlit or overgrown areas where someone could hide?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-033",
+      "section": "Building Layout and Design",
+      "title": "Are any areas not visible to workers?",
+      "description": "Are any areas not visible to workers?",
+      "wording": "Are any areas not visible to workers?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-034",
+      "section": "Building Layout and Design",
+      "title": "Are unoccupied rooms locked?",
+      "description": "Are unoccupied rooms locked?",
+      "wording": "Are unoccupied rooms locked?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-035",
+      "section": "Building Layout and Design",
+      "title": "Is the designated smoking area located in a well-lit, safe outdoor location?",
+      "description": "Is the designated smoking area located in a well-lit, safe outdoor location?",
+      "wording": "Is the designated smoking area located in a well-lit, safe outdoor location?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 2,
+      "reference_image_path": "pages/page-2.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-036",
+      "section": "Visibility and Lighting",
+      "title": "Can workers see in and out of the store or do posters, signs and bushes block their view?",
+      "description": "Can workers see in and out of the store or do posters, signs and bushes block their view?",
+      "wording": "Can workers see in and out of the store or do posters, signs and bushes block their view?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-037",
+      "section": "Visibility and Lighting",
+      "title": "Are workers visible to potential witnesses outside?",
+      "description": "Are workers visible to potential witnesses outside?",
+      "wording": "Are workers visible to potential witnesses outside?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-038",
+      "section": "Visibility and Lighting",
+      "title": "Do mirrors help workers see the whole store?",
+      "description": "Do mirrors help workers see the whole store?",
+      "wording": "Do mirrors help workers see the whole store?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-039",
+      "section": "Visibility and Lighting",
+      "title": "Does lighting ensure that would-be thieves or robbers will be recognizable?",
+      "description": "Does lighting ensure that would-be thieves or robbers will be recognizable?",
+      "wording": "Does lighting ensure that would-be thieves or robbers will be recognizable?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-040",
+      "section": "Visibility and Lighting",
+      "title": "Do tinted windows prevent workers from seeing would-be aggressors outside at night?",
+      "description": "Do tinted windows prevent workers from seeing would-be aggressors outside at night?",
+      "wording": "Do tinted windows prevent workers from seeing would-be aggressors outside at night?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-041",
+      "section": "General Store Impression",
+      "title": "Does the worksite look cared for? Is there graffiti or vandalism?",
+      "description": "Does the worksite look cared for? Is there graffiti or vandalism?",
+      "wording": "Does the worksite look cared for? Is there graffiti or vandalism?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-042",
+      "section": "General Store Impression",
+      "title": "Are fences and other security measures well-maintained?",
+      "description": "Are fences and other security measures well-maintained?",
+      "wording": "Are fences and other security measures well-maintained?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-043",
+      "section": "General Store Impression",
+      "title": "Are workers dressed to suit the general appearance of the store?",
+      "description": "Are workers dressed to suit the general appearance of the store?",
+      "wording": "Are workers dressed to suit the general appearance of the store?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-044",
+      "section": "Signage and Emergency Information",
+      "title": "Are emergency numbers posted in a prominent place or on phones?",
+      "description": "Are emergency numbers posted in a prominent place or on phones?",
+      "wording": "Are emergency numbers posted in a prominent place or on phones?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-045",
+      "section": "Signage and Emergency Information",
+      "title": "Are robbery-prevention signs prominently displayed? (For example, “Area monitored by video camera,” “Store has less than $40 after dark,” and “Time-Lock Safe - Clerk Cannot Open”)",
+      "description": "Are robbery-prevention signs prominently displayed? (For example, “Area monitored by video camera,” “Store has less than $40 after dark,” and “Time-Lock Safe - Clerk Cannot Open”)",
+      "wording": "Are robbery-prevention signs prominently displayed? (For example, “Area monitored by video camera,” “Store has less than $40 after dark,” and “Time-Lock Safe - Clerk Cannot Open”)",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-046",
+      "section": "Signage and Emergency Information",
+      "title": "Is there a coloured height chart next to the entrance?",
+      "description": "Is there a coloured height chart next to the entrance?",
+      "wording": "Is there a coloured height chart next to the entrance?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-047",
+      "section": "Tools and Equipment",
+      "title": "Are knives and other sharp objects kept out of sight and reach of Guests?",
+      "description": "Are knives and other sharp objects kept out of sight and reach of Guests?",
+      "wording": "Are knives and other sharp objects kept out of sight and reach of Guests?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-048",
+      "section": "Tools and Equipment",
+      "title": "Can anyone grab and use tools or other items as weapons against workers?",
+      "description": "Can anyone grab and use tools or other items as weapons against workers?",
+      "wording": "Can anyone grab and use tools or other items as weapons against workers?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-049",
+      "section": "Security Guards and Equipment",
+      "title": "Are there door alarms to alert workers that someone is entering the store?",
+      "description": "Are there door alarms to alert workers that someone is entering the store?",
+      "wording": "Are there door alarms to alert workers that someone is entering the store?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-050",
+      "section": "Security Guards and Equipment",
+      "title": "Are security guards or buddy systems available at the location?",
+      "description": "Are security guards or buddy systems available at the location?",
+      "wording": "Are security guards or buddy systems available at the location?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-051",
+      "section": "Security Guards and Equipment",
+      "title": "Is a closed-circuit television or surveillance camera installed?",
+      "description": "Is a closed-circuit television or surveillance camera installed?",
+      "wording": "Is a closed-circuit television or surveillance camera installed?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-052",
+      "section": "Security Guards and Equipment",
+      "title": "Is a silent, centrally monitored holdup alarm installed?",
+      "description": "Is a silent, centrally monitored holdup alarm installed?",
+      "wording": "Is a silent, centrally monitored holdup alarm installed?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-053",
+      "section": "Security Guards and Equipment",
+      "title": "Do workers wear Personal Emergency Transmitters at all times, if provided?",
+      "description": "Do workers wear Personal Emergency Transmitters at all times, if provided?",
+      "wording": "Do workers wear Personal Emergency Transmitters at all times, if provided?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-054",
+      "section": "Handling Money and Deposits",
+      "title": "Are cash-handling areas positioned away from entries and exits?",
+      "description": "Are cash-handling areas positioned away from entries and exits?",
+      "wording": "Are cash-handling areas positioned away from entries and exits?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-055",
+      "section": "Handling Money and Deposits",
+      "title": "Is it standard practice to keep as little cash in the till as possible?",
+      "description": "Is it standard practice to keep as little cash in the till as possible?",
+      "wording": "Is it standard practice to keep as little cash in the till as possible?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-056",
+      "section": "Handling Money and Deposits",
+      "title": "Are large bills put into a drop box, safe or strong room that is out of sight?",
+      "description": "Are large bills put into a drop box, safe or strong room that is out of sight?",
+      "wording": "Are large bills put into a drop box, safe or strong room that is out of sight?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-057",
+      "section": "Handling Money and Deposits",
+      "title": "If there are counter safes, are they fitted with time-delay locks?",
+      "description": "If there are counter safes, are they fitted with time-delay locks?",
+      "wording": "If there are counter safes, are they fitted with time-delay locks?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-058",
+      "section": "Handling Money and Deposits",
+      "title": "Do workers make deposits at night or alone?",
+      "description": "Do workers make deposits at night or alone?",
+      "wording": "Do workers make deposits at night or alone?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-059",
+      "section": "Handling Money and Deposits",
+      "title": "When workers make deposits together, do they face in opposite directions to keep an eye on the surroundings?",
+      "description": "When workers make deposits together, do they face in opposite directions to keep an eye on the surroundings?",
+      "wording": "When workers make deposits together, do they face in opposite directions to keep an eye on the surroundings?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 3,
+      "reference_image_path": "pages/page-3.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-060",
+      "section": "Handling Money and Deposits",
+      "title": "Does the time and routine for making deposits vary from day to day to make it less predictable?",
+      "description": "Does the time and routine for making deposits vary from day to day to make it less predictable?",
+      "wording": "Does the time and routine for making deposits vary from day to day to make it less predictable?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-061",
+      "section": "Handling Money and Deposits",
+      "title": "Do workers transport cash in a bag that has the company logo or otherwise makes it obvious they are carrying cash?",
+      "description": "Do workers transport cash in a bag that has the company logo or otherwise makes it obvious they are carrying cash?",
+      "wording": "Do workers transport cash in a bag that has the company logo or otherwise makes it obvious they are carrying cash?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-062",
+      "section": "Files and Records",
+      "title": "Are confidential files and records kept in a locked room?",
+      "description": "Are confidential files and records kept in a locked room?",
+      "wording": "Are confidential files and records kept in a locked room?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-063",
+      "section": "Files and Records",
+      "title": "Are filing cabinets containing confidential records locked?",
+      "description": "Are filing cabinets containing confidential records locked?",
+      "wording": "Are filing cabinets containing confidential records locked?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-064",
+      "section": "Opening and Closing",
+      "title": "Do workers work in pairs at opening and closing, especially when doing the rounds at the end of a shift?",
+      "description": "Do workers work in pairs at opening and closing, especially when doing the rounds at the end of a shift?",
+      "wording": "Do workers work in pairs at opening and closing, especially when doing the rounds at the end of a shift?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-065",
+      "section": "Opening and Closing",
+      "title": "Do the written procedures for opening and closing emphasize personal safety? (For example: “Don’t count the cash from the till at the sales counter.”)",
+      "description": "Do the written procedures for opening and closing emphasize personal safety? (For example: “Don’t count the cash from the till at the sales counter.”)",
+      "wording": "Do the written procedures for opening and closing emphasize personal safety? (For example: “Don’t count the cash from the till at the sales counter.”)",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-066",
+      "section": "Travelling to and from Work",
+      "title": "Do workers have the option of asking for an escort to walk to their cars or the bus stop?",
+      "description": "Do workers have the option of asking for an escort to walk to their cars or the bus stop?",
+      "wording": "Do workers have the option of asking for an escort to walk to their cars or the bus stop?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-067",
+      "section": "Travelling to and from Work",
+      "title": "Can workers park nearby and within sight of the station, especially at night?",
+      "description": "Can workers park nearby and within sight of the station, especially at night?",
+      "wording": "Can workers park nearby and within sight of the station, especially at night?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-068",
+      "section": "Travelling to and from Work",
+      "title": "Is evening or night parking available for workers in nearby spaces normally reserved for Guests?",
+      "description": "Is evening or night parking available for workers in nearby spaces normally reserved for Guests?",
+      "wording": "Is evening or night parking available for workers in nearby spaces normally reserved for Guests?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-069",
+      "section": "Regular Checks",
+      "title": "Do you conduct risk assessments for violence annually or whenever there are significant changes in the workplace?",
+      "description": "Do you conduct risk assessments for violence annually or whenever there are significant changes in the workplace?",
+      "wording": "Do you conduct risk assessments for violence annually or whenever there are significant changes in the workplace?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-070",
+      "section": "Regular Checks",
+      "title": "Do you conduct an accident investigation whenever there is a violent incident?",
+      "description": "Do you conduct an accident investigation whenever there is a violent incident?",
+      "wording": "Do you conduct an accident investigation whenever there is a violent incident?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-071",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Are copies of the risk assessment available for the Associate/Licensee and supplier?",
+      "description": "Are copies of the risk assessment available for the Associate/Licensee and supplier?",
+      "wording": "Are copies of the risk assessment available for the Associate/Licensee and supplier?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-072",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Are there supporting materials for the risk assessment or policies and procedures? In Ontario a written policy must be created and posted for sites with 5 or more employees.",
+      "description": "Are there supporting materials for the risk assessment or policies and procedures? In Ontario a written policy must be created and posted for sites with 5 or more employees.",
+      "wording": "Are there supporting materials for the risk assessment or policies and procedures? In Ontario a written policy must be created and posted for sites with 5 or more employees.",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-073",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Is there any training or instruction on performing a risk assessment and creating site-specific policies and procedures?",
+      "description": "Is there any training or instruction on performing a risk assessment and creating site-specific policies and procedures?",
+      "wording": "Is there any training or instruction on performing a risk assessment and creating site-specific policies and procedures?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-074",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Is there regularly submitted documentation to the effect that an assessment has been performed and policies have been reviewed?",
+      "description": "Is there regularly submitted documentation to the effect that an assessment has been performed and policies have been reviewed?",
+      "wording": "Is there regularly submitted documentation to the effect that an assessment has been performed and policies have been reviewed?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-075",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Are work environment alterations supported by both the Associate/Licensee and the supplier following a risk assessment?",
+      "description": "Are work environment alterations supported by both the Associate/Licensee and the supplier following a risk assessment?",
+      "wording": "Are work environment alterations supported by both the Associate/Licensee and the supplier following a risk assessment?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-076",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "If not, has there been some consideration of alternatives?",
+      "description": "If not, has there been some consideration of alternatives?",
+      "wording": "If not, has there been some consideration of alternatives?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": false,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-077",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Is there monitoring of the Associate/Licensee?",
+      "description": "Is there monitoring of the Associate/Licensee?",
+      "wording": "Is there monitoring of the Associate/Licensee?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-078",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Does the supplier review the Associate’s/Licensee’s policies and procedures?",
+      "description": "Does the supplier review the Associate’s/Licensee’s policies and procedures?",
+      "wording": "Does the supplier review the Associate’s/Licensee’s policies and procedures?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-079",
+      "section": "Employer/Supplier Responsibilities",
+      "title": "Are the risk assessments and policies and procedures discussed between the Associate/Licensee and the supplier?",
+      "description": "Are the risk assessments and policies and procedures discussed between the Associate/Licensee and the supplier?",
+      "wording": "Are the risk assessments and policies and procedures discussed between the Associate/Licensee and the supplier?",
+      "notes": null,
+      "response_type": "yes_no_na",
+      "required": true,
+      "page": 4,
+      "reference_image_path": "pages/page-4.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": true,
+      "responsibility_options": [
+        "L",
+        "S"
+      ],
+      "responsibility_default": null,
+      "responsibility_legend": {
+        "L": "Associate, direct employer, or franchisee",
+        "S": "Supplier, owner, franchisor, employer or gas company"
+      },
+      "create_action_on": [
+        "N"
+      ],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    },
+    {
+      "id": "WI-080",
+      "section": "Other risks",
+      "title": "If, during your inspection, you noticed any other risks to workers that are not listed above, write down these risks on a blank page and include it with the inspection checklist.",
+      "description": "The Next Step: Once you have completed the inspection checklist, the next step is to create an action plan to address items you answered “No” to above. Refer to section 6.4 Site Security Action Plan Form.",
+      "wording": "If, during your inspection, you noticed any other risks to workers that are not listed above, write down these risks on a blank page and include it with the inspection checklist.",
+      "notes": "The Next Step: Once you have completed the inspection checklist, the next step is to create an action plan to address items you answered “No” to above. Refer to section 6.4 Site Security Action Plan Form.",
+      "response_type": "text",
+      "required": false,
+      "page": 5,
+      "reference_image_path": "pages/page-5.png",
+      "allow_photo": true,
+      "photo_required": false,
+      "responsibility_assignable": false,
+      "responsibility_options": [],
+      "responsibility_default": null,
+      "responsibility_legend": null,
+      "create_action_on": [],
+      "action_plan_form": "ENMCDS840-6.4",
+      "source_sop": "ENMCDS840",
+      "source_section": "6.3 Workplace Inspection Checklist (BC & ON)"
+    }
+  ]
+}
