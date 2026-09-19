@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Import JSON
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <p class="errornote">{{ form.non_field_errors }}</p>
+    {% endif %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row{% if field.errors %} errors{% endif %}">
+          {{ field.errors }}
+          <div>
+            <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
+            {{ field }}
+            {% if field.help_text %}
+              <div class="help">{{ field.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Import JSON" class="default">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+
+  <div class="module">
+    <h2>Expected JSON</h2>
+    <p>
+      Upload a checklist export. Extra keys such as section, pages, response_type,
+      reference images, and allow_photo are ignored. <code>allow_photo</code> means
+      an optional photo is OK and does <strong>not</strong> set requires_photo.
+    </p>
+    <pre>{
+  "name": "Site opening checklist",
+  "description": "Optional notes",
+  "items": [
+    {"text": "Unlock front doors", "requires_photo": false, "order": 0},
+    {"title": "Check cooler temperature", "photo_required": false}
+  ]
+}</pre>
+    <p>
+      Template name is read from <code>name</code>, then <code>title</code>, then
+      <code>document</code>. Description is read from <code>description</code>,
+      then <code>notes</code>, then <code>purpose</code>. Item labels are
+      <code>text</code> or <code>title</code>. Item order uses <code>order</code>
+      or the list index.
+    </p>
+  </div>
+</div>
+{% endblock %}
