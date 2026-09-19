@@ -21,11 +21,38 @@ from .models import (
 
 from arl.user.models import Store
 
+from .json_import import QuizJSONImportError, load_quiz_json_bytes, parse_quiz_json
+
 
 class QuizForm(forms.ModelForm):
     class Meta:
         model = Quiz
         fields = ["title", "description"]
+
+
+class QuizJSONImportForm(forms.Form):
+    json_file = forms.FileField(
+        label="JSON file",
+        help_text=(
+            "Upload a .json file that creates one Quiz. "
+            "Title: name, title, or document. "
+            "Description: description, notes, or purpose. "
+            "Questions: items[] or questions[], each with text or title."
+        ),
+    )
+
+    def clean_json_file(self):
+        uploaded = self.cleaned_data["json_file"]
+        name = getattr(uploaded, "name", "") or ""
+        if not name.lower().endswith(".json"):
+            raise forms.ValidationError("Please upload a .json file.")
+
+        try:
+            payload = load_quiz_json_bytes(uploaded.read())
+            parse_quiz_json(payload)
+        except QuizJSONImportError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return payload
 
 
 class QuestionForm(forms.ModelForm):

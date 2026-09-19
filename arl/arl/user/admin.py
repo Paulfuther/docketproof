@@ -5,7 +5,7 @@ from django.contrib.admin import SimpleListFilter
 from django.contrib.auth.admin import UserAdmin
 from django.forms.widgets import TextInput
 from django.shortcuts import redirect, render
-from django.urls import path
+from django.urls import path, reverse
 from django.utils.html import format_html, strip_tags
 from import_export import fields, resources
 from import_export import fields as export_fields
@@ -29,6 +29,8 @@ from arl.msg.models import (
 )
 # from arl.msg.tasks import EmployerSMSTask
 # from arl.payroll.models import CalendarEvent, PayPeriod, StatutoryHoliday
+from arl.quiz.forms import QuizJSONImportForm
+from arl.quiz.json_import import QuizJSONImportError, import_quiz_from_json
 from arl.quiz.models import Answer, Question, Quiz, SaltLog
 from arl.setup.models import StripePayment, StripePlan, TenantApiKeys
 
@@ -464,10 +466,52 @@ class QuizAdmin(admin.ModelAdmin):
     # Display questions inline within the Quiz admin view
     list_display = ("title", "description")
     # Display quiz title and description in the list view
+    change_list_template = "admin/quiz/quiz_changelist.html"
 
     def get_queryset(self, request):
         # Preload related questions and answers to avoid multiple database hits
         return super().get_queryset(request).prefetch_related("questions__answers")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-json/",
+                self.admin_site.admin_view(self.import_json_view),
+                name="quiz_quiz_import_json",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_json_view(self, request):
+        if request.method == "POST":
+            form = QuizJSONImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                payload = form.cleaned_data["json_file"]
+                try:
+                    quiz, questions = import_quiz_from_json(payload)
+                except QuizJSONImportError as exc:
+                    form.add_error("json_file", str(exc))
+                else:
+                    self.message_user(
+                        request,
+                        f'Imported quiz "{quiz.title}" with '
+                        f"{len(questions)} question(s).",
+                        messages.SUCCESS,
+                    )
+                    return redirect(
+                        reverse("admin:quiz_quiz_change", args=[quiz.pk])
+                    )
+        else:
+            form = QuizJSONImportForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "form": form,
+            "title": "Import quiz from JSON",
+        }
+        return render(request, "admin/quiz/import_json.html", context)
 
     def view_questions_and_answers(self, obj):
         # Display questions and their answers as a

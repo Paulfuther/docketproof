@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Import quiz from JSON</h1>
+
+<p>
+  Upload a JSON file to create <strong>one Quiz</strong> and its
+  <strong>Questions</strong>. Each question gets Yes/No answers so the
+  existing take-quiz flow works. Yes is marked correct.
+</p>
+
+<p>
+  This import is text-only. Fields such as
+  <code>section</code>, <code>reference_image_path</code> /
+  <code>image_path</code>, <code>response_type</code>,
+  <code>allow_photo</code>, <code>pages</code>, and
+  <code>requires_photo</code> / <code>photo_required</code> are ignored.
+  Photo-on-fill belongs to Checklists, not Quizzes.
+</p>
+
+<h2>Accepted JSON schema</h2>
+<pre>
+{
+  "name": "Quiz title",          // or "title" or "document"
+  "description": "Optional",     // or "notes" or "purpose"
+  "items": [                     // or "questions"
+    { "text": "Question text" }, // or "title"
+    { "title": "Another question" }
+  ]
+}
+</pre>
+
+<p>
+  <strong>Question model:</strong> <code>Question.text</code> is
+  255 characters. Longer titles are truncated. There is no order field;
+  questions are created in file order.
+</p>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div>
+    <input type="submit" value="Import JSON" class="default">
+    <a href="{% url 'admin:quiz_quiz_changelist' %}" class="button">Cancel</a>
+  </div>
+</form>
+{% endblock %}
