@@ -1,12 +1,13 @@
-from django.test import SimpleTestCase
+import unittest
 
-from arl.quiz.checklist_import import (
+from .checklist_json import (
     ChecklistImportError,
+    parse_checklist_template_bytes,
     parse_checklist_template_payload,
 )
 
 
-class ParseChecklistTemplatePayloadTests(SimpleTestCase):
+class ParseChecklistTemplatePayloadTests(unittest.TestCase):
     def test_merch_export_maps_title_notes_and_optional_photos(self):
         parsed = parse_checklist_template_payload(
             {
@@ -142,3 +143,13 @@ class ParseChecklistTemplatePayloadTests(SimpleTestCase):
             parse_checklist_template_payload(
                 {"name": "Empty", "items": [{"section": "x"}]}
             )
+
+    def test_utf8_bytes_with_bom(self):
+        raw = b'\xef\xbb\xbf{"name": "BOM", "items": [{"text": "One"}]}'
+        parsed = parse_checklist_template_bytes(raw)
+        self.assertEqual(parsed.name, "BOM")
+        self.assertEqual(parsed.items[0].text, "One")
+
+    def test_invalid_json_bytes_raise(self):
+        with self.assertRaises(ChecklistImportError):
+            parse_checklist_template_bytes(b"{not json")
