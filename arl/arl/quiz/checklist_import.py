@@ -50,7 +50,10 @@ class ChecklistTemplateImportForm(forms.Form):
         uploaded = self.cleaned_data["json_file"]
         if uploaded.size and uploaded.size > MAX_IMPORT_BYTES:
             raise forms.ValidationError("File is too large (max 5 MB).")
-        self.parsed = parse_checklist_template_bytes(uploaded.read())
+        try:
+            self.parsed = parse_checklist_template_bytes(uploaded.read())
+        except ChecklistImportError as exc:
+            raise forms.ValidationError(str(exc)) from exc
         return uploaded
 
     def save(self, *, created_by=None) -> ChecklistTemplate:
