@@ -588,20 +588,34 @@
         const required = (plan.querySelector('textarea[name$="-action_required"]') || {}).value || '';
         rows.push({id: card.id, title: title.trim(), who, when, required});
       });
+      body.replaceChildren();
       if (!rows.length) {
-        body.innerHTML = '<tr class="text-muted" data-empty="1"><td colspan="3">No N answers yet.</td></tr>';
+        const empty = document.createElement('tr');
+        empty.className = 'text-muted';
+        empty.dataset.empty = '1';
+        empty.innerHTML = '<td colspan="3">No N answers yet.</td>';
+        body.appendChild(empty);
         return;
       }
-      body.innerHTML = rows.map((row) => `
-        <tr class="action-summary-row" data-target="${row.id}">
-          <td>
-            <div class="fw-semibold">${row.title}</div>
-            <div class="small text-muted">${row.required || 'Action required not filled yet'}</div>
-          </td>
-          <td>${row.who || '—'}</td>
-          <td>${row.when || '—'}</td>
-        </tr>
-      `).join('');
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.className = 'action-summary-row';
+        tr.dataset.target = row.id;
+        const itemTd = document.createElement('td');
+        const titleEl = document.createElement('div');
+        titleEl.className = 'fw-semibold';
+        titleEl.textContent = row.title;
+        const requiredEl = document.createElement('div');
+        requiredEl.className = 'small text-muted';
+        requiredEl.textContent = row.required || 'Action required not filled yet';
+        itemTd.append(titleEl, requiredEl);
+        const whoTd = document.createElement('td');
+        whoTd.textContent = row.who || '—';
+        const whenTd = document.createElement('td');
+        whenTd.textContent = row.when || '—';
+        tr.append(itemTd, whoTd, whenTd);
+        body.appendChild(tr);
+      });
     }
 
     document.querySelectorAll('.checklist-item').forEach((card) => {

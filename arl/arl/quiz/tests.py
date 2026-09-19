@@ -210,6 +210,18 @@ class ChecklistFormTests(TestCase):
         )
         self.assertTrue(formset.forms[0].validate_submit)
 
+    def test_form_renders_answer_pills_and_action_fields(self):
+        form = ChecklistItemForm(instance=self.item)
+        html = form.as_p()
+        self.assertIn('value="yes"', html)
+        self.assertIn('value="no"', html)
+        self.assertIn('value="na"', html)
+        self.assertIn("action_required", html)
+        self.assertIn('name="who"', html)
+        self.assertIn("target_date", html)
+        labels = [choice[1] for choice in form.fields["result"].choices]
+        self.assertEqual(labels, ["Y", "N", "N/A"])
+
 
 class ChecklistImportTests(TestCase):
     def test_import_bundled_workplace_inspection_json(self):
