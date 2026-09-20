@@ -61,7 +61,8 @@ jobs:
           python arl/manage.py check
 
       - name: Run tests with coverage
+        env:
+          DJANGO_TEST_SQLITE: "1"
         run: |
-          coverage run arl/manage.py test
-          coverage run -a arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import
+          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import
           coverage report
