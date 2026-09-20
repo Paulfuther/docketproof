@@ -4,6 +4,7 @@ import string
 import pytz
 from django import forms
 from django.forms import inlineformset_factory
+from django.forms.models import BaseInlineFormSet
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -295,6 +296,11 @@ class ChecklistItemForm(forms.ModelForm):
         if not self.validate_submit:
             return cleaned
 
+        self._attach_submit_errors(cleaned, item, result, responsibility)
+        return cleaned
+
+    def _attach_submit_errors(self, cleaned, item, result, responsibility):
+        """Map submit_errors() onto the L/S and action-plan fields for in-row display."""
         action = None
         if item.creates_action(result):
             action = ChecklistActionItem(
@@ -307,9 +313,91 @@ class ChecklistItemForm(forms.ModelForm):
             responsibility=responsibility,
             action=action,
         )
-        if errors:
-            raise forms.ValidationError(errors)
-        return cleaned
+        for message in errors:
+            if "L or S" in message:
+                self.add_error("responsibility", message)
+            elif "Y, N, or N/A" in message:
+                self.add_error("result", message)
+            elif "requires an answer" in message:
+                self.add_error("text_value", message)
+            elif "action plan" in message:
+                attached = False
+                if not (cleaned.get("action_required") or "").strip():
+                    self.add_error("action_required", message)
+                    attached = True
+                if not (cleaned.get("who") or "").strip():
+                    self.add_error("who", message)
+                    attached = True
+                if not cleaned.get("target_date"):
+                    self.add_error("target_date", message)
+                    attached = True
+                if not attached:
+                    self.add_error(None, message)
+            else:
+                self.add_error(None, message)
+
+    def full_clean(self):
+        super().full_clean()
+        for name in self.errors:
+            if name == "__all__" or name not in self.fields:
+                continue
+            css = self.fields[name].widget.attrs.get("class", "")
+            if "is-invalid" not in css.split():
+                self.fields[name].widget.attrs["class"] = f"{css} is-invalid".strip()
+
+    def submit_error_kinds(self):
+        """Classify this row's errors for the compact top-of-form summary."""
+        kinds = set()
+        if not self.errors:
+            return kinds
+        if self.errors.get("responsibility"):
+            kinds.add("responsibility")
+        if (
+            self.errors.get("action_required")
+            or self.errors.get("who")
+            or self.errors.get("target_date")
+        ):
+            kinds.add("action")
+        if self.errors.get("result"):
+            kinds.add("result")
+        if self.errors.get("text_value"):
+            kinds.add("text")
+        for message in self.non_field_errors():
+            text = str(message)
+            if "L or S" in text:
+                kinds.add("responsibility")
+            elif "action plan" in text:
+                kinds.add("action")
+            elif "Y, N, or N/A" in text:
+                kinds.add("result")
+            elif "requires an answer" in text:
+                kinds.add("text")
+        return kinds
+
+    def flat_error_messages(self):
+        messages = []
+        for message in self.non_field_errors():
+            text = str(message)
+            if text not in messages:
+                messages.append(text)
+        for field, field_errors in self.errors.items():
+            if field == "__all__":
+                continue
+            for message in field_errors:
+                text = str(message)
+                if text not in messages:
+                    messages.append(text)
+        return messages
+
+    def item_label(self, index):
+        item = self.instance
+        code = ""
+        template_item = getattr(item, "template_item", None)
+        if template_item is not None:
+            code = getattr(template_item, "item_code", "") or ""
+        if code:
+            return f"{code}"
+        return f"Item {index}"
 
     def save_action_item(self):
         item = self.instance
@@ -337,10 +425,47 @@ class ChecklistItemForm(forms.ModelForm):
         return action
 
 
+class ChecklistItemFormSetBase(BaseInlineFormSet):
+    def item_error_summaries(self):
+        """Compact counts + per-row links for the checklist edit error banner."""
+        items = []
+        need_ls = 0
+        need_action = 0
+        need_answer = 0
+        for index, form in enumerate(self.forms, start=1):
+            kinds = form.submit_error_kinds()
+            if not kinds and not form.errors:
+                continue
+            if "responsibility" in kinds:
+                need_ls += 1
+            if "action" in kinds:
+                need_action += 1
+            if "result" in kinds or "text" in kinds:
+                need_answer += 1
+            items.append(
+                {
+                    "index": index,
+                    "pk": form.instance.pk,
+                    "label": form.item_label(index),
+                    "text": form.instance.text,
+                    "kinds": kinds,
+                    "messages": form.flat_error_messages(),
+                }
+            )
+        return {
+            "rows": items,
+            "count": len(items),
+            "need_ls": need_ls,
+            "need_action": need_action,
+            "need_answer": need_answer,
+        }
+
+
 ChecklistItemFormSet = inlineformset_factory(
     Checklist,
     ChecklistItem,
     form=ChecklistItemForm,
+    formset=ChecklistItemFormSetBase,
     extra=0,
     can_delete=False,
 )

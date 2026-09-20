@@ -90,6 +90,29 @@
   }
   .action-plan.collapsed { display: none; }
   .action-summary-row { cursor: pointer; }
+  .checklist-item.has-item-errors {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.18);
+  }
+  .checklist-item.has-item-errors:focus {
+    outline: 2px solid #dc3545;
+    outline-offset: 2px;
+  }
+  .field-error {
+    color: #dc3545;
+    font-size: .85rem;
+    font-weight: 600;
+    margin-top: .35rem;
+  }
+  .resp-wrap.has-error .resp-pills label,
+  .answer-pills-wrap.has-error .answer-pills label {
+    border-color: #dc3545;
+  }
+  .action-plan.has-error {
+    border-color: #dc3545;
+    box-shadow: inset 0 0 0 1px #dc3545;
+  }
+  #checklist-error-summary a { font-weight: 600; }
 </style>
 
 <div class="container">
@@ -118,11 +141,37 @@
   </a>
 </div>
 
-{% if form.errors or form.non_field_errors or formset.non_form_errors or formset.errors %}
-  <div class="alert alert-danger">
+{% if form.errors or form.non_field_errors or formset.non_form_errors or item_error_summary.count %}
+  <div class="alert alert-danger" id="checklist-error-summary" role="alert">
     <strong>Please fix the errors below.</strong>
-    {% if form.non_field_errors %}<div>{{ form.non_field_errors }}</div>{% endif %}
-    {% if formset.non_form_errors %}<div>{{ formset.non_form_errors }}</div>{% endif %}
+    {% if item_error_summary.count %}
+      <div class="mt-1">
+        {{ item_error_summary.count }} item{{ item_error_summary.count|pluralize }}
+        need{{ item_error_summary.count|pluralize:"s," }} attention
+        {% if item_error_summary.need_ls %}
+          · {{ item_error_summary.need_ls }} need{{ item_error_summary.need_ls|pluralize:"s," }} L/S
+        {% endif %}
+        {% if item_error_summary.need_action %}
+          · {{ item_error_summary.need_action }} N answer{{ item_error_summary.need_action|pluralize }} need{{ item_error_summary.need_action|pluralize:"s," }} action plan
+        {% endif %}
+        {% if item_error_summary.need_answer %}
+          · {{ item_error_summary.need_answer }} need{{ item_error_summary.need_answer|pluralize:"s," }} an answer
+        {% endif %}
+      </div>
+      <ul class="mb-0 mt-2">
+        {% for err in item_error_summary.rows %}
+          <li>
+            <a href="#item-{{ err.pk }}">{{ err.label }}</a>
+            — {{ err.text|truncatechars:80 }}
+            {% if err.messages %}
+              <div class="small">{{ err.messages|join:" " }}</div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if form.non_field_errors %}<div class="mt-2">{{ form.non_field_errors }}</div>{% endif %}
+    {% if formset.non_form_errors %}<div class="mt-2">{{ formset.non_form_errors }}</div>{% endif %}
   </div>
 {% endif %}
 
@@ -145,27 +194,31 @@
         <div class="section-label">{{ f.instance.section }}</div>
       {% endifchanged %}
     {% endif %}
-    <div class="card mb-3 checklist-item"
+    <div class="card mb-3 checklist-item{% if f.errors or f.non_field_errors %} has-item-errors{% endif %}"
          id="item-{{ f.instance.pk }}"
          data-item-id="{{ f.instance.pk }}"
+         data-item-index="{{ forloop.counter }}"
          data-response-type="{{ f.instance.response_type }}"
          data-creates-action="{{ f.instance.create_action_answers|join:',' }}"
-         data-responsibility-assignable="{% if f.instance.responsibility_assignable %}1{% else %}0{% endif %}">
+         data-responsibility-assignable="{% if f.instance.responsibility_assignable %}1{% else %}0{% endif %}"
+         {% if f.errors or f.non_field_errors %}tabindex="-1"{% endif %}>
       <div class="card-body">
         {{ f.id }}
         {{ f.order }} {# hidden input - keep it here #}
 
-        {% if f.non_field_errors or f.errors %}
-          <div class="alert alert-warning py-2">
+        {% if f.non_field_errors %}
+          <div class="alert alert-warning py-2" role="alert">
             {{ f.non_field_errors }}
-            <pre class="small mb-0">{{ f.errors }}</pre>
           </div>
         {% endif %}
 
-        <div class="fw-semibold mb-2">{{ f.instance.text }}</div>
+        <div class="d-flex gap-2 align-items-start mb-2">
+          <span class="badge text-bg-light border text-muted">{{ forloop.counter }}</span>
+          <div class="fw-semibold" data-role="item-title">{{ f.instance.text }}</div>
+        </div>
 
         {% if f.instance.is_yes_no_na %}
-        <div class="mb-2">
+        <div class="mb-2 answer-pills-wrap {% if f.result.errors %}has-error{% endif %}">
           <div class="small text-muted mb-1">Answer</div>
           <div class="answer-pills" data-role="answer">
             {% for radio in f.result %}
@@ -175,8 +228,13 @@
               {% endif %}
             {% endfor %}
           </div>
+          {% if f.result.errors %}
+            <div class="field-error" id="item-{{ f.instance.pk }}-result-error" data-item-error role="alert" tabindex="-1">
+              {{ f.result.errors.0 }}
+            </div>
+          {% endif %}
         </div>
-        <div class="mb-2 resp-wrap {% if not f.instance.responsibility_assignable %}d-none{% endif %}">
+        <div class="mb-2 resp-wrap {% if not f.instance.responsibility_assignable %}d-none{% endif %}{% if f.responsibility.errors %} has-error{% endif %}">
           <div class="small text-muted mb-1">Responsibility <span class="resp-required {% if f.instance.result == 'na' or not f.instance.result %}d-none{% endif %}">(required for Y/N)</span></div>
           <div class="resp-pills" data-role="responsibility">
             {% for radio in f.responsibility %}
@@ -186,6 +244,11 @@
               {% endif %}
             {% endfor %}
           </div>
+          {% if f.responsibility.errors %}
+            <div class="field-error" id="item-{{ f.instance.pk }}-responsibility-error" data-item-error role="alert" tabindex="-1">
+              {{ f.responsibility.errors.0 }}
+            </div>
+          {% endif %}
           <div class="small text-muted mt-1">L = Associate / franchisee &nbsp;·&nbsp; S = supplier / owner / gas company</div>
         </div>
         {% else %}
@@ -213,9 +276,14 @@
           </div>
         </div>
 
-        <div class="action-plan {% if not f.instance.creates_action %}collapsed{% endif %}" data-role="action-plan">
+        <div class="action-plan {% if not f.instance.creates_action %}collapsed{% endif %}{% if f.action_required.errors or f.who.errors or f.target_date.errors %} has-error{% endif %}" data-role="action-plan">
           <div class="fw-semibold mb-2">Site Security Action Plan (6.4)</div>
           <p class="small text-muted mb-2">Required because this item is N. Prefills from the checklist wording.</p>
+          {% if f.action_required.errors or f.who.errors or f.target_date.errors %}
+            <div class="field-error mb-2" id="item-{{ f.instance.pk }}-action-error" data-item-error role="alert" tabindex="-1">
+              N requires an action plan (action required, who, and when).
+            </div>
+          {% endif %}
           <div class="mb-2">
             <label class="form-label small mb-1">Action item</label>
             {{ f.action_item }}
@@ -223,15 +291,24 @@
           <div class="mb-2">
             <label class="form-label small mb-1">Action required <span class="text-danger">*</span></label>
             {{ f.action_required }}
+            {% if f.action_required.errors %}
+              <div class="field-error">{{ f.action_required.errors.0 }}</div>
+            {% endif %}
           </div>
           <div class="row g-2">
             <div class="col-12 col-md-6">
               <label class="form-label small mb-1">Who <span class="text-danger">*</span></label>
               {{ f.who }}
+              {% if f.who.errors %}
+                <div class="field-error">{{ f.who.errors.0 }}</div>
+              {% endif %}
             </div>
             <div class="col-12 col-md-6">
               <label class="form-label small mb-1">When (target date) <span class="text-danger">*</span></label>
               {{ f.target_date }}
+              {% if f.target_date.errors %}
+                <div class="field-error">{{ f.target_date.errors.0 }}</div>
+              {% endif %}
             </div>
           </div>
           <div class="mt-2">
@@ -415,10 +492,10 @@
   });
 </script>
 
-<!-- Alert auto-dismiss -->
+<!-- Alert auto-dismiss (success only — keep validation errors on screen) -->
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    const alerts = document.querySelectorAll(".alert");
+    const alerts = document.querySelectorAll(".alert-success.alert-dismissible");
     alerts.forEach(alert => {
       setTimeout(() => {
         alert.classList.add("fade");
@@ -556,7 +633,7 @@
       if (shouldOpen) {
         plan.classList.remove('collapsed');
         const itemField = plan.querySelector('input[name$="-action_item"]');
-        const title = card.querySelector('.fw-semibold');
+        const title = card.querySelector('[data-role="item-title"]');
         if (itemField && !(itemField.value || '').trim() && title) {
           itemField.value = title.textContent.trim();
         }
@@ -582,7 +659,7 @@
         const plan = card.querySelector('[data-role="action-plan"]');
         if (!answerWrap || !plan) return;
         if (selectedValue(answerWrap) !== NO) return;
-        const title = (card.querySelector('.fw-semibold') || {}).textContent || '';
+        const title = (card.querySelector('[data-role="item-title"]') || {}).textContent || '';
         const who = (plan.querySelector('input[name$="-who"]') || {}).value || '';
         const when = (plan.querySelector('input[name$="-target_date"]') || {}).value || '';
         const required = (plan.querySelector('textarea[name$="-action_required"]') || {}).value || '';
@@ -645,6 +722,22 @@
       });
     }
     refreshSummary();
+
+    function focusFirstChecklistError() {
+      const first = document.querySelector('.checklist-item.has-item-errors');
+      if (!first) return;
+      const errorEl = first.querySelector('[data-item-error]');
+      const target = errorEl || first;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => {
+        try {
+          target.focus({ preventScroll: true });
+        } catch (e) {
+          target.focus();
+        }
+      }, 50);
+    }
+    focusFirstChecklistError();
   })();
 </script>
 {% endblock %}

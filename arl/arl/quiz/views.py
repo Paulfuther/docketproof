@@ -567,8 +567,6 @@ def checklist_edit(request, slug):
             if nfe:
                 print(f"Item {i} non-field errors:", nfe)
 
-        messages.error(request, "There are errors in the form. Please review below.")
-
     else:
         form = ChecklistForm(instance=checklist, user=request.user)
         formset = ChecklistItemFormSet(instance=checklist)
@@ -589,7 +587,12 @@ def checklist_edit(request, slug):
     return render(
         request,
         "quiz/checklist_edit.html",
-        {"checklist": checklist, "form": form, "formset": formset},
+        {
+            "checklist": checklist,
+            "form": form,
+            "formset": formset,
+            "item_error_summary": formset.item_error_summaries(),
+        },
     )
 
 
