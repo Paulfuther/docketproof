@@ -69,6 +69,9 @@
           <tr>
             <th style="width: 80px;">Order</th>
             <th>Text</th>
+            <th>Type</th>
+            <th>L/S</th>
+            <th>Action on</th>
             <th style="width: 140px;">Requires Photo</th>
           </tr>
         </thead>
@@ -76,7 +79,13 @@
         {% for it in template.items.all %}
           <tr>
             <td><code>{{ it.order }}</code></td>
-            <td>{{ it.text }}</td>
+            <td>
+              {% if it.section %}<div class="small text-muted">{{ it.section }}</div>{% endif %}
+              {{ it.text }}
+            </td>
+            <td>{{ it.get_response_type_display }}</td>
+            <td>{% if it.responsibility_assignable %}Yes{% else %}—{% endif %}</td>
+            <td>{{ it.create_action_on|default:"—" }}</td>
             <td>
               {% if it.requires_photo %}
                 <span class="badge bg-info">Yes</span>
@@ -87,7 +96,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="3" class="text-muted">No items yet. Click <em>Edit Template</em> to add items.</td>
+            <td colspan="6" class="text-muted">No items yet. Click <em>Edit Template</em> to add items.</td>
           </tr>
         {% endfor %}
         </tbody>
