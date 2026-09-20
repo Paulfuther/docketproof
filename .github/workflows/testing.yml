@@ -63,4 +63,5 @@ jobs:
       - name: Run tests with coverage
         run: |
           coverage run arl/manage.py test
+          coverage run -a arl/manage.py test arl.quiz
           coverage report
