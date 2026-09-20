@@ -46,6 +46,7 @@ from .models import (
     Quiz,
     SaltLog,
 )
+from .store_address import store_report_context
 from .tasks import (
     generate_checklist_pdf_task,
     generate_fresh_checklist_pdf,
@@ -927,8 +928,7 @@ def checklist_report_html(request, slug):
         "checklist": checklist,
         "items": items,
         "action_items": checklist.action_items.select_related("checklist_item"),
-        "store_number": getattr(checklist.store, "number", None),
-        "store_name": getattr(checklist.store, "name", None),
+        **store_report_context(checklist.store),
     }
     # Reuse the exact same template as the PDF:
     return render(request, "quiz/checklist_pdf_for_app.html", ctx)

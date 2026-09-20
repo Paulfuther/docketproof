@@ -67,6 +67,7 @@
       <div class="meta">
         {% if store_number %}<div>Store #: {{ store_number }}</div>{% endif %}
         {% if store_name %}<div>Store Name: {{ store_name }}</div>{% endif %}
+        {% if store_address_line %}<div>Address: {{ store_address_line }}</div>{% endif %}
         <strong>Created by:</strong> {{ checklist.created_by }}<br>
         {% if checklist.submitted_by %}
           <strong>Submitted by:</strong> {{ checklist.submitted_by }} on {{ checklist.submitted_at|date:"Y-m-d H:i" }}

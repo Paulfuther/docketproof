@@ -1,4 +1,6 @@
-from datetime import date
+from datetime import date, datetime
+from types import SimpleNamespace
+from unittest import TestCase as SimpleTestCase
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -245,5 +247,85 @@ class ChecklistImportTests(TestCase):
         call_command("import_checklist_template")
         self.assertTrue(
             ChecklistTemplate.objects.filter(document_id="ENMCDS840-6.3").exists()
+        )
+
+
+class StoreReportContextTests(SimpleTestCase):
+    def test_joins_nonempty_address_parts(self):
+        from .store_address import store_report_context
+
+        store = SimpleNamespace(
+            number=123,
+            name=None,
+            address="123 Main St",
+            address_two="",
+            city="London",
+            province="ON",
+        )
+        ctx = store_report_context(store)
+        self.assertEqual(ctx["store_number"], 123)
+        self.assertEqual(ctx["store_address_line"], "123 Main St, London, ON")
+
+    def test_empty_when_store_missing(self):
+        from .store_address import store_report_context
+
+        ctx = store_report_context(None)
+        self.assertEqual(ctx["store_address_line"], "")
+        self.assertIsNone(ctx["store_number"])
+
+    def test_omits_blank_address_two(self):
+        from .store_address import format_store_address_line
+
+        store = SimpleNamespace(
+            address="123 Main St",
+            address_two="  ",
+            city="London",
+            province="ON",
+        )
+        self.assertEqual(
+            format_store_address_line(store), "123 Main St, London, ON"
+        )
+
+
+class DropboxChecklistPathTests(SimpleTestCase):
+    def test_path_is_company_then_checklist_then_store_then_date(self):
+        from .dropbox_paths import build_checklist_dropbox_path
+
+        when = datetime(2026, 9, 20)
+        checklist = SimpleNamespace(
+            id=42,
+            slug="store-12-inspection-ab12cd34",
+            title="Store 12 inspection",
+            template=SimpleNamespace(name="Workplace Inspection Checklist (BC & ON)"),
+            created_by=SimpleNamespace(
+                employer=SimpleNamespace(name="Petro Canada")
+            ),
+        )
+        path, folder = build_checklist_dropbox_path(checklist, "12", when=when)
+        self.assertEqual(folder, "workplace-inspection-checklist-bc-on")
+        self.assertEqual(
+            path,
+            "/CHECKLISTS/petro-canada/workplace-inspection-checklist-bc-on/"
+            "12/2026/09-September/12_store-12-inspection-ab12cd34-42.pdf",
+        )
+
+    def test_falls_back_to_title_when_template_missing(self):
+        from .dropbox_paths import build_checklist_dropbox_path
+
+        checklist = SimpleNamespace(
+            id=7,
+            slug="",
+            title="Fall Winter Exterior Checklist",
+            template=None,
+            created_by=SimpleNamespace(employer=None),
+        )
+        path, folder = build_checklist_dropbox_path(
+            checklist, "no-store", when=datetime(2026, 2, 1)
+        )
+        self.assertEqual(folder, "fall-winter-exterior-checklist")
+        self.assertTrue(
+            path.startswith(
+                "/CHECKLISTS/no-company/fall-winter-exterior-checklist/no-store/2026/02-February/"
+            )
         )
 
