@@ -25,10 +25,18 @@
       <div class="card mb-2 p-2">
         {{ f.id }}
         <div class="row g-2">
-          <div class="col-md-7">{{ f.text|as_crispy_field }}</div>
-          <div class="col-md-2">{{ f.requires_photo|as_crispy_field }}</div>
+          <div class="col-md-8">{{ f.text|as_crispy_field }}</div>
           <div class="col-md-2">{{ f.order|as_crispy_field }}</div>
-          <div class="col-md-1">{{ f.DELETE|as_crispy_field }}</div>
+          <div class="col-md-2">{{ f.DELETE|as_crispy_field }}</div>
+          <div class="col-md-3">{{ f.item_code|as_crispy_field }}</div>
+          <div class="col-md-5">{{ f.section|as_crispy_field }}</div>
+          <div class="col-md-4">{{ f.response_type|as_crispy_field }}</div>
+          <div class="col-md-3">{{ f.required|as_crispy_field }}</div>
+          <div class="col-md-3">{{ f.responsibility_assignable|as_crispy_field }}</div>
+          <div class="col-md-3">{{ f.requires_photo|as_crispy_field }}</div>
+          <div class="col-md-3">{{ f.allow_photo|as_crispy_field }}</div>
+          <div class="col-md-6">{{ f.create_action_on|as_crispy_field }}</div>
+          <div class="col-md-6">{{ f.action_plan_form|as_crispy_field }}</div>
         </div>
       </div>
     {% endfor %}

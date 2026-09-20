@@ -475,6 +475,8 @@ def checklist_from_template(request, template_id):
                         checklist=checklist,
                         template_item=ti,
                         text=ti.text,
+                        section=ti.section or "",
+                        result="",
                         order=(ti.order or idx),
                     )
                     for idx, ti in enumerate(t_items, start=1)
@@ -498,14 +500,21 @@ def checklist_from_template(request, template_id):
 @login_required
 def checklist_edit(request, slug):
     checklist = get_object_or_404(
-        Checklist.objects.select_related("created_by", "submitted_by"),
+        Checklist.objects.select_related("created_by", "submitted_by").prefetch_related(
+            "items__template_item", "items__action_item"
+        ),
         slug=slug,
     )
 
     if request.method == "POST":
         # Photos are uploaded separately; don't pass request.FILES here.
-        form = ChecklistForm(request.POST, instance=checklist)
-        formset = ChecklistItemFormSet(request.POST, instance=checklist)
+        action = request.POST.get("action")
+        form = ChecklistForm(request.POST, instance=checklist, user=request.user)
+        formset = ChecklistItemFormSet(
+            request.POST,
+            instance=checklist,
+            form_kwargs={"validate_submit": action == "submit"},
+        )
 
         if form.is_valid() and formset.is_valid():
             # Backfill order for any rows that didn't post it
@@ -521,8 +530,10 @@ def checklist_edit(request, slug):
 
             form.save()
             formset.save()
+            for fr in formset.forms:
+                if getattr(fr, "cleaned_data", None):
+                    fr.save_action_item()
 
-            action = request.POST.get("action")
             if action == "submit":
                 checklist.status = "submitted"
                 checklist.submitted_by = request.user
@@ -591,7 +602,7 @@ def checklist_detail(request, slug):
 
     qs = (
         ChecklistItem.objects.filter(checklist=checklist)
-        .only("text", "result", "comment", "photo", "uuid", "order")
+        .select_related("template_item", "action_item")
         .order_by("order", "id")
     )
 
@@ -601,12 +612,18 @@ def checklist_detail(request, slug):
         if it.photo and it.photo.name:
             # fast: sign key, no listing
             signed = get_signed_url_for_key(it.photo.name, expires_in=900)
+        action = it.get_action_item()
         items.append(
             {
                 "text": it.text,
+                "section": it.section,
                 "result": it.result,
+                "answer": it.answer,
+                "responsibility": it.responsibility,
+                "text_value": it.text_value,
                 "comment": it.comment,
                 "signed_url": signed,
+                "action": action,
             }
         )
 
@@ -622,6 +639,9 @@ def checklist_detail(request, slug):
         {
             "checklist": checklist,
             "items": items,
+            "action_items": checklist.action_items.select_related(
+                "checklist_item"
+            ).order_by("checklist_item__order", "id"),
             "pdf_url": pdf_url,
         },
     )
@@ -880,22 +900,28 @@ def checklist_report_html(request, slug):
     print("checklist store :", checklist.store)
     # Build items with short-lived signed URLs (so images load in browser)
     items = []
-    for it in checklist.items.all().order_by("order", "id"):
+    for it in checklist.items.select_related("action_item").order_by("order", "id"):
         photo_url = None
         if it.photo and it.photo.name:
             photo_url = get_signed_url_for_key(it.photo.name, expires_in=900)
+        action = it.get_action_item()
         items.append(
             {
                 "text": it.text,
                 "result": it.result,
+                "answer": it.answer,
+                "responsibility": it.responsibility,
+                "text_value": it.text_value,
                 "comment": it.comment,
                 "photo_url": photo_url,
+                "action": action,
             }
         )
 
     ctx = {
         "checklist": checklist,
         "items": items,
+        "action_items": checklist.action_items.select_related("checklist_item"),
         **store_report_context(checklist.store),
     }
     # Reuse the exact same template as the PDF:
