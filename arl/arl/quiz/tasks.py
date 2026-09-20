@@ -2,6 +2,7 @@ from __future__ import absolute_import, unicode_literals
 
 import base64
 import logging
+import os
 import time
 import uuid
 from datetime import datetime
@@ -17,7 +18,9 @@ from arl.helpers import (
     upload_to_linode_object_storage,
 )
 from arl.msg.helpers import create_master_email
+from arl.quiz.dropbox_paths import build_checklist_dropbox_path
 from arl.quiz.models import Checklist, SaltLog
+from arl.quiz.store_address import store_report_context
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
 from django.conf import settings
@@ -168,7 +171,9 @@ def generate_checklist_pdf_task(self, checklist_id: int):
 
     try:
         checklist = (
-            Checklist.objects.select_related("created_by", "submitted_by")
+            Checklist.objects.select_related(
+                "created_by", "submitted_by", "template"
+            )
             .prefetch_related("items")
             .get(pk=checklist_id)
         )
@@ -200,20 +205,16 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         logger.info("[PDF] fresh pdf_size_bytes=%d (key=%s)", len(pdf_bytes), temp_key)
         # ================== /CHANGED ==================
 
-        # Build Dropbox path (unchanged)
-        company_name = slugify(
-            getattr(
-                getattr(checklist.created_by, "employer", None), "name", "no-company"
-            )
+        # Build Dropbox path: company, checklist type, store, then date
+        full_file_path, checklist_folder = build_checklist_dropbox_path(
+            checklist, store_segment
         )
-        today = datetime.now()
-        year = today.strftime("%Y")
-        month = today.strftime("%m-%B")
-        slug = checklist.slug or slugify(checklist.title) or f"checklist-{checklist.id}"
-        filename = f"{store_segment}_{slug}-{checklist.id}.pdf"
-        folder_path = f"/CHECKLISTS/{company_name}/{year}/{month}/{store_segment}"
-        full_file_path = f"{folder_path}/{filename}"
-        logger.info("[PDF] upload_path=%s", full_file_path)
+        logger.info(
+            "[PDF] upload_path=%s checklist_folder=%s store_segment=%s",
+            full_file_path,
+            checklist_folder,
+            store_segment,
+        )
 
         # Upload to Dropbox (unchanged)
         ok, msg = master_upload_file_to_dropbox(pdf_buffer.getvalue(), full_file_path)
@@ -258,7 +259,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
                     else settings.MAIL_DEFAULT_SENDER
                 )
 
-                pdf_filename = filename  # keep your naming
+                pdf_filename = os.path.basename(full_file_path)
                 logger.info(
                     "[Checklist Email Task] Preparing attachment: %s (%s bytes)",
                     pdf_filename,
@@ -409,17 +410,22 @@ def generate_fresh_checklist_pdf(checklist_id):
 
     # Build items
     items = []
-    for it in checklist.items.all().order_by("order", "id"):
+    for it in checklist.items.select_related("action_item").order_by("order", "id"):
         photo_url = None
         if it.photo and it.photo.name:
             orig = get_signed_url_for_key(it.photo.name, expires_in=900)
             photo_url = _downscale_for_pdf(orig, max_px=800, jpeg_quality=75)
+        action = it.get_action_item()
         items.append(
             {
                 "text": it.text,
                 "result": it.result,
+                "answer": it.answer,
+                "responsibility": it.responsibility,
+                "text_value": it.text_value,
                 "comment": it.comment,
                 "photo_url": photo_url,
+                "action": action,
             }
         )
     logger.info(
@@ -432,8 +438,8 @@ def generate_fresh_checklist_pdf(checklist_id):
         {
             "checklist": checklist,
             "items": items,
-            "store_number": getattr(checklist.store, "number", None),
-            "store_name": getattr(checklist.store, "name", None),
+            "action_items": checklist.action_items.select_related("checklist_item"),
+            **store_report_context(checklist.store),
         },
     )
     logger.debug("[PDF] Rendered HTML for checklist_id=%s", checklist.id)

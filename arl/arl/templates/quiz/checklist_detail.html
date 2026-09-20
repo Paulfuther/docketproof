@@ -103,16 +103,31 @@
         {% for it in items %}
           <div class="row g-3 align-items-start py-2 border-bottom">
             <div class="col-md-6">
+              {% if it.section %}<div class="text-muted small">{{ it.section }}</div>{% endif %}
               <div class="fw-semibold">{{ it.text }}</div>
+              {% if it.text_value %}
+                <div class="small mt-1">{{ it.text_value }}</div>
+              {% endif %}
               {% if it.comment %}
                 <div class="text-muted small mt-1">{{ it.comment }}</div>
               {% endif %}
+              {% if it.action %}
+                <div class="small mt-2">
+                  <div><strong>Action:</strong> {{ it.action.action_required|default:it.action.action_item }}</div>
+                  <div class="text-muted">Who: {{ it.action.who|default:"—" }} · When: {{ it.action.target_date|default:"—" }}</div>
+                </div>
+              {% endif %}
             </div>
             <div class="col-md-2">
-              {% if it.result %}
+              {% if it.answer %}
+                <span class="badge badge-soft">{{ it.answer }}</span>
+              {% elif it.result %}
                 <span class="badge badge-soft">{{ it.result }}</span>
               {% else %}
                 <span class="text-muted small">—</span>
+              {% endif %}
+              {% if it.responsibility %}
+                <div class="small mt-1">{{ it.responsibility }}</div>
               {% endif %}
             </div>
             <div class="col-md-4">
@@ -128,6 +143,40 @@
         {% endfor %}
       {% else %}
         <div class="text-muted">No items.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mt-3 mb-4">
+    <div class="card-header"><strong>Action plan summary</strong></div>
+    <div class="card-body">
+      {% if action_items %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Action item</th>
+                <th>Required</th>
+                <th>Who</th>
+                <th>When</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for action in action_items %}
+                <tr>
+                  <td>{{ action.action_item }}</td>
+                  <td>{{ action.action_required|default:"—" }}</td>
+                  <td>{{ action.who|default:"—" }}</td>
+                  <td>{{ action.target_date|default:"—" }}</td>
+                  <td>{{ action.get_status_display }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">No action items.</div>
       {% endif %}
     </div>
   </div>

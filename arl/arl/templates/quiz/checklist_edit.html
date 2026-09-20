@@ -47,6 +47,49 @@
   display: flex;
   align-items: flex-end; /* aligns bottom edge with comment */
 }
+
+  .section-label {
+    font-size: .78rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin: 1rem 0 .4rem;
+  }
+  .answer-pills, .resp-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+  .answer-pills input, .resp-pills input { position: absolute; opacity: 0; pointer-events: none; }
+  .answer-pills label, .resp-pills label {
+    margin: 0;
+    min-width: 3.2rem;
+    padding: .4rem .7rem;
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    background: #fff;
+    color: #495057;
+    font-weight: 600;
+    font-size: .9rem;
+    text-align: center;
+    cursor: pointer;
+  }
+  .answer-pills input:checked + label[data-value="yes"],
+  .answer-pills input:checked + label[data-value="Y"] { background: #198754; border-color: #198754; color: #fff; }
+  .answer-pills input:checked + label[data-value="no"],
+  .answer-pills input:checked + label[data-value="N"] { background: #dc3545; border-color: #dc3545; color: #fff; }
+  .answer-pills input:checked + label[data-value="na"],
+  .answer-pills input:checked + label[data-value="N/A"] { background: #6c757d; border-color: #6c757d; color: #fff; }
+  .resp-pills input:checked + label { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+  .action-plan {
+    border: 1px solid #f1aeb5;
+    background: #fff5f5;
+    border-radius: .5rem;
+    padding: .75rem;
+    margin-top: .75rem;
+  }
+  .action-plan.collapsed { display: none; }
+  .action-summary-row { cursor: pointer; }
 </style>
 
 <div class="container">
@@ -90,10 +133,24 @@
   {{ form|crispy }}
 
   <h5 class="mt-4">Items</h5>
+  <p class="small text-muted mb-3">
+    Y = present, N = gap (opens a 6.4 action plan), N/A = does not apply.
+    L = Associate / franchisee; S = supplier / owner / gas company.
+  </p>
   {{ formset.management_form }}
 
   {% for f in formset %}
-    <div class="card mb-3">
+    {% if f.instance.section %}
+      {% ifchanged f.instance.section %}
+        <div class="section-label">{{ f.instance.section }}</div>
+      {% endifchanged %}
+    {% endif %}
+    <div class="card mb-3 checklist-item"
+         id="item-{{ f.instance.pk }}"
+         data-item-id="{{ f.instance.pk }}"
+         data-response-type="{{ f.instance.response_type }}"
+         data-creates-action="{{ f.instance.create_action_answers|join:',' }}"
+         data-responsibility-assignable="{% if f.instance.responsibility_assignable %}1{% else %}0{% endif %}">
       <div class="card-body">
         {{ f.id }}
         {{ f.order }} {# hidden input - keep it here #}
@@ -105,24 +162,42 @@
           </div>
         {% endif %}
 
-        <!-- Row 1: question (readonly) + result select -->
-        <div class="row g-2 align-items-center">
-          <div class="col-md-8">
-            <div class="fw-semibold">{{ f.instance.text }}</div>
-          </div>
-          <div class="col-md-4">
-            {{ f.result }}
+        <div class="fw-semibold mb-2">{{ f.instance.text }}</div>
+
+        {% if f.instance.is_yes_no_na %}
+        <div class="mb-2">
+          <div class="small text-muted mb-1">Answer</div>
+          <div class="answer-pills" data-role="answer">
+            {% for radio in f.result %}
+              {% if radio.data.value %}
+              {{ radio.tag }}
+              <label for="{{ radio.id_for_label }}" data-value="{{ radio.data.value }}">{{ radio.choice_label }}</label>
+              {% endif %}
+            {% endfor %}
           </div>
         </div>
+        <div class="mb-2 resp-wrap {% if not f.instance.responsibility_assignable %}d-none{% endif %}">
+          <div class="small text-muted mb-1">Responsibility <span class="resp-required {% if f.instance.result == 'na' or not f.instance.result %}d-none{% endif %}">(required for Y/N)</span></div>
+          <div class="resp-pills" data-role="responsibility">
+            {% for radio in f.responsibility %}
+              {% if radio.data.value %}
+              {{ radio.tag }}
+              <label for="{{ radio.id_for_label }}" data-value="{{ radio.data.value }}">{{ radio.data.value }}</label>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="small text-muted mt-1">L = Associate / franchisee &nbsp;·&nbsp; S = supplier / owner / gas company</div>
+        </div>
+        {% else %}
+          <div class="d-none">{{ f.result }}{{ f.responsibility }}</div>
+          <div class="mb-2">{{ f.text_value|as_crispy_field }}</div>
+        {% endif %}
 
         <!-- Row 2: comment (left) + image/dropzone (right) -->
         <div class="row g-2 align-items-start mt-2">
           <div class="col">
             {{ f.comment|as_crispy_field }}
           </div>
-
-          <!-- Hide the built-in file input; uploads are separate -->
-          <div class="d-none">{{ f.photo }}</div>
 
           <div class="col-auto">
             {% if f.instance.signed_url %}
@@ -137,11 +212,60 @@
             {% endif %}
           </div>
         </div>
+
+        <div class="action-plan {% if not f.instance.creates_action %}collapsed{% endif %}" data-role="action-plan">
+          <div class="fw-semibold mb-2">Site Security Action Plan (6.4)</div>
+          <p class="small text-muted mb-2">Required because this item is N. Prefills from the checklist wording.</p>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Action item</label>
+            {{ f.action_item }}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Action required <span class="text-danger">*</span></label>
+            {{ f.action_required }}
+          </div>
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">Who <span class="text-danger">*</span></label>
+              {{ f.who }}
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">When (target date) <span class="text-danger">*</span></label>
+              {{ f.target_date }}
+            </div>
+          </div>
+          <div class="mt-2">
+            <label class="form-label small mb-1">Note / photo (optional)</label>
+            {{ f.action_note }}
+            <div class="small text-muted mt-1">Use the item photo above if a picture is needed.</div>
+          </div>
+        </div>
       </div>
     </div>
   {% endfor %}
 
-  <div class="d-flex gap-2">
+  <div class="card mb-3" id="action-summary">
+    <div class="card-body">
+      <h5 class="mb-2">Action plan summary</h5>
+      <p class="small text-muted">Every N below uses the same action-plan record as the question above. Click a row to jump there.</p>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Who</th>
+              <th>When</th>
+            </tr>
+          </thead>
+          <tbody id="action-summary-body">
+            <tr class="text-muted" data-empty="1"><td colspan="3">No N answers yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap sticky-bottom py-2 bg-white">
     <button class="btn btn-sm btn-outline-primary" name="action" value="save">Save Draft</button>
     <button class="btn btn-sm btn-outline-primary" name="action" value="submit">Submit & Generate PDF</button>
   </div>
@@ -374,6 +498,153 @@
     form.addEventListener('submit', () => {
       clearTimeout(saveTimer);
     });
+  })();
+</script>
+
+<script>
+  (function () {
+    const NO = 'no';
+    const YES = 'yes';
+    const NA = 'na';
+
+    function selectedValue(container) {
+      const checked = container.querySelector('input:checked');
+      return checked ? checked.value : '';
+    }
+
+    function actionHasContent(plan) {
+      if (!plan) return false;
+      const fields = plan.querySelectorAll('textarea, input[type="text"], input[type="date"]');
+      return Array.from(fields).some((el) => {
+        if (el.readOnly) return false;
+        return (el.value || '').trim().length > 0;
+      });
+    }
+
+    function clearAction(plan) {
+      if (!plan) return;
+      plan.querySelectorAll('textarea, input[type="text"], input[type="date"]').forEach((el) => {
+        if (el.readOnly) return;
+        el.value = '';
+      });
+    }
+
+    function setAnswer(card, value) {
+      const radio = card.querySelector('.answer-pills input[value="' + value + '"]');
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    function refreshCard(card, {confirmDiscard = true} = {}) {
+      const answerWrap = card.querySelector('[data-role="answer"]');
+      const respWrap = card.querySelector('.resp-wrap');
+      const plan = card.querySelector('[data-role="action-plan"]');
+      const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
+      const answer = answerWrap ? selectedValue(answerWrap) : '';
+      const answerCode = {yes: 'Y', no: 'N', na: 'N/A'}[answer] || '';
+
+      if (respWrap && card.dataset.responsibilityAssignable === '1') {
+        const req = respWrap.querySelector('.resp-required');
+        if (req) req.classList.toggle('d-none', !(answer === YES || answer === NO));
+      }
+
+      if (!plan) return;
+      const shouldOpen = creates.includes(answerCode);
+      const isOpen = !plan.classList.contains('collapsed');
+      if (shouldOpen) {
+        plan.classList.remove('collapsed');
+        const itemField = plan.querySelector('input[name$="-action_item"]');
+        const title = card.querySelector('.fw-semibold');
+        if (itemField && !(itemField.value || '').trim() && title) {
+          itemField.value = title.textContent.trim();
+        }
+      } else if (isOpen) {
+        if (confirmDiscard && actionHasContent(plan)) {
+          const ok = window.confirm('Discard the action plan for this item?');
+          if (!ok) {
+            setAnswer(card, NO);
+            return;
+          }
+        }
+        clearAction(plan);
+        plan.classList.add('collapsed');
+      }
+    }
+
+    function refreshSummary() {
+      const body = document.getElementById('action-summary-body');
+      if (!body) return;
+      const rows = [];
+      document.querySelectorAll('.checklist-item').forEach((card) => {
+        const answerWrap = card.querySelector('[data-role="answer"]');
+        const plan = card.querySelector('[data-role="action-plan"]');
+        if (!answerWrap || !plan) return;
+        if (selectedValue(answerWrap) !== NO) return;
+        const title = (card.querySelector('.fw-semibold') || {}).textContent || '';
+        const who = (plan.querySelector('input[name$="-who"]') || {}).value || '';
+        const when = (plan.querySelector('input[name$="-target_date"]') || {}).value || '';
+        const required = (plan.querySelector('textarea[name$="-action_required"]') || {}).value || '';
+        rows.push({id: card.id, title: title.trim(), who, when, required});
+      });
+      body.replaceChildren();
+      if (!rows.length) {
+        const empty = document.createElement('tr');
+        empty.className = 'text-muted';
+        empty.dataset.empty = '1';
+        empty.innerHTML = '<td colspan="3">No N answers yet.</td>';
+        body.appendChild(empty);
+        return;
+      }
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.className = 'action-summary-row';
+        tr.dataset.target = row.id;
+        const itemTd = document.createElement('td');
+        const titleEl = document.createElement('div');
+        titleEl.className = 'fw-semibold';
+        titleEl.textContent = row.title;
+        const requiredEl = document.createElement('div');
+        requiredEl.className = 'small text-muted';
+        requiredEl.textContent = row.required || 'Action required not filled yet';
+        itemTd.append(titleEl, requiredEl);
+        const whoTd = document.createElement('td');
+        whoTd.textContent = row.who || '—';
+        const whenTd = document.createElement('td');
+        whenTd.textContent = row.when || '—';
+        tr.append(itemTd, whoTd, whenTd);
+        body.appendChild(tr);
+      });
+    }
+
+    document.querySelectorAll('.checklist-item').forEach((card) => {
+      card.querySelectorAll('.answer-pills input').forEach((input) => {
+        input.addEventListener('change', () => {
+          refreshCard(card);
+          refreshSummary();
+        });
+      });
+      const plan = card.querySelector('[data-role="action-plan"]');
+      if (plan) {
+        plan.querySelectorAll('input, textarea').forEach((el) => {
+          el.addEventListener('input', refreshSummary);
+          el.addEventListener('change', refreshSummary);
+        });
+      }
+      refreshCard(card, {confirmDiscard: false});
+    });
+
+    const summaryBody = document.getElementById('action-summary-body');
+    if (summaryBody) {
+      summaryBody.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-target]');
+        if (!row) return;
+        const target = document.getElementById(row.dataset.target);
+        if (target) target.scrollIntoView({behavior: 'smooth', block: 'start'});
+      });
+    }
+    refreshSummary();
   })();
 </script>
 {% endblock %}

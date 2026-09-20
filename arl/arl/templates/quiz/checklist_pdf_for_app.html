@@ -67,6 +67,7 @@
       <div class="meta">
         {% if store_number %}<div>Store #: {{ store_number }}</div>{% endif %}
         {% if store_name %}<div>Store Name: {{ store_name }}</div>{% endif %}
+        {% if store_address_line %}<div>Address: {{ store_address_line }}</div>{% endif %}
         <strong>Created by:</strong> {{ checklist.created_by }}<br>
         {% if checklist.submitted_by %}
           <strong>Submitted by:</strong> {{ checklist.submitted_by }} on {{ checklist.submitted_at|date:"Y-m-d H:i" }}
@@ -90,9 +91,14 @@
               <strong>{{ it.text }}</strong>
             </td>
             <td class="a">
-              {% if it.result %}<strong>{{ it.result }}</strong>{% endif %}
+              {% if it.answer %}<strong>{{ it.answer }}</strong>{% elif it.result %}<strong>{{ it.result }}</strong>{% endif %}
+              {% if it.responsibility %} <span class="muted">({{ it.responsibility }})</span>{% endif %}
+              {% if it.text_value %}<div>{{ it.text_value }}</div>{% endif %}
               {% if it.comment %}<span class="muted ms-1">{{ it.comment }}</span>{% endif %}
-              {% if not it.result and not it.comment %}<span class="muted">—</span>{% endif %}
+              {% if it.action %}
+                <div class="muted">Action: {{ it.action.action_required|default:it.action.action_item }} · Who: {{ it.action.who|default:"—" }} · When: {{ it.action.target_date|default:"—" }}</div>
+              {% endif %}
+              {% if not it.result and not it.comment and not it.text_value %}<span class="muted">—</span>{% endif %}
             </td>
             <td class="p">
               {% if it.photo_url %}
@@ -105,6 +111,30 @@
           {% endfor %}
         </tbody>
       </table>
+
+      {% if action_items %}
+      <h5 class="mt-4">Action plan summary</h5>
+      <table class="items">
+        <thead>
+          <tr>
+            <th>Action item</th>
+            <th>Required</th>
+            <th>Who</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for action in action_items %}
+          <tr>
+            <td>{{ action.action_item }}</td>
+            <td>{{ action.action_required|default:"—" }}</td>
+            <td>{{ action.who|default:"—" }}</td>
+            <td>{{ action.target_date|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
 
     </div>
   </div>
