@@ -14,6 +14,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: testdb
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
@@ -21,15 +36,11 @@ jobs:
       FERNET_PRIMARY_KEY: ${{ secrets.FERNET_PRIMARY_KEY }}
       SIN_HASH_SALT: ${{ secrets.SIN_HASH_SALT }}
 
-      DB_NAME: ${{ secrets.DB_NAME }}
-
-      DB_USER: ${{ secrets.DB_USER }}
-
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-
-      DB_HOST: ${{ secrets.DB_HOST }}
-
-      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: testdb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
 
     steps:
       - name: Checkout code
@@ -61,8 +72,6 @@ jobs:
           python arl/manage.py check
 
       - name: Run tests with coverage
-        env:
-          DJANGO_TEST_SQLITE: "1"
         run: |
           coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import
           coverage report

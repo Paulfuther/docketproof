@@ -188,15 +188,6 @@ DATABASES = {
     }
 }
 
-# GitHub Actions has no Postgres listener; run Django tests against SQLite.
-if os.environ.get("DJANGO_TEST_SQLITE") == "1":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
-    }
-
 
 # This should match one of the keys in EXPLORER_CONNECTIONS
 
