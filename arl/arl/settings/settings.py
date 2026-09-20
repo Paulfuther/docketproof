@@ -351,9 +351,9 @@ MESSAGE_TAGS = {
 
 # cryptography
 
-FERNET_PRIMARY_KEY = os.environ["FERNET_PRIMARY_KEY"]          # 32-byte urlsafe base64
+FERNET_PRIMARY_KEY = os.environ.get("FERNET_PRIMARY_KEY")          # 32-byte urlsafe base64
 FERNET_OLD_KEYS = [k for k in os.environ.get("FERNET_OLD_KEYS", "").split(",") if k]
-SIN_HASH_SALT = os.environ["SIN_HASH_SALT"]
+SIN_HASH_SALT = os.environ.get("SIN_HASH_SALT")
 
 
 # print("site url:", SITE_URL)

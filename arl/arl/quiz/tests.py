@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase as SimpleTestCase
 
@@ -157,7 +158,87 @@ class ChecklistFormTests(TestCase):
             validate_submit=True,
         )
         self.assertFalse(form.is_valid())
-        self.assertTrue(form.non_field_errors())
+        self.assertIn("action_required", form.errors)
+        self.assertIn("who", form.errors)
+        self.assertIn("target_date", form.errors)
+        self.assertTrue(
+            any("action plan" in str(message) for message in form.errors["action_required"])
+        )
+        self.assertIn("is-invalid", form["action_required"].as_widget())
+        self.assertIn("is-invalid", form["who"].as_widget())
+
+    def test_submit_requires_responsibility_on_field(self):
+        form = self._form(
+            {
+                "result": "yes",
+                "responsibility": "",
+                "comment": "",
+                "order": 1,
+            },
+            validate_submit=True,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("responsibility", form.errors)
+        self.assertTrue(
+            any("L or S" in str(message) for message in form.errors["responsibility"])
+        )
+        self.assertNotIn("action_required", form.errors)
+
+    def test_na_submit_does_not_require_ls_or_action(self):
+        form = self._form(
+            {
+                "result": "na",
+                "responsibility": "",
+                "comment": "",
+                "order": 1,
+            },
+            validate_submit=True,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_error_summary_lists_failed_items(self):
+        other = ChecklistItem.objects.create(
+            checklist=self.checklist,
+            template_item=self.template_item,
+            text="Fire extinguisher tagged?",
+            order=2,
+        )
+        data = {
+            "items-TOTAL_FORMS": "2",
+            "items-INITIAL_FORMS": "2",
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+            "items-0-id": str(self.item.pk),
+            "items-0-order": "1",
+            "items-0-result": "no",
+            "items-0-responsibility": "",
+            "items-0-comment": "",
+            "items-1-id": str(other.pk),
+            "items-1-order": "2",
+            "items-1-result": "yes",
+            "items-1-responsibility": "",
+            "items-1-comment": "",
+        }
+        formset = ChecklistItemFormSet(
+            data,
+            instance=self.checklist,
+            form_kwargs={"validate_submit": True},
+        )
+        self.assertFalse(formset.is_valid())
+        summary = formset.item_error_summaries()
+        self.assertEqual(summary["count"], 2)
+        self.assertEqual(summary["need_ls"], 2)
+        self.assertEqual(summary["need_action"], 1)
+        self.assertEqual(summary["rows"][0]["pk"], self.item.pk)
+        self.assertIn("responsibility", summary["rows"][0]["kinds"])
+        self.assertIn("action", summary["rows"][0]["kinds"])
+        self.assertEqual(summary["rows"][1]["kinds"], {"responsibility"})
+
+    def test_unbound_formset_has_empty_error_summary(self):
+        formset = ChecklistItemFormSet(instance=self.checklist)
+        summary = formset.item_error_summaries()
+        self.assertEqual(summary["count"], 0)
+        self.assertEqual(summary["rows"], [])
 
     def test_submit_saves_action_item_from_n(self):
         form = self._form(
@@ -330,4 +411,26 @@ class DropboxChecklistPathTests(SimpleTestCase):
                 "/CHECKLISTS/no-company/fall-winter-exterior-checklist/no-store/2026/02-February/"
             )
         )
+
+
+class ChecklistEditTemplateTests(SimpleTestCase):
+    def test_edit_template_has_per_item_error_hooks(self):
+        template = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "quiz"
+            / "checklist_edit.html"
+        )
+        text = template.read_text()
+        self.assertIn("id=\"checklist-error-summary\"", text)
+        self.assertIn("has-item-errors", text)
+        self.assertIn("data-item-error", text)
+        self.assertIn("focusFirstChecklistError", text)
+        self.assertIn("L/S", text)
+        self.assertIn("item_error_summary.rows", text)
+        self.assertIn("alert-success.alert-dismissible", text)
+        self.assertIn("function applyLiveItemErrors", text)
+        self.assertIn("function refreshErrorSummary", text)
+        self.assertIn("data-error-kind", text)
+
 
