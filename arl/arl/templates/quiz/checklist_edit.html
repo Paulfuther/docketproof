@@ -145,7 +145,7 @@
   <div class="alert alert-danger" id="checklist-error-summary" role="alert">
     <strong>Please fix the errors below.</strong>
     {% if item_error_summary.count %}
-      <div class="mt-1">
+      <div class="mt-1" data-role="error-counts">
         {{ item_error_summary.count }} item{{ item_error_summary.count|pluralize }}
         need{{ item_error_summary.count|pluralize:"s," }} attention
         {% if item_error_summary.need_ls %}
@@ -158,9 +158,9 @@
           · {{ item_error_summary.need_answer }} need{{ item_error_summary.need_answer|pluralize:"s," }} an answer
         {% endif %}
       </div>
-      <ul class="mb-0 mt-2">
+      <ul class="mb-0 mt-2" data-role="error-list">
         {% for err in item_error_summary.rows %}
-          <li>
+          <li data-item-id="{{ err.pk }}">
             <a href="#item-{{ err.pk }}">{{ err.label }}</a>
             — {{ err.text|truncatechars:80 }}
             {% if err.messages %}
@@ -170,8 +170,12 @@
         {% endfor %}
       </ul>
     {% endif %}
-    {% if form.non_field_errors %}<div class="mt-2">{{ form.non_field_errors }}</div>{% endif %}
-    {% if formset.non_form_errors %}<div class="mt-2">{{ formset.non_form_errors }}</div>{% endif %}
+    {% if form.non_field_errors or formset.non_form_errors %}
+      <div class="mt-2" data-role="form-level-errors">
+        {% if form.non_field_errors %}<div>{{ form.non_field_errors }}</div>{% endif %}
+        {% if formset.non_form_errors %}<div>{{ formset.non_form_errors }}</div>{% endif %}
+      </div>
+    {% endif %}
   </div>
 {% endif %}
 
@@ -198,6 +202,8 @@
          id="item-{{ f.instance.pk }}"
          data-item-id="{{ f.instance.pk }}"
          data-item-index="{{ forloop.counter }}"
+         data-item-label="{% if f.instance.template_item.item_code %}{{ f.instance.template_item.item_code }}{% else %}Item {{ forloop.counter }}{% endif %}"
+         data-item-required="{% if f.instance.is_required %}1{% else %}0{% endif %}"
          data-response-type="{{ f.instance.response_type }}"
          data-creates-action="{{ f.instance.create_action_answers|join:',' }}"
          data-responsibility-assignable="{% if f.instance.responsibility_assignable %}1{% else %}0{% endif %}"
@@ -229,7 +235,7 @@
             {% endfor %}
           </div>
           {% if f.result.errors %}
-            <div class="field-error" id="item-{{ f.instance.pk }}-result-error" data-item-error role="alert" tabindex="-1">
+            <div class="field-error" id="item-{{ f.instance.pk }}-result-error" data-item-error data-error-kind="result" role="alert" tabindex="-1">
               {{ f.result.errors.0 }}
             </div>
           {% endif %}
@@ -245,7 +251,7 @@
             {% endfor %}
           </div>
           {% if f.responsibility.errors %}
-            <div class="field-error" id="item-{{ f.instance.pk }}-responsibility-error" data-item-error role="alert" tabindex="-1">
+            <div class="field-error" id="item-{{ f.instance.pk }}-responsibility-error" data-item-error data-error-kind="responsibility" role="alert" tabindex="-1">
               {{ f.responsibility.errors.0 }}
             </div>
           {% endif %}
@@ -280,7 +286,7 @@
           <div class="fw-semibold mb-2">Site Security Action Plan (6.4)</div>
           <p class="small text-muted mb-2">Required because this item is N. Prefills from the checklist wording.</p>
           {% if f.action_required.errors or f.who.errors or f.target_date.errors %}
-            <div class="field-error mb-2" id="item-{{ f.instance.pk }}-action-error" data-item-error role="alert" tabindex="-1">
+            <div class="field-error mb-2" id="item-{{ f.instance.pk }}-action-error" data-item-error data-error-kind="action" role="alert" tabindex="-1">
               N requires an action plan (action required, who, and when).
             </div>
           {% endif %}
@@ -292,7 +298,7 @@
             <label class="form-label small mb-1">Action required <span class="text-danger">*</span></label>
             {{ f.action_required }}
             {% if f.action_required.errors %}
-              <div class="field-error">{{ f.action_required.errors.0 }}</div>
+              <div class="field-error" data-error-kind="action_required">{{ f.action_required.errors.0 }}</div>
             {% endif %}
           </div>
           <div class="row g-2">
@@ -300,14 +306,14 @@
               <label class="form-label small mb-1">Who <span class="text-danger">*</span></label>
               {{ f.who }}
               {% if f.who.errors %}
-                <div class="field-error">{{ f.who.errors.0 }}</div>
+                <div class="field-error" data-error-kind="who">{{ f.who.errors.0 }}</div>
               {% endif %}
             </div>
             <div class="col-12 col-md-6">
               <label class="form-label small mb-1">When (target date) <span class="text-danger">*</span></label>
               {{ f.target_date }}
               {% if f.target_date.errors %}
-                <div class="field-error">{{ f.target_date.errors.0 }}</div>
+                <div class="field-error" data-error-kind="target_date">{{ f.target_date.errors.0 }}</div>
               {% endif %}
             </div>
           </div>
@@ -585,8 +591,222 @@
     const NA = 'na';
 
     function selectedValue(container) {
-      const checked = container.querySelector('input:checked');
+      const checked = container && container.querySelector('input:checked');
       return checked ? checked.value : '';
+    }
+
+    function namedValue(card, suffix) {
+      const el = card.querySelector('[name$="-' + suffix + '"]');
+      return el ? (el.value || '').trim() : '';
+    }
+
+    function itemClientErrors(card) {
+      const errors = {
+        result: false,
+        responsibility: false,
+        action: false,
+        action_required: false,
+        who: false,
+        target_date: false,
+        text: false,
+      };
+      const answerWrap = card.querySelector('[data-role="answer"]');
+      const isYesNo = card.dataset.responseType === 'yes_no_na' || !!answerWrap;
+      if (!isYesNo) {
+        if (card.dataset.itemRequired === '1' && !namedValue(card, 'text_value')) {
+          errors.text = true;
+        }
+        return errors;
+      }
+      const answer = selectedValue(answerWrap);
+      const answerCode = {yes: 'Y', no: 'N', na: 'N/A'}[answer] || '';
+      if (!answer) errors.result = true;
+      if (
+        card.dataset.responsibilityAssignable === '1' &&
+        (answer === YES || answer === NO)
+      ) {
+        const resp = selectedValue(card.querySelector('[data-role="responsibility"]'));
+        if (resp !== 'L' && resp !== 'S') errors.responsibility = true;
+      }
+      const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
+      if (creates.includes(answerCode)) {
+        errors.action_required = !namedValue(card, 'action_required');
+        errors.who = !namedValue(card, 'who');
+        errors.target_date = !namedValue(card, 'target_date');
+        errors.action = errors.action_required || errors.who || errors.target_date;
+      }
+      return errors;
+    }
+
+    function removeErrorNodes(card, kind) {
+      card.querySelectorAll('[data-error-kind="' + kind + '"]').forEach((el) => el.remove());
+    }
+
+    function clearInvalidClass(card, suffix) {
+      const el = card.querySelector('[name$="-' + suffix + '"]');
+      if (el) el.classList.remove('is-invalid');
+    }
+
+    function cardHasErrorUi(card) {
+      return card.classList.contains('has-item-errors') ||
+        !!card.querySelector('.field-error, .alert-warning');
+    }
+
+    function clearCardErrors(card) {
+      card.classList.remove('has-item-errors');
+      card.removeAttribute('tabindex');
+      card.querySelectorAll('.has-error').forEach((el) => el.classList.remove('has-error'));
+      card.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+      card.querySelectorAll('.field-error, .alert-warning').forEach((el) => el.remove());
+    }
+
+    function applyLiveItemErrors(card) {
+      if (!cardHasErrorUi(card)) return;
+      const errors = itemClientErrors(card);
+      const any = errors.result || errors.responsibility || errors.action || errors.text;
+      if (!any) {
+        clearCardErrors(card);
+        return;
+      }
+
+      const answerWrap = card.querySelector('.answer-pills-wrap');
+      if (answerWrap) answerWrap.classList.toggle('has-error', errors.result);
+      if (!errors.result) removeErrorNodes(card, 'result');
+
+      const respWrap = card.querySelector('.resp-wrap');
+      if (respWrap) respWrap.classList.toggle('has-error', errors.responsibility);
+      if (!errors.responsibility) {
+        removeErrorNodes(card, 'responsibility');
+        card.querySelectorAll('.resp-radio').forEach((el) => el.classList.remove('is-invalid'));
+      }
+
+      const plan = card.querySelector('[data-role="action-plan"]');
+      if (plan) plan.classList.toggle('has-error', errors.action);
+      if (!errors.action) {
+        removeErrorNodes(card, 'action');
+        removeErrorNodes(card, 'action_required');
+        removeErrorNodes(card, 'who');
+        removeErrorNodes(card, 'target_date');
+        ['action_required', 'who', 'target_date'].forEach((name) => clearInvalidClass(card, name));
+      } else {
+        if (!errors.action_required) {
+          removeErrorNodes(card, 'action_required');
+          clearInvalidClass(card, 'action_required');
+        }
+        if (!errors.who) {
+          removeErrorNodes(card, 'who');
+          clearInvalidClass(card, 'who');
+        }
+        if (!errors.target_date) {
+          removeErrorNodes(card, 'target_date');
+          clearInvalidClass(card, 'target_date');
+        }
+      }
+
+      if (!errors.text) {
+        removeErrorNodes(card, 'text');
+        clearInvalidClass(card, 'text_value');
+      }
+
+      card.classList.toggle('has-item-errors', any);
+    }
+
+    function needsWord(count) {
+      return count === 1 ? 'needs' : 'need';
+    }
+
+    function refreshErrorSummary() {
+      const banner = document.getElementById('checklist-error-summary');
+      if (!banner) return;
+      const cards = Array.from(document.querySelectorAll('.checklist-item.has-item-errors'));
+      const countsEl = banner.querySelector('[data-role="error-counts"]');
+      const listEl = banner.querySelector('[data-role="error-list"]');
+      const formLevel = banner.querySelector('[data-role="form-level-errors"]');
+      const hasFormLevel = !!(formLevel && formLevel.textContent.trim());
+
+      if (!cards.length) {
+        if (countsEl) countsEl.remove();
+        if (listEl) listEl.remove();
+        if (!hasFormLevel) {
+          banner.hidden = true;
+          banner.classList.add('d-none');
+        }
+        return;
+      }
+
+      banner.hidden = false;
+      banner.classList.remove('d-none');
+
+      let needLs = 0;
+      let needAction = 0;
+      let needAnswer = 0;
+      const rows = cards.map((card) => {
+        const errors = itemClientErrors(card);
+        if (errors.responsibility) needLs += 1;
+        if (errors.action) needAction += 1;
+        if (errors.result || errors.text) needAnswer += 1;
+        const messages = [];
+        if (errors.result) messages.push('Choose Y, N, or N/A.');
+        if (errors.text) messages.push('This item requires an answer.');
+        if (errors.responsibility) messages.push('Choose L or S responsibility.');
+        if (errors.action) {
+          messages.push('N requires an action plan (action required, who, and when).');
+        }
+        return {
+          id: card.id,
+          pk: card.dataset.itemId,
+          label: card.dataset.itemLabel || ('Item ' + (card.dataset.itemIndex || '')),
+          text: ((card.querySelector('[data-role="item-title"]') || {}).textContent || '').trim(),
+          messages,
+        };
+      });
+
+      const countBits = [
+        rows.length + (rows.length === 1 ? ' item ' : ' items ') + needsWord(rows.length) + ' attention',
+      ];
+      if (needLs) countBits.push(needLs + ' ' + needsWord(needLs) + ' L/S');
+      if (needAction) {
+        countBits.push(
+          needAction +
+            (needAction === 1 ? ' N answer ' : ' N answers ') +
+            needsWord(needAction) +
+            ' action plan'
+        );
+      }
+      if (needAnswer) countBits.push(needAnswer + ' ' + needsWord(needAnswer) + ' an answer');
+
+      let countsNode = countsEl;
+      if (!countsNode) {
+        countsNode = document.createElement('div');
+        countsNode.className = 'mt-1';
+        countsNode.dataset.role = 'error-counts';
+        banner.insertBefore(countsNode, banner.querySelector('ul, [data-role="form-level-errors"]') || null);
+      }
+      countsNode.textContent = countBits.join(' · ');
+
+      let listNode = listEl;
+      if (!listNode) {
+        listNode = document.createElement('ul');
+        listNode.className = 'mb-0 mt-2';
+        listNode.dataset.role = 'error-list';
+        countsNode.after(listNode);
+      }
+      listNode.replaceChildren();
+      rows.forEach((row) => {
+        const li = document.createElement('li');
+        li.dataset.itemId = row.pk || '';
+        const link = document.createElement('a');
+        link.href = '#' + row.id;
+        link.textContent = row.label;
+        li.append(link, document.createTextNode(' — ' + row.text));
+        if (row.messages.length) {
+          const msg = document.createElement('div');
+          msg.className = 'small';
+          msg.textContent = row.messages.join(' ');
+          li.appendChild(msg);
+        }
+        listNode.appendChild(li);
+      });
     }
 
     function actionHasContent(plan) {
@@ -695,19 +915,33 @@
       });
     }
 
+    function onItemFieldsChange(card) {
+      applyLiveItemErrors(card);
+      refreshSummary();
+      refreshErrorSummary();
+    }
+
     document.querySelectorAll('.checklist-item').forEach((card) => {
       card.querySelectorAll('.answer-pills input').forEach((input) => {
         input.addEventListener('change', () => {
           refreshCard(card);
-          refreshSummary();
+          onItemFieldsChange(card);
         });
+      });
+      card.querySelectorAll('.resp-pills input').forEach((input) => {
+        input.addEventListener('change', () => onItemFieldsChange(card));
       });
       const plan = card.querySelector('[data-role="action-plan"]');
       if (plan) {
         plan.querySelectorAll('input, textarea').forEach((el) => {
-          el.addEventListener('input', refreshSummary);
-          el.addEventListener('change', refreshSummary);
+          el.addEventListener('input', () => onItemFieldsChange(card));
+          el.addEventListener('change', () => onItemFieldsChange(card));
         });
+      }
+      const textEl = card.querySelector('[name$="-text_value"]');
+      if (textEl) {
+        textEl.addEventListener('input', () => onItemFieldsChange(card));
+        textEl.addEventListener('change', () => onItemFieldsChange(card));
       }
       refreshCard(card, {confirmDiscard: false});
     });

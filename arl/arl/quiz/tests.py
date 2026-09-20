@@ -429,5 +429,8 @@ class ChecklistEditTemplateTests(SimpleTestCase):
         self.assertIn("L/S", text)
         self.assertIn("item_error_summary.rows", text)
         self.assertIn("alert-success.alert-dismissible", text)
+        self.assertIn("function applyLiveItemErrors", text)
+        self.assertIn("function refreshErrorSummary", text)
+        self.assertIn("data-error-kind", text)
 
 
