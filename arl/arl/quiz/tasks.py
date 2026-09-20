@@ -2,6 +2,7 @@ from __future__ import absolute_import, unicode_literals
 
 import base64
 import logging
+import os
 import time
 import uuid
 from datetime import datetime
@@ -258,7 +259,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
                     else settings.MAIL_DEFAULT_SENDER
                 )
 
-                pdf_filename = filename  # keep your naming
+                pdf_filename = os.path.basename(full_file_path)
                 logger.info(
                     "[Checklist Email Task] Preparing attachment: %s (%s bytes)",
                     pdf_filename,

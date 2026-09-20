@@ -302,11 +302,13 @@ class DropboxChecklistPathTests(SimpleTestCase):
             ),
         )
         path, folder = build_checklist_dropbox_path(checklist, "12", when=when)
+        pdf_filename = path.rsplit("/", 1)[-1]
         self.assertEqual(folder, "workplace-inspection-checklist-bc-on")
+        self.assertEqual(pdf_filename, "12_store-12-inspection-ab12cd34-42.pdf")
         self.assertEqual(
             path,
             "/CHECKLISTS/petro-canada/workplace-inspection-checklist-bc-on/"
-            "12/2026/09-September/12_store-12-inspection-ab12cd34-42.pdf",
+            f"12/2026/09-September/{pdf_filename}",
         )
 
     def test_falls_back_to_title_when_template_missing(self):
