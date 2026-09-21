@@ -7,6 +7,7 @@ from django.utils import timezone
 from arl.user.models import Employer, EmployerSettings, NewHireInvite
 
 
+@override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
 class NewHireInviteExpiryTests(TestCase):
     def setUp(self):
         self.employer = Employer.objects.create(name="Acme Fuels")

@@ -442,6 +442,7 @@ class ChecklistEditTemplateTests(SimpleTestCase):
         self.assertIn("id=\"checklist-form-action\"", text)
 
 
+@override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
 class ChecklistMobileSubmitTests(TestCase):
     """80-item submit must not 400; Django TooManyFieldsSent is the mobile failure mode."""
 
