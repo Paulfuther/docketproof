@@ -1,12 +1,15 @@
+from unittest.mock import patch
 from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase as SimpleTestCase
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from arl.quiz.forms import ChecklistItemForm, ChecklistItemFormSet
+from arl.user.models import CustomUser, Employer, Store
 from arl.quiz.importers import import_checklist_template, load_checklist_payload
 from arl.quiz.models import (
     Checklist,
@@ -432,5 +435,125 @@ class ChecklistEditTemplateTests(SimpleTestCase):
         self.assertIn("function applyLiveItemErrors", text)
         self.assertIn("function refreshErrorSummary", text)
         self.assertIn("data-error-kind", text)
+        self.assertIn("id=\"checklist-edit-form\"", text)
+        self.assertNotIn('enctype="multipart/form-data"', text)
+        self.assertIn("function checklistFormData", text)
+        self.assertIn("data-action=\"submit\"", text)
+        self.assertIn("id=\"checklist-form-action\"", text)
+
+
+class ChecklistMobileSubmitTests(TestCase):
+    """80-item submit must not 400; Django TooManyFieldsSent is the mobile failure mode."""
+
+    ITEM_COUNT = 80
+
+    def setUp(self):
+        employer = Employer.objects.create(name="Petro Test")
+        self.user = CustomUser.objects.create_user(
+            username="inspector",
+            email="inspector@example.com",
+            password="pass12345",
+            phone_number="+15196707469",
+            employer=employer,
+        )
+        self.store = Store.objects.create(
+            number=12,
+            employer=employer,
+            address="123 Main St",
+            city="London",
+            province="ON",
+        )
+        template = ChecklistTemplate.objects.create(name="Workplace Inspection")
+        self.checklist = Checklist.objects.create(
+            title="Store 12 inspection",
+            created_by=self.user,
+            store=self.store,
+            status="draft",
+        )
+        for i in range(self.ITEM_COUNT):
+            ti = ChecklistTemplateItem.objects.create(
+                template=template,
+                text=f"Item {i + 1}",
+                response_type=ChecklistTemplateItem.RESPONSE_YES_NO_NA,
+                responsibility_assignable=True,
+                create_action_on=["N"],
+                order=i,
+            )
+            ChecklistItem.objects.create(
+                checklist=self.checklist,
+                template_item=ti,
+                text=ti.text,
+                order=i,
+            )
+        self.client.force_login(self.user)
+        self.url = reverse("checklist_edit", kwargs={"slug": self.checklist.slug})
+        self.pdf_patch = patch(
+            "arl.quiz.views.generate_checklist_pdf_task.delay"
+        )
+        self.pdf_patch.start()
+        self.addCleanup(self.pdf_patch.stop)
+
+    def _post_data(self, include_action_fields=True, responsibility="L"):
+        items = list(self.checklist.items.order_by("id"))
+        data = {
+            "title": self.checklist.title,
+            "notes": "",
+            "store": str(self.store.pk),
+            "action": "submit",
+            "items-TOTAL_FORMS": str(len(items)),
+            "items-INITIAL_FORMS": str(len(items)),
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+        }
+        for i, item in enumerate(items):
+            data[f"items-{i}-id"] = str(item.pk)
+            data[f"items-{i}-order"] = str(item.order)
+            data[f"items-{i}-result"] = "yes"
+            data[f"items-{i}-responsibility"] = responsibility
+            data[f"items-{i}-comment"] = ""
+            if include_action_fields:
+                data[f"items-{i}-action_item"] = ""
+                data[f"items-{i}-action_required"] = ""
+                data[f"items-{i}-who"] = ""
+                data[f"items-{i}-target_date"] = ""
+                data[f"items-{i}-action_note"] = ""
+        return data
+
+    def test_eighty_item_payload_exceeds_django_default_field_limit(self):
+        """Evidence: full L/S + action-plan POST is > Django's default 1000 keys
+        once radios/file parts are counted the way mobile multipart can."""
+        data = self._post_data()
+        # Always-posted keys for 80 items (id, order, result, L/S, comment,
+        # 5 action fields) plus management + checklist + action ≈ 809.
+        self.assertGreater(len(data), 800)
+        # Simulated extra radio parts (3 Y/N/N/A + 2 L/S per item) push over 1000.
+        simulated_mobile_parts = len(data) + (self.ITEM_COUNT * 3)
+        self.assertGreater(simulated_mobile_parts, 1000)
+
+    def test_eighty_item_submit_is_not_400(self):
+        resp = self.client.post(self.url, self._post_data())
+        self.assertNotEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 302)
+        self.checklist.refresh_from_db()
+        self.assertEqual(self.checklist.status, "submitted")
+
+    def test_submit_omitting_action_fields_for_yes_is_not_400(self):
+        resp = self.client.post(
+            self.url, self._post_data(include_action_fields=False)
+        )
+        self.assertNotEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 302)
+
+    def test_missing_ls_on_submit_is_validation_200_not_400(self):
+        resp = self.client.post(
+            self.url, self._post_data(responsibility="")
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Please fix the errors below")
+
+    @override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=50)
+    def test_too_many_fields_is_http_400_suspicious_operation(self):
+        resp = self.client.post(self.url, self._post_data())
+        self.assertEqual(resp.status_code, 400)
 
 

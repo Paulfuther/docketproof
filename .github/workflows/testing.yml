@@ -73,5 +73,5 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import
+          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import arl.user.test_invite
           coverage report

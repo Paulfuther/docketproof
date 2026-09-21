@@ -153,6 +153,22 @@ AUTHENTICATION_BACKENDS = [
 
 LOGIN_URL = 'login/'
 
+# Checklist POSTs (80 items × Y/N/N/A + L/S + action-plan fields) exceed
+# Django's default 1000-field cap on mobile multipart. Django raises
+# TooManyFieldsSent → HTTP 400 before the view. Photos upload separately.
+# If nginx terminates the request, also set client_max_body_size 50m;
+# nginx oversize is 413, Django oversize is 400.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+DATA_UPLOAD_MAX_NUMBER_FILES = 200
+
+# New-hire /register/<token>/ TTL. 0 = never expire.
+# Invite tokens previously had no time-to-live (valid until used).
+NEW_HIRE_INVITE_EXPIRY_DAYS = 14
+# Django default is 3 days (72h).
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 14
+
 
 try:
     from .local_settings import *
