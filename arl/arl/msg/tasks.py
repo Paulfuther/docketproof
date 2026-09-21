@@ -31,6 +31,12 @@ from arl.msg.models import (
     ShortenedSMSMessage,
     SmsLog,
 )
+from arl.msg.email_utils import (
+    GENERIC_SENDGRID_TEMPLATE_ID,
+    extract_sendgrid_event_subject,
+    render_merge_fields,
+    resolve_email_subject,
+)
 from arl.setup.models import TenantApiKeys
 from arl.user.models import SMSOptOut, EmployerSMSTask, NewHireInvite
 
@@ -64,6 +70,8 @@ def master_email_send_task(
     body=None,
     subject=None,
     attachment_urls=None,
+    html_body=None,
+    template_name=None,
 ):
     logger.info(
         "[EmailTask] start sg_id=%s employer_id=%s recipients_count=%s",
@@ -80,6 +88,10 @@ def master_email_send_task(
         sendgrid_id (str): SendGrid template ID to use for the email.
         attachments (list, optional): List of attachments (each as a dictionary with file details).
         employer_id (int, optional): Employer ID for logging purposes.
+        body (str, optional): HTML/text body for the generic wrapper template.
+        subject (str, optional): Subject from user input or the in-app template.
+        html_body (str, optional): In-app HTML template body (SendGrid is transport only).
+        template_name (str, optional): Friendly name stored on EmailLog.
 
     Returns:
         str: Success or error message.
@@ -129,7 +141,13 @@ def master_email_send_task(
 
         logger.info(f"📧 Using verified sender: {verified_sender}")
 
+        raw_subject = resolve_email_subject(
+            subject=subject, employer=employer
+        )
+        send_template_id = sendgrid_id or GENERIC_SENDGRID_TEMPLATE_ID
+
         failed_emails = []
+        any_success = False
 
         for recipient in recipients:
             email = recipient.get("email")
@@ -143,19 +161,20 @@ def master_email_send_task(
             to_email = (email or "").strip()
             name_str = (name or "").strip()
 
-            # ensure dicts
-            td = {
+            merge_context = {
                 "name": name_str,
                 "body": body or "",
                 "senior_contact_name": getattr(employer, "senior_contact_name", "")
                 or "",
                 "company_name": getattr(employer, "name", "") or "Company",
-                "subject": subject
-                or f"New Message from {employer.name if employer else 'Our Company'}",
             }
+            resolved_subject = render_merge_fields(raw_subject, merge_context)
+            merge_context["subject"] = resolved_subject
+            td = dict(merge_context)
+            if not td.get("body") and html_body:
+                td["body"] = render_merge_fields(html_body, merge_context)
             ca = {
-                "subject": subject
-                or f"New Message from {employer.name if employer else 'Our Company'}",
+                "subject": resolved_subject,
             }
             logger.info("template data :", td, "custom args :", ca)
             # ensure attachments is a list of dicts
@@ -167,14 +186,19 @@ def master_email_send_task(
                 logger.warning("Skipping recipient with empty email: %r", recipient)
                 continue
 
+            rendered_html = None
+            if html_body and str(html_body).strip():
+                rendered_html = render_merge_fields(html_body, merge_context)
+
             try:
                 success = create_master_email(
                     to_email=email,
-                    sendgrid_id=sendgrid_id,
+                    sendgrid_id=send_template_id,
                     template_data=td,
                     attachments=attachments,
                     verified_sender=verified_sender,
-                    # custom_args=ca,
+                    custom_args=ca,
+                    html_content=rendered_html,
                 )
 
             except Exception as e:
@@ -187,11 +211,28 @@ def master_email_send_task(
             if not success:
                 logger.error(f"❌ create_master_email returned False for {email}")
                 failed_emails.append(email)
+            else:
+                any_success = True
+
+        if employer:
+            EmailLog.objects.create(
+                employer=employer,
+                sender_email=verified_sender or "",
+                template_id=str(send_template_id or "in-app")[:100],
+                template_name=template_name or "",
+                subject=raw_subject,
+                status="SUCCESS" if any_success else "FAILED",
+                error_message=(
+                    f"Failed emails: {', '.join(failed_emails)}"
+                    if failed_emails
+                    else ""
+                ),
+            )
 
         if failed_emails:
             return f"Emails sent with some failures. Failed emails: {', '.join(failed_emails)}"
         else:
-            return f"✅ All emails sent successfully using template '{sendgrid_id}'"
+            return f"✅ All emails sent successfully using template '{send_template_id}'"
 
     except Exception as e:
         error_message = f"🔥 Critical error in master_email_send_task: {str(e)}"
@@ -920,7 +961,7 @@ def process_sendgrid_webhook(payload):
             sg_message_id = event_data.get("sg_message_id", "")
             sg_template_id = event_data.get("sg_template_id", "")
             sg_template_name = event_data.get("sg_template_name", "")
-            subject = event_data.get("subject") or None
+            subject = extract_sendgrid_event_subject(event_data)
             event = event_data.get("event", "")
             timestamp = timezone.datetime.fromtimestamp(
                 event_data.get("timestamp", 0), tz=timezone.utc

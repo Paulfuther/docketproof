@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import urllib.parse
 import uuid
 from io import BytesIO
@@ -31,6 +32,13 @@ from waffle.decorators import waffle_flag
 from arl.bucket.helpers import conn, upload_to_linode_object_storage
 from arl.dsign.forms import NameEmailForm
 from arl.dsign.tasks import create_docusign_envelope_task
+from arl.msg.email_utils import (
+    GENERIC_SENDGRID_TEMPLATE_ID,
+    render_merge_fields,
+    resolve_email_subject,
+    sample_preview_context,
+    sendgrid_id_for_template,
+)
 from arl.msg.helpers import (client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
                              is_member_of_comms_group,
@@ -50,11 +58,11 @@ from arl.msg.tasks import (master_email_send_task,
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
 
-from .forms import (CampaignSetupForm, EmailForm, EmployeeSearchForm,
+from .forms import (CampaignSetupForm, EmailForm, EmailTemplateForm, EmployeeSearchForm,
                     GroupSelectForm, SendGridFilterForm, SMSForm,
                     SMSLogFilterForm, StoreTargetForm, TemplateFilterForm,
                     TemplateWhatsAppForm)
-from .models import (ComplianceFile, DraftEmail, EmailEvent, ShortenedSMSLog,
+from .models import (ComplianceFile, DraftEmail, EmailEvent, EmailTemplate, ShortenedSMSLog,
                      ShortenedSMSMessage)
 from .tasks import (fetch_twilio_sms_task, fetch_twilio_summary,
                     filter_sendgrid_events, generate_email_event_summary,
@@ -501,11 +509,16 @@ def communications(request):
                     print(message)
                     res = master_email_send_task.delay(
                         recipients=recipients,  # ensure JSON-serializable!
-                        sendgrid_id="d-4ac0497efd864e29b4471754a9c836eb",
+                        sendgrid_id=getattr(
+                            settings,
+                            "SENDGRID_GENERIC_TEMPLATE_ID",
+                            GENERIC_SENDGRID_TEMPLATE_ID,
+                        ),
                         employer_id=user.employer.id,  # ensure int
                         body=message,  # str
                         subject=subject,  # str
                         attachment_urls=attachment_urls,  # ensure list[str]
+                        template_name="Custom message",
                     )
                     print("queued master_email_send_task:", res.id)
 
@@ -519,10 +532,28 @@ def communications(request):
                         getattr(sendgrid_template, "sendgrid_id", sendgrid_template),
                     )
 
+                    subject = resolve_email_subject(
+                        subject=email_form.cleaned_data.get("subject"),
+                        template=sendgrid_template,
+                        employer=user.employer,
+                    )
+                    html_body = (sendgrid_template.html_body or "").strip() or None
+                    # In-app HTML is sent as content (SendGrid = transport).
+                    # Legacy templates still use their SendGrid dynamic template id.
+                    send_id = (
+                        ""
+                        if html_body
+                        else sendgrid_id_for_template(sendgrid_template)
+                    )
+
                     master_email_send_task.delay(
                         recipients=recipients,
-                        sendgrid_id=sendgrid_template.sendgrid_id,
+                        sendgrid_id=send_id,
                         employer_id=user.employer.id,
+                        subject=subject,
+                        html_body=html_body,
+                        body=html_body,
+                        template_name=sendgrid_template.name,
                         attachment_urls=attachment_urls,
                     )
 
@@ -668,6 +699,17 @@ def communications(request):
             "can_send_docusign": is_member_of_docusign_group(user),
             "can_view_email_logs": is_member_of_email_logs_group(user),
             "can_view_sms_logs": is_member_of_sms_logs_group(user),
+            "email_templates_meta": json.dumps(
+                [
+                    {
+                        "id": str(t.pk),
+                        "name": t.name or "",
+                        "subject": t.resolved_subject(),
+                        "is_in_app": t.is_in_app,
+                    }
+                    for t in email_form.fields["sendgrid_id"].queryset
+                ]
+            ),
             # "can_send_whatsapp": is_member_of_whatsapp_group(user),
             "selected_ids": selected_ids,
             "draft_id": draft_id,
@@ -1073,6 +1115,155 @@ def search_users_view(request):
     )
 
 
+def _visible_email_templates(employer):
+    return (
+        EmailTemplate.objects.filter(
+            Q(employers=employer) | Q(employers__isnull=True)
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+def _template_for_employer(pk, employer, require_owned=False):
+    qs = _visible_email_templates(employer)
+    template = get_object_or_404(qs, pk=pk)
+    if require_owned and not template.employers.filter(pk=employer.pk).exists():
+        return None
+    return template
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_list(request):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    templates = _visible_email_templates(employer)
+    owned_template_ids = list(
+        EmailTemplate.objects.filter(employers=employer).values_list("pk", flat=True)
+    )
+    return render(
+        request,
+        "msg/email_template_list.html",
+        {
+            "templates": templates,
+            "employer": employer,
+            "owned_template_ids": owned_template_ids,
+        },
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_create(request):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    form = EmailTemplateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        template = form.save()
+        template.employers.add(employer)
+        messages.success(request, "Email template saved.")
+        return redirect("email_template_edit", pk=template.pk)
+    return render(
+        request,
+        "msg/email_template_form.html",
+        {"form": form, "template": None, "preview_context": sample_preview_context(request.user)},
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_edit(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        messages.error(
+            request,
+            "You can preview shared templates but only edit templates owned by your employer.",
+        )
+        return redirect("email_template_list")
+    form = EmailTemplateForm(request.POST or None, instance=template)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Email template updated.")
+        return redirect("email_template_edit", pk=template.pk)
+    return render(
+        request,
+        "msg/email_template_form.html",
+        {
+            "form": form,
+            "template": template,
+            "preview_context": sample_preview_context(request.user),
+        },
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_delete(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return redirect("comms")
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        messages.error(request, "You can only delete templates owned by your employer.")
+        return redirect("email_template_list")
+    if request.method == "POST":
+        name = template.name
+        template.delete()
+        messages.success(request, f'Template "{name}" deleted.')
+        return redirect("email_template_list")
+    return render(
+        request,
+        "msg/email_template_confirm_delete.html",
+        {"template": template},
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_preview(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return JsonResponse({"error": "No employer"}, status=400)
+    template = get_object_or_404(_visible_email_templates(employer), pk=pk)
+    context = sample_preview_context(request.user, employer)
+    if request.method == "POST":
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            context.update({k: v for k, v in payload.items() if isinstance(v, str)})
+    raw_subject = resolve_email_subject(template=template, employer=employer)
+    subject = render_merge_fields(raw_subject, context)
+    context = {**context, "subject": subject}
+    if template.is_in_app:
+        html = render_merge_fields(template.html_body, context)
+    else:
+        html = (
+            "<p><em>This template is a legacy SendGrid dynamic template "
+            f"({escape(template.sendgrid_id or 'no id')}). "
+            "Author HTML here to preview and send from DocketProof.</em></p>"
+        )
+    return JsonResponse(
+        {
+            "name": template.name or "",
+            "subject": subject,
+            "html": html,
+            "is_in_app": template.is_in_app,
+            "sendgrid_id": template.sendgrid_id or "",
+        }
+    )
+
+
 # View for weekly compliance notes
 def latest_compliance_file(request):
     file = ComplianceFile.objects.filter(is_active=True).first()
@@ -1092,7 +1283,10 @@ def compliance_file_view(request):
 def upload_attachment(request):
     if request.method == "POST" and request.FILES.get("file"):
         uploaded_file = request.FILES["file"]
-        unique_name = f"email_attachments/{uuid.uuid4()}_{uploaded_file.name}"
+        folder = (request.POST.get("folder") or "email_attachments").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", folder):
+            folder = "email_attachments"
+        unique_name = f"{folder}/{uuid.uuid4()}_{uploaded_file.name}"
 
         try:
             # ✅ Resize if it's an image

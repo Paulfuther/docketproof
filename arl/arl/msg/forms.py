@@ -253,6 +253,53 @@ class StoreTargetForm(forms.ModelForm):
         self.fields["number"].label = "Store Number"
 
 
+class EmailTemplateForm(forms.ModelForm):
+    class Meta:
+        model = EmailTemplate
+        fields = ["name", "subject", "html_body"]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Template name"}
+            ),
+            "subject": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. Welcome to {{company_name}}",
+                }
+            ),
+            "html_body": forms.Textarea(
+                attrs={
+                    "class": "form-control font-monospace",
+                    "rows": 16,
+                    "placeholder": "<h1>Hello {{name}}</h1>\n<p>A message from {{company_name}}.</p>",
+                }
+            ),
+        }
+        help_texts = {
+            "name": "Shown in the Communications template picker.",
+            "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
+            "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
+        }
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError("Name is required.")
+        return name
+
+    def clean_subject(self):
+        subject = (self.cleaned_data.get("subject") or "").strip()
+        if not subject:
+            raise forms.ValidationError("Subject is required.")
+        return subject
+
+    def clean_html_body(self):
+        html_body = (self.cleaned_data.get("html_body") or "").strip()
+        if not html_body:
+            raise forms.ValidationError("HTML body is required.")
+        return html_body
+
+
 class EmailForm(forms.Form):
     MODE_CHOICES = [
         ("text", "Write Custom Message"),
@@ -325,6 +372,9 @@ class EmailForm(forms.Form):
                 )
                 .distinct()
                 .order_by("name")
+            )
+            self.fields["sendgrid_id"].label_from_instance = lambda t: (
+                t.name or f"Template {t.pk}"
             )
 
             self.fields["selected_group"].queryset = (

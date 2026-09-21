@@ -13,7 +13,9 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Asm,
     Attachment,
+    Content,
     ContentId,
+    CustomArg,
     Disposition,
     FileContent,
     FileName,
@@ -80,7 +82,13 @@ def create_tobacco_email(to_email, name):
 # And the onbording of a new hire.
 # This will be the master function going forward.
 def create_master_email(
-    to_email, sendgrid_id, template_data, attachments=None, verified_sender=None
+    to_email,
+    sendgrid_id,
+    template_data,
+    attachments=None,
+    verified_sender=None,
+    custom_args=None,
+    html_content=None,
 ):
     try:
         unsubscribe_group_id = 24753
@@ -126,7 +134,14 @@ def create_master_email(
         )
 
         logger.info(f"📜 Email Template Data: {template_data}")
-        message.template_id = sendgrid_id
+        # In-app HTML is sent as content; SendGrid is transport only.
+        # Legacy dynamic templates still use template_id.
+        if html_content:
+            if template_data.get("subject"):
+                message.subject = template_data["subject"]
+            message.add_content(Content("text/html", html_content))
+        elif sendgrid_id:
+            message.template_id = sendgrid_id
         asm = Asm(
             group_id=unsubscribe_group_id,
         )
@@ -136,10 +151,19 @@ def create_master_email(
         personalization = Personalization()
         for email in to_email:
             personalization.add_to(To(email))
-        personalization.dynamic_template_data = template_data
+        if not html_content:
+            personalization.dynamic_template_data = template_data
 
-        if "subject" in template_data:
+        if template_data.get("subject"):
             personalization.subject = template_data["subject"]
+
+        # Unique args so Event Webhook payloads include the resolved subject
+        # (SendGrid does not always send a native `subject` field for templates).
+        if custom_args:
+            for key, value in custom_args.items():
+                if value is None:
+                    continue
+                personalization.add_custom_arg(CustomArg(str(key), str(value)))
 
         message.add_personalization(personalization)
 
@@ -1069,7 +1093,11 @@ def send_quick_email(user, recipients, subject, message, attachment_urls):
 
     master_email_send_task.delay(
         recipients=recipients,
-        sendgrid_id="d-4ac0497efd864e29b4471754a9c836eb",  # Fallback SendGrid ID
+        sendgrid_id=getattr(
+            settings,
+            "SENDGRID_GENERIC_TEMPLATE_ID",
+            "d-4ac0497efd864e29b4471754a9c836eb",
+        ),
         employer_id=user.employer.id,
         body=message,
         subject=subject,

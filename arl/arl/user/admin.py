@@ -711,10 +711,21 @@ class DocuSignTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(EmailTemplate)
 class EmailTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "get_employers", "sendgrid_id",
-                    "include_in_report")
-    search_fields = ("name", "sendgrid_id", "employers__name")
-    list_filter = ("employers",)
+    list_display = ("name", "subject", "get_employers", "is_in_app_display",
+                    "sendgrid_id", "include_in_report")
+    search_fields = ("name", "subject", "sendgrid_id", "employers__name")
+    list_filter = ("employers", "include_in_report")
+    fields = (
+        "name",
+        "subject",
+        "html_body",
+        "sendgrid_id",
+        "employers",
+        "include_in_report",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
     def get_employers(self, obj):
         """Display employers in alphabetical"""
@@ -723,6 +734,12 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         return ", ".join(sorted_employers)
 
     get_employers.short_description = "Employers"
+
+    def is_in_app_display(self, obj):
+        return obj.is_in_app
+
+    is_in_app_display.boolean = True
+    is_in_app_display.short_description = "In-app HTML"
 
 
 @admin.register(EmployerSettings)

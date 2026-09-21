@@ -71,6 +71,12 @@ class EmailLog(models.Model):
         max_length=100, help_text="SendGrid Template ID used"
     )
     template_name = models.CharField(max_length=255, blank=True, null=True)
+    subject = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Resolved subject that was sent (user input or template subject)",
+    )
     sent_at = models.DateTimeField(default=now)
     status = models.CharField(
         max_length=20,
@@ -94,11 +100,37 @@ class EmailTemplate(models.Model):
         null=True,
         help_text="The name of the email template (e.g., 'New Hire Onboarding')",
     )  # ✅ Allow same name for multiple employers
-    sendgrid_id = models.TextField()  # ✅ Store SendGrid Template ID
+    sendgrid_id = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional legacy SendGrid dynamic template ID. Leave blank for in-app templates; SendGrid is used as send transport only.",
+    )
+    subject = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Email subject. Supports {{name}}, {{company_name}}, {{senior_contact_name}}.",
+    )
+    html_body = models.TextField(
+        blank=True,
+        default="",
+        help_text="In-app HTML body. Supports {{name}}, {{company_name}}, {{senior_contact_name}}. Image URLs should be public (Linode).",
+    )
     include_in_report = models.BooleanField(default=False)  # ✅ For analytics
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.name} - {', '.join([emp.name for emp in self.employers.all()])}"
+        names = ", ".join(emp.name for emp in self.employers.all())
+        label = self.name or f"Template {self.pk}"
+        return f"{label} - {names}" if names else label
+
+    @property
+    def is_in_app(self):
+        return bool((self.html_body or "").strip())
+
+    def resolved_subject(self):
+        return (self.subject or self.name or "").strip()
 
 
 class WhatsAppTemplate(models.Model):

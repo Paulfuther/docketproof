@@ -1,0 +1,134 @@
+{% extends "../base/base.html" %}
+{% block title %}{% if template %}Edit template{% else %}New email template{% endif %}{% endblock %}
+{% block template %}
+{% include "../base/navbar.html" %}
+{% load crispy_forms_tags %}
+
+<div class="container">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">{% if template %}{{ template.name }}{% else %}New email template{% endif %}</h3>
+        <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">All templates</a>
+      </div>
+
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+
+      <p class="text-muted">
+        Merge fields:
+        {% verbatim %}<code>{{name}}</code>, <code>{{company_name}}</code>, <code>{{senior_contact_name}}</code>.{% endverbatim %}
+        Use unescaped HTML with triple braces when needed.
+      </p>
+
+      <form method="post" id="template-form">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            {{ form.name|as_crispy_field }}
+            {{ form.subject|as_crispy_field }}
+            {{ form.html_body|as_crispy_field }}
+
+            <div class="mb-3">
+              <label class="form-label">Insert image</label>
+              <div class="dz-template-image border rounded p-3 text-muted"
+                   data-upload-url="{% url 'upload_attachment' %}">
+                Drop an image or click to upload. It is stored on Linode and inserted as a public URL.
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">Save template</button>
+              <button type="button" class="btn btn-outline-secondary" id="refresh-preview">Refresh preview</button>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <div class="fw-semibold mb-1">Preview</div>
+            <div class="small text-muted mb-2" id="preview-subject"></div>
+            <iframe id="template-preview" title="Email preview" sandbox=""
+                    class="w-100 bg-white border rounded"
+                    style="min-height: 480px;"></iframe>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function getCSRFToken() {
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function renderPreview() {
+  const subject = document.getElementById('id_subject')?.value || '';
+  const html = document.getElementById('id_html_body')?.value || '';
+  const sample = {
+    name: "{{ preview_context.name|escapejs }}",
+    company_name: "{{ preview_context.company_name|escapejs }}",
+    senior_contact_name: "{{ preview_context.senior_contact_name|escapejs }}",
+    subject: subject
+  };
+  let renderedSubject = subject;
+  let renderedHtml = html;
+  Object.keys(sample).forEach(function (key) {
+    const re = new RegExp('\\{\\{\\s*' + key + '\\s*\\}\\}', 'g');
+    renderedSubject = renderedSubject.replace(re, sample[key]);
+    renderedHtml = renderedHtml.replace(re, sample[key]);
+  });
+  document.getElementById('preview-subject').textContent = renderedSubject || '(No subject)';
+  const iframe = document.getElementById('template-preview');
+  iframe.srcdoc = renderedHtml || '<p class="text-muted">HTML preview will appear here.</p>';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  renderPreview();
+  ['id_subject', 'id_html_body'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', renderPreview);
+    }
+  });
+  document.getElementById('refresh-preview')?.addEventListener('click', renderPreview);
+
+  if (window.Dropzone) Dropzone.autoDiscover = false;
+  const CSRF = getCSRFToken();
+  document.querySelectorAll('.dz-template-image').forEach(function (el) {
+    const url = el.getAttribute('data-upload-url');
+    new Dropzone(el, {
+      url: url,
+      headers: { 'X-CSRFToken': CSRF },
+      paramName: 'file',
+      acceptedFiles: 'image/*',
+      maxFilesize: 8,
+      init: function () {
+        this.on('sending', function (file, xhr, formData) {
+          formData.append('folder', 'email_templates');
+        });
+        this.on('success', function (file, resp) {
+          if (resp && resp.success && resp.url) {
+            const body = document.getElementById('id_html_body');
+            if (body) {
+              const tag = '<p><img src="' + resp.url + '" alt="" style="max-width:100%;"></p>\n';
+              body.value = (body.value || '') + tag;
+              renderPreview();
+            }
+          } else {
+            alert('Upload finished but no URL was returned.');
+          }
+          this.removeFile(file);
+        });
+        this.on('error', function (file, message) {
+          alert(typeof message === 'string' ? message : 'Image upload failed.');
+          this.removeFile(file);
+        });
+      }
+    });
+  });
+});
+</script>
+{% endblock %}
