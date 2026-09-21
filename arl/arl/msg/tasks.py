@@ -32,8 +32,8 @@ from arl.msg.models import (
     SmsLog,
 )
 from arl.msg.email_utils import (
-    GENERIC_SENDGRID_TEMPLATE_ID,
     extract_sendgrid_event_subject,
+    get_generic_sendgrid_template_id,
     render_merge_fields,
     resolve_email_subject,
 )
@@ -144,7 +144,7 @@ def master_email_send_task(
         raw_subject = resolve_email_subject(
             subject=subject, employer=employer
         )
-        send_template_id = sendgrid_id or GENERIC_SENDGRID_TEMPLATE_ID
+        send_template_id = sendgrid_id or get_generic_sendgrid_template_id()
 
         failed_emails = []
         any_success = False

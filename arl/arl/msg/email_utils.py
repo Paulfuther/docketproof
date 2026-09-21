@@ -3,15 +3,24 @@
 import json
 import re
 
-from django.conf import settings
 from django.utils.html import escape
 
 
-GENERIC_SENDGRID_TEMPLATE_ID = getattr(
-    settings,
-    "SENDGRID_GENERIC_TEMPLATE_ID",
-    "d-4ac0497efd864e29b4471754a9c836eb",
-)
+# Default wrapper template used by compose-your-own messages.
+# Override with settings.SENDGRID_GENERIC_TEMPLATE_ID when Django is configured.
+GENERIC_SENDGRID_TEMPLATE_ID = "d-4ac0497efd864e29b4471754a9c836eb"
+
+
+def get_generic_sendgrid_template_id():
+    try:
+        from django.conf import settings
+
+        return getattr(
+            settings, "SENDGRID_GENERIC_TEMPLATE_ID", GENERIC_SENDGRID_TEMPLATE_ID
+        )
+    except Exception:
+        return GENERIC_SENDGRID_TEMPLATE_ID
+
 
 _TRIPLE_BRACE = re.compile(r"\{\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}\}")
 _DOUBLE_BRACE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
