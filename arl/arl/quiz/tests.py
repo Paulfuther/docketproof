@@ -556,5 +556,6 @@ class ChecklistMobileSubmitTests(TestCase):
     def test_too_many_fields_is_http_400_suspicious_operation(self):
         resp = self.client.post(self.url, self._post_data())
         self.assertEqual(resp.status_code, 400)
+        self.assertNotEqual(resp.status_code, 500)
 
 
