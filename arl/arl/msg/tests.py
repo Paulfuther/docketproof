@@ -25,7 +25,7 @@ from arl.msg.email_utils import (
 )
 from arl.msg.models import EmailEvent, EmailLog, EmailTemplate
 from arl.msg.tasks import (
-    generate_email_event_summary,
+    filter_sendgrid_events,
     generate_employee_email_report_task,
     master_email_send_task,
     process_sendgrid_webhook,
@@ -421,16 +421,7 @@ class EmailLogSubjectTests(TestCase):
         html = generate_employee_email_report_task.run(employee.id)
         self.assertIn("Safety Reminder", html)
 
-    def test_event_summary_matches_in_app_template_by_app_id(self):
-        employee = CustomUser.objects.create_user(
-            username="summary.user",
-            email="summary@example.com",
-            password="pass12345",
-            phone_number="+15195550997",
-            employer=self.employer,
-            first_name="Pat",
-            last_name="Doe",
-        )
+    def test_event_filter_matches_in_app_template_by_app_id(self):
         template = EmailTemplate.objects.create(
             name="Policy update",
             subject="Please read",
@@ -438,7 +429,7 @@ class EmailLogSubjectTests(TestCase):
             include_in_report=True,
         )
         EmailEvent.objects.create(
-            email=employee.email,
+            email="summary@example.com",
             event="click",
             ip="192.0.2.1",
             sg_event_id="evt-summary-in-app",
@@ -450,16 +441,15 @@ class EmailLogSubjectTests(TestCase):
             employer=self.employer,
             timestamp=timezone.now(),
             url="",
-            username=employee.username,
-            user=employee,
+            username="summary.user",
         )
-        html = generate_email_event_summary.run(
+        rows = filter_sendgrid_events.run(
             template_id="",
-            employer_id=self.employer.id,
             app_template_id=template.pk,
         )
-        self.assertIn("Policy update", html)
-        self.assertIn("summary@example.com", html)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sg_template_name"], "Policy update")
+        self.assertEqual(rows[0]["email"], "summary@example.com")
 
 
 class InAppEmailTemplateViewTests(TestCase):
