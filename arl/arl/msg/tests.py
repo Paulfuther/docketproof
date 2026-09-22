@@ -422,6 +422,15 @@ class EmailLogSubjectTests(TestCase):
         self.assertIn("Safety Reminder", html)
 
     def test_event_summary_matches_in_app_template_by_app_id(self):
+        employee = CustomUser.objects.create_user(
+            username="summary.user",
+            email="summary@example.com",
+            password="pass12345",
+            phone_number="+15195550997",
+            employer=self.employer,
+            first_name="Pat",
+            last_name="Doe",
+        )
         template = EmailTemplate.objects.create(
             name="Policy update",
             subject="Please read",
@@ -429,7 +438,7 @@ class EmailLogSubjectTests(TestCase):
             include_in_report=True,
         )
         EmailEvent.objects.create(
-            email="pat@example.com",
+            email=employee.email,
             event="click",
             ip="192.0.2.1",
             sg_event_id="evt-summary-in-app",
@@ -441,7 +450,8 @@ class EmailLogSubjectTests(TestCase):
             employer=self.employer,
             timestamp=timezone.now(),
             url="",
-            username="pat",
+            username=employee.username,
+            user=employee,
         )
         html = generate_email_event_summary.run(
             template_id="",
@@ -449,7 +459,7 @@ class EmailLogSubjectTests(TestCase):
             app_template_id=template.pk,
         )
         self.assertIn("Policy update", html)
-        self.assertIn("pat@example.com", html)
+        self.assertIn("summary@example.com", html)
 
 
 class InAppEmailTemplateViewTests(TestCase):
