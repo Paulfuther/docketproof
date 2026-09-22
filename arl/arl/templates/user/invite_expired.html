@@ -1,0 +1,24 @@
+{% extends "../base/base.html" %}
+{% block title %}Invite expired{% endblock %}
+
+{% block template %}
+{% include "../base/navbar.html" %}
+
+<div class="container">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+      <h1 class="display-6 mb-2 mt-4">This registration link has expired</h1>
+      <p class="lead">
+        New-hire invite links stay valid for a limited time
+        (default 14 days). Ask your HR contact to resend the invite —
+        that issues a fresh link.
+      </p>
+      {% if expires_at %}
+        <p class="text-muted">Expired {{ expires_at|date:"Y-m-d H:i" }}.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

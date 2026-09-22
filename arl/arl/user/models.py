@@ -1,3 +1,6 @@
+from datetime import timedelta
+from typing import Optional
+
 from django.contrib.auth.models import AbstractUser, Group
 from django.core.validators import (
     MaxLengthValidator,
@@ -11,7 +14,6 @@ from django.utils.timezone import now
 from django.utils.crypto import get_random_string
 from django.conf import settings
 from arl.utils.crypto import sin_decrypt
-from typing import Optional
 
 
 class Employer(models.Model):
@@ -306,9 +308,33 @@ class EmployerSettings(models.Model):
                                     related_name="settings")
     send_new_hire_file = models.BooleanField(default=True)  
     # ✅ Toggle for new hire file
+    new_hire_invite_expiry_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Days a new-hire registration link stays valid. "
+            "Leave blank to use the site default "
+            "(settings.NEW_HIRE_INVITE_EXPIRY_DAYS). "
+            "0 = never expire."
+        ),
+    )
 
     def __str__(self):
         return f"{self.employer.name} - {'Send' if self.send_new_hire_file else 'Do Not Send'} New Hire File"
+
+
+def invite_expiry_days(employer=None):
+    """Return TTL in days for a new-hire registration link (0 = never)."""
+    default = int(getattr(settings, "NEW_HIRE_INVITE_EXPIRY_DAYS", 14) or 0)
+    if employer is None:
+        return default
+    try:
+        override = employer.settings.new_hire_invite_expiry_days
+    except EmployerSettings.DoesNotExist:
+        return default
+    if override is None:
+        return default
+    return int(override)
 
 
 def generate_random_token():
@@ -336,11 +362,47 @@ class NewHireInvite(models.Model):
     token = models.CharField(max_length=64,
                              unique=True, default=generate_random_token)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When this registration link stops working. "
+            "Blank on older invites means no time limit."
+        ),
+    )
     used = models.BooleanField(default=False)
 
     def get_invite_link(self):
         base_url = settings.SITE_URL  # Set this dynamically
         return f"{base_url}/register/{self.token}/"
+
+    def set_expiry(self, days=None):
+        """Set expires_at from employer/site TTL. days=0 clears expiry."""
+        if days is None:
+            days = invite_expiry_days(self.employer)
+        days = int(days or 0)
+        if days > 0:
+            self.expires_at = now() + timedelta(days=days)
+        else:
+            self.expires_at = None
+        return self.expires_at
+
+    def refresh_expiry(self, save=True):
+        self.set_expiry()
+        if save and self.pk:
+            self.save(update_fields=["expires_at"])
+        return self.expires_at
+
+    def is_expired(self):
+        """Legacy rows with expires_at=NULL never time out."""
+        if self.expires_at is None:
+            return False
+        return now() >= self.expires_at
+
+    def save(self, *args, **kwargs):
+        if not self.pk and self.expires_at is None:
+            self.set_expiry()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Invite for {self.name} ({self.email})"

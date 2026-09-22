@@ -76,15 +76,31 @@ class RegisterView(FormView):
     template_name = "user/register.html"
     form_class = CustomUserCreationForm
 
+    def get_unused_invite(self, token):
+        invite = get_object_or_404(NewHireInvite, token=token, used=False)
+        if invite.is_expired():
+            return None, invite
+        return invite, None
+
+    def expired_invite_response(self, request, invite):
+        return render(
+            request,
+            "user/invite_expired.html",
+            {
+                "invite": invite,
+                "expires_at": invite.expires_at,
+            },
+        )
+
     def get(self, request, *args, **kwargs):
         """
         Displays the registration form only if the token is valid.
         """
         token = kwargs.get("token")
         print(f"🔹 Received Token: {token}")
-        invite = get_object_or_404(
-            NewHireInvite, token=token, used=False
-        )  # ✅ Ensure the token is valid
+        invite, expired = self.get_unused_invite(token)
+        if expired is not None:
+            return self.expired_invite_response(request, expired)
 
         form = CustomUserCreationForm(
             initial={
@@ -99,7 +115,9 @@ class RegisterView(FormView):
         try:
             print(form.data)
             token = self.kwargs.get("token")
-            invite = get_object_or_404(NewHireInvite, token=token, used=False)
+            invite, expired = self.get_unused_invite(token)
+            if expired is not None:
+                return self.expired_invite_response(self.request, expired)
             verified_phone_number = self.request.POST.get("phone_number")
             print("verified :", verified_phone_number)
             if verified_phone_number is None:
@@ -141,7 +159,9 @@ class RegisterView(FormView):
         """
         print(form.data)
         token = self.kwargs.get("token")
-        invite = get_object_or_404(NewHireInvite, token=token, used=False)
+        invite, expired = self.get_unused_invite(token)
+        if expired is not None:
+            return self.expired_invite_response(self.request, expired)
 
         # ✅ Ensure employer and phone_number persist
         form.data = form.data.copy()  # Make form data mutable
@@ -1177,6 +1197,7 @@ def resend_invite(request, invite_id):
             request, "This invite has already been used and cannot be resent."
         )
     else:
+        invite.refresh_expiry()
         # ✅ Resend the invite email
         send_new_hire_invite(
             new_hire_email=invite.email,

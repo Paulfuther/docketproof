@@ -727,7 +727,11 @@ class EmailTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(EmployerSettings)
 class EmployerSettingsAdmin(admin.ModelAdmin):
-    list_display = ("employer", "send_new_hire_file")
+    list_display = (
+        "employer",
+        "send_new_hire_file",
+        "new_hire_invite_expiry_days",
+    )
     list_filter = ("send_new_hire_file",)
 
 
@@ -821,6 +825,7 @@ class NewHireInviteAdmin(admin.ModelAdmin):
         "invited_by",
         "employer",
         "created_at",
+        "expires_at",
         "used",
         "invite_link_display",
     )
@@ -837,7 +842,7 @@ class NewHireInviteAdmin(admin.ModelAdmin):
         (None, {"fields": ("name", "email", "role")}),
         ("Context", {"fields": ("employer", "invited_by", "used")}),
         ("Invite Details", {"fields": ("token", "invite_link_display",
-                                       "created_at")}),
+                                       "created_at", "expires_at")}),
     )
 
     actions = ["mark_as_used", "mark_as_unused"]

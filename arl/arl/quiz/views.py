@@ -508,6 +508,9 @@ def checklist_edit(request, slug):
 
     if request.method == "POST":
         # Photos are uploaded separately; don't pass request.FILES here.
+        # A native iOS multipart POST of this 80-item form can 400 before
+        # this view (TooManyFieldsSent / MultiPartParserError). The edit
+        # template posts the same fields via FormData like autosave.
         action = request.POST.get("action")
         form = ChecklistForm(request.POST, instance=checklist, user=request.user)
         formset = ChecklistItemFormSet(

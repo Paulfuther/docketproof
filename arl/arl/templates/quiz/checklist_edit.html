@@ -181,8 +181,9 @@
 
 
 
-<form method="post" enctype="multipart/form-data">
+<form id="checklist-edit-form" method="post" novalidate>
   {% csrf_token %}
+  <input type="hidden" name="action" id="checklist-form-action" value="save">
   {{ form|crispy }}
 
   <h5 class="mt-4">Items</h5>
@@ -275,7 +276,8 @@
               </a>
             {% else %}
               <div class="dropzone dz-check-photo"
-                  data-upload-url="{% url 'upload_checklist_item_photo' slug=checklist.slug item_uuid=f.instance.uuid %}">
+                  data-upload-url="{% url 'upload_checklist_item_photo' slug=checklist.slug item_uuid=f.instance.uuid %}"
+                  data-keep-out-of-form="1">
                 <div class="dz-message small">Upload<br>Photo</div>
               </div>
             {% endif %}
@@ -349,8 +351,8 @@
   </div>
 
   <div class="d-flex gap-2 flex-wrap sticky-bottom py-2 bg-white">
-    <button class="btn btn-sm btn-outline-primary" name="action" value="save">Save Draft</button>
-    <button class="btn btn-sm btn-outline-primary" name="action" value="submit">Submit & Generate PDF</button>
+    <button type="submit" class="btn btn-sm btn-outline-primary" name="action" value="save" data-action="save">Save Draft</button>
+    <button type="submit" class="btn btn-sm btn-outline-primary" name="action" value="submit" data-action="submit">Submit & Generate PDF</button>
   </div>
 </form>
 
@@ -437,6 +439,8 @@
             if (this.hiddenFileInput) {
               this.hiddenFileInput.setAttribute("accept", "image/*,.heic,.heif");
               this.hiddenFileInput.setAttribute("capture", "environment"); // back camera
+              // Keep camera files off the checklist POST (separate upload URL).
+              this.hiddenFileInput.setAttribute("form", "dz-not-checklist");
             }
           };
 
@@ -516,15 +520,50 @@
 
 <script>
   (function () {
-    const form = document.querySelector('form');
+    const form = document.getElementById('checklist-edit-form') || document.querySelector('form');
     if (!form) return;
 
-    const CSRF = (typeof getCookie === 'function') ? getCookie('csrftoken') : null;
+    const actionInput = document.getElementById('checklist-form-action');
     const statusEl = document.getElementById('autosave-status');
-    const actionUrl = (typeof form.action === 'string' && form.action) ? form.action : window.location.href;
+    const actionUrl = form.getAttribute('action') || window.location.href;
     const AUTOSAVE_URL = actionUrl + (actionUrl.includes('?') ? '&' : '?') + 'autosave=1';
     let saveTimer = null;
     let inflight = false;
+    let nativeFallback = false;
+
+    function csrfToken() {
+      const el = form.querySelector('[name="csrfmiddlewaretoken"]');
+      if (el && el.value) return el.value;
+      const cookies = (document.cookie || '').split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.indexOf('csrftoken=') === 0) {
+          return decodeURIComponent(cookie.substring('csrftoken='.length));
+        }
+      }
+      return null;
+    }
+
+    function checklistFormData(actionValue) {
+      const fd = new FormData(form);
+      fd.set('action', actionValue || (actionInput && actionInput.value) || 'save');
+      // Photos are uploaded on the Dropzone endpoint. Never re-post files
+      // with save/submit — iOS camera originals can 400 the whole checklist.
+      if (typeof File !== 'undefined') {
+        const keys = [];
+        fd.forEach((value, key) => {
+          if (value instanceof File) keys.push(key);
+        });
+        keys.forEach((key) => fd.delete(key));
+      }
+      return fd;
+    }
+
+    form.querySelectorAll('button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (actionInput) actionInput.value = btn.dataset.action || 'save';
+      });
+    });
 
     // Show “last saved …” helper
     function showSavedAt(ts) {
@@ -538,13 +577,13 @@
       if (inflight) return; // don’t pile up
       inflight = true;
       try {
-        const fd = new FormData(form);
+        const token = csrfToken();
         const resp = await fetch(AUTOSAVE_URL, {
           method: 'POST',
-          body: fd,
+          body: checklistFormData('save'),
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            ...(CSRF ? {'X-CSRFToken': CSRF} : {})
+            ...(token ? {'X-CSRFToken': token} : {})
           },
           credentials: 'same-origin'
         });
@@ -577,9 +616,51 @@
       if (document.visibilityState === 'hidden') doAutosave();
     });
 
-    // Don’t double-post if they actually submit
-    form.addEventListener('submit', () => {
+    // Native iOS multipart of this 80-item form 400s (MultiPartParserError /
+    // TooManyFieldsSent) before Django can re-render validation errors.
+    // Autosave already uses FormData successfully; submit uses the same path.
+    form.addEventListener('submit', async (event) => {
+      if (nativeFallback) return;
+      event.preventDefault();
       clearTimeout(saveTimer);
+      const submitter = event.submitter;
+      const actionValue =
+        (submitter && submitter.getAttribute('data-action')) ||
+        (actionInput && actionInput.value) ||
+        'save';
+      if (actionInput) actionInput.value = actionValue;
+      const token = csrfToken();
+      form.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.disabled = true;
+      });
+      try {
+        const resp = await fetch(actionUrl, {
+          method: 'POST',
+          body: checklistFormData(actionValue),
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? {'X-CSRFToken': token} : {})
+          },
+          credentials: 'same-origin',
+          redirect: 'follow',
+        });
+        const dest = resp.url || actionUrl;
+        const here = window.location.href.split('#')[0];
+        if (dest.split('#')[0] !== here) {
+          window.location.href = dest;
+          return;
+        }
+        const html = await resp.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (e) {
+        nativeFallback = true;
+        form.querySelectorAll('button[data-action]').forEach((btn) => {
+          btn.disabled = false;
+        });
+        form.submit();
+      }
     });
   })();
 </script>

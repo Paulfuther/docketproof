@@ -258,7 +258,24 @@ BROKER_URL = os.environ.get("CLOUDAMQP_URL")
 
 EMAIL_BACKEND = "arl.msg.helpers.SendGridEmailBackend"
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 50485760  # 10MB in bytes
+# Checklist save/submit posts ~10 fields per item (Y/N/N/A, L/S, 6.4 action
+# plan). An 80-item workplace inspection is ~800–1,000 POST keys; iOS Safari
+# may also send unchecked radios / empty Dropzone file parts. Django's
+# default DATA_UPLOAD_MAX_NUMBER_FIELDS is 1000 and raises
+# TooManyFieldsSent (HTTP 400 Bad Request) before the view runs.
+# Photos are uploaded on a separate Dropzone endpoint — do not rely on the
+# checklist form being multipart. If nginx sits in front, set
+# client_max_body_size 50m; nginx oversize is 413, Django oversize is 400.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+DATA_UPLOAD_MAX_NUMBER_FILES = 200
+
+# New-hire /register/<token>/ links. 0 = never expire.
+# Previously invite tokens had no time-to-live (valid until used).
+NEW_HIRE_INVITE_EXPIRY_DAYS = 14
+# Django default is 3 days (72h). Password-reset links now match invite TTL.
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 14
 SECRET_ENCRYPTION_KEY = os.environ.get("SECRET_ENCRYPTION_KEY")
 
 DOCUSIGN_BASE_PATH = os.environ.get("DOCUSIGN_BASE_PATH_DEV")

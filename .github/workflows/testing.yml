@@ -30,6 +30,7 @@ jobs:
           --health-retries 5
 
     env:
+      SECRET_KEY: ci-test-secret-key-not-for-production
       TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
       SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
@@ -73,5 +74,5 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import
+          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import arl.user.test_invite
           coverage report

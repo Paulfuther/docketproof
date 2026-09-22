@@ -38,9 +38,11 @@ def send_new_hire_invite(new_hire_email, new_hire_name, role, start_date, employ
         )
 
         # ✅ Ensure we have a token in case the invite already existed
-        if not created and not invite.token:
-            invite.token = get_random_string(64)
-            invite.save()
+        if not created:
+            if not invite.token:
+                invite.token = get_random_string(64)
+                invite.save(update_fields=["token"])
+            invite.refresh_expiry()
 
 
         # ✅ Generate the correct invite link

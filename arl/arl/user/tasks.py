@@ -261,9 +261,11 @@ def send_new_hire_invite_task(
             },
         )
 
-        if not created and not invite.token:
-            invite.token = get_random_string(64)
-            invite.save()
+        if not created:
+            if not invite.token:
+                invite.token = get_random_string(64)
+                invite.save(update_fields=["token"])
+            invite.refresh_expiry()
 
         invite_link = invite.get_invite_link()
 

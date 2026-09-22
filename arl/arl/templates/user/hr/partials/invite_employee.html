@@ -30,6 +30,13 @@
           <span>{{ invite.email }}</span><br>
           <span class="text-muted">{{ invite.get_role_display }}</span><br>
           <span class="text-muted">Sent: {{ invite.created_at|date:"Y-m-d H:i" }}</span>
+          {% if invite.expires_at %}
+            <br>
+            <span class="text-muted {% if invite.is_expired %}text-danger{% endif %}">
+              {% if invite.is_expired %}Expired{% else %}Expires{% endif %}
+              {{ invite.expires_at|date:"Y-m-d" }}
+            </span>
+          {% endif %}
         </div>
 
         <div class="invite-actions">
