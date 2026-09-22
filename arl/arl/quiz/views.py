@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -511,31 +512,42 @@ def checklist_edit(request, slug):
         # A native iOS multipart POST of this 80-item form can 400 before
         # this view (TooManyFieldsSent / MultiPartParserError). The edit
         # template posts the same fields via FormData like autosave.
-        action = request.POST.get("action")
+        # ?autosave=1 is always a draft: never run submit validation, even
+        # if a submit button named "action" is also in the body. Otherwise
+        # a partial action plan rejects the whole POST and notes are dropped
+        # while earlier answers stay saved.
+        is_autosave = request.GET.get("autosave") == "1"
+        action = "save" if is_autosave else (request.POST.get("action") or "save")
         form = ChecklistForm(request.POST, instance=checklist, user=request.user)
         formset = ChecklistItemFormSet(
             request.POST,
             instance=checklist,
-            form_kwargs={"validate_submit": action == "submit"},
+            form_kwargs={"validate_submit": (not is_autosave) and action == "submit"},
         )
 
         if form.is_valid() and formset.is_valid():
-            # Backfill order for any rows that didn't post it
-            next_pos = 0
-            for fr in formset.forms:
-                cd = getattr(fr, "cleaned_data", {}) or {}
-                if cd.get("DELETE"):
-                    continue
-                # if no order provided, assign sequentially
-                if not cd.get("order"):
-                    fr.instance.order = next_pos
-                next_pos += 1
+            with transaction.atomic():
+                # Backfill order for any rows that didn't post it
+                next_pos = 0
+                for fr in formset.forms:
+                    cd = getattr(fr, "cleaned_data", {}) or {}
+                    if cd.get("DELETE"):
+                        continue
+                    # if no order provided, assign sequentially
+                    if not cd.get("order"):
+                        fr.instance.order = next_pos
+                    next_pos += 1
 
-            form.save()
-            formset.save()
-            for fr in formset.forms:
-                if getattr(fr, "cleaned_data", None):
-                    fr.save_action_item()
+                form.save()
+                formset.save()
+                for fr in formset.forms:
+                    if getattr(fr, "cleaned_data", None):
+                        fr.save_action_item()
+
+            if is_autosave:
+                return JsonResponse(
+                    {"ok": True, "saved_at": timezone.now().isoformat()}
+                )
 
             if action == "submit":
                 checklist.status = "submitted"
@@ -558,6 +570,9 @@ def checklist_edit(request, slug):
             else:
                 messages.success(request, "Draft saved.")
                 return redirect("checklist_edit", slug=checklist.slug)
+
+        if is_autosave:
+            return JsonResponse({"ok": False}, status=422)
 
         # INVALID: dump errors to terminal and fall through to re-render bound forms
         print("Form errors:", form.errors.as_json())

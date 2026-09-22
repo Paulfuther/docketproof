@@ -148,7 +148,7 @@ class ChecklistTemplateItemForm(forms.ModelForm):
             "create_action_on": forms.TextInput(
                 attrs={
                     "class": "form-control",
-                    "placeholder": '["N"]',
+                    "placeholder": '["N"], ["Y"], or []',
                 }
             ),
             "action_plan_form": forms.TextInput(attrs={"class": "form-control"}),
@@ -290,7 +290,7 @@ class ChecklistItemForm(forms.ModelForm):
         if not item.pk:
             return cleaned
 
-        if result == ChecklistItem.RESULT_NO and not (cleaned.get("action_item") or "").strip():
+        if item.creates_action(result) and not (cleaned.get("action_item") or "").strip():
             cleaned["action_item"] = item.text
 
         if not self.validate_submit:
