@@ -2,13 +2,19 @@
 
 import json
 import re
+from io import BytesIO
 
 from django.utils.html import escape
+from PIL import Image, ImageOps
 
 
 # Default wrapper template used by compose-your-own messages.
 # Override with settings.SENDGRID_GENERIC_TEMPLATE_ID when Django is configured.
 GENERIC_SENDGRID_TEMPLATE_ID = "d-4ac0497efd864e29b4471754a9c836eb"
+# Email clients clip wide images; keep inline/header art within a common
+# single-column width.
+EMAIL_IMAGE_MAX_WIDTH = 600
+EMAIL_JPEG_QUALITY = 80
 
 
 def get_generic_sendgrid_template_id():
@@ -122,3 +128,88 @@ def sendgrid_id_for_template(template):
     if getattr(template, "html_body", None) and str(template.html_body).strip():
         return (template.sendgrid_id or "").strip() or GENERIC_SENDGRID_TEMPLATE_ID
     return (getattr(template, "sendgrid_id", None) or "").strip() or GENERIC_SENDGRID_TEMPLATE_ID
+
+
+def _lanczos():
+    try:
+        return Image.Resampling.LANCZOS
+    except AttributeError:
+        return Image.LANCZOS
+
+
+def _image_has_alpha(image):
+    if image.mode in ("RGBA", "LA"):
+        return True
+    if image.mode == "P" and "transparency" in image.info:
+        return True
+    return False
+
+
+def prepare_email_image(file_obj, filename=""):
+    """Resize/compress an image for inline email use.
+
+    Caps width at EMAIL_IMAGE_MAX_WIDTH (keeps aspect ratio). Opaque images
+    become JPEG; images with transparency stay PNG. Returns
+    ``(BytesIO, extension_without_dot, content_type)``.
+    """
+    if hasattr(file_obj, "seek"):
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+
+    image = Image.open(file_obj)
+    try:
+        image = ImageOps.exif_transpose(image)
+    except Exception:
+        pass
+
+    if getattr(image, "n_frames", 1) > 1:
+        image.seek(0)
+
+    width, height = image.size
+    if width > EMAIL_IMAGE_MAX_WIDTH:
+        ratio = EMAIL_IMAGE_MAX_WIDTH / float(width)
+        new_size = (
+            EMAIL_IMAGE_MAX_WIDTH,
+            max(1, int(round(height * ratio))),
+        )
+        image = image.resize(new_size, _lanczos())
+
+    buffer = BytesIO()
+    if _image_has_alpha(image):
+        if image.mode not in ("RGBA", "LA"):
+            image = image.convert("RGBA")
+        image.save(buffer, format="PNG", optimize=True)
+        buffer.seek(0)
+        return buffer, "png", "image/png"
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    image.save(
+        buffer,
+        format="JPEG",
+        quality=EMAIL_JPEG_QUALITY,
+        optimize=True,
+        progressive=True,
+    )
+    buffer.seek(0)
+    return buffer, "jpg", "image/jpeg"
+
+
+def wrap_in_app_email_html(html_body, header_image_url=None):
+    """Prepend an optional header image above in-app template HTML."""
+    body = html_body or ""
+    url = (header_image_url or "").strip()
+    if not url:
+        return body
+    safe_url = escape(url)
+    header = (
+        '<div style="text-align:center;margin:0 auto 16px auto;'
+        f'max-width:{EMAIL_IMAGE_MAX_WIDTH}px;">'
+        f'<img src="{safe_url}" alt="" width="{EMAIL_IMAGE_MAX_WIDTH}" '
+        'style="display:block;margin:0 auto;width:100%;'
+        f'max-width:{EMAIL_IMAGE_MAX_WIDTH}px;height:auto;border:0;outline:none;">'
+        "</div>\n"
+    )
+    return header + body

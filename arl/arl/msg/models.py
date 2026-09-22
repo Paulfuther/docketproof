@@ -116,6 +116,12 @@ class EmailTemplate(models.Model):
         default="",
         help_text="In-app HTML body. Supports {{name}}, {{company_name}}, {{senior_contact_name}}. Image URLs should be public (Linode).",
     )
+    header_image_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Optional public header image URL (Linode). Shown at the top of preview and outbound HTML.",
+    )
     include_in_report = models.BooleanField(default=False)  # ✅ For analytics
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)

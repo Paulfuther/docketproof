@@ -256,7 +256,7 @@ class StoreTargetForm(forms.ModelForm):
 class EmailTemplateForm(forms.ModelForm):
     class Meta:
         model = EmailTemplate
-        fields = ["name", "subject", "html_body"]
+        fields = ["name", "subject", "header_image_url", "html_body"]
         widgets = {
             "name": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Template name"}
@@ -267,6 +267,7 @@ class EmailTemplateForm(forms.ModelForm):
                     "placeholder": "e.g. Welcome to {{company_name}}",
                 }
             ),
+            "header_image_url": forms.HiddenInput(),
             "html_body": forms.Textarea(
                 attrs={
                     "class": "form-control font-monospace",
@@ -278,6 +279,7 @@ class EmailTemplateForm(forms.ModelForm):
         help_texts = {
             "name": "Shown in the Communications template picker.",
             "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
+            "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
             "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
         }
 
@@ -298,6 +300,9 @@ class EmailTemplateForm(forms.ModelForm):
         if not html_body:
             raise forms.ValidationError("HTML body is required.")
         return html_body
+
+    def clean_header_image_url(self):
+        return (self.cleaned_data.get("header_image_url") or "").strip()
 
 
 class EmailForm(forms.Form):

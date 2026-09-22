@@ -4,6 +4,7 @@ import re
 import urllib.parse
 import uuid
 from io import BytesIO
+from pathlib import Path
 
 from celery.result import AsyncResult
 from django.conf import settings
@@ -34,10 +35,12 @@ from arl.dsign.forms import NameEmailForm
 from arl.dsign.tasks import create_docusign_envelope_task
 from arl.msg.email_utils import (
     GENERIC_SENDGRID_TEMPLATE_ID,
+    prepare_email_image,
     render_merge_fields,
     resolve_email_subject,
     sample_preview_context,
     sendgrid_id_for_template,
+    wrap_in_app_email_html,
 )
 from arl.msg.helpers import (client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
@@ -538,6 +541,10 @@ def communications(request):
                         employer=user.employer,
                     )
                     html_body = (sendgrid_template.html_body or "").strip() or None
+                    if html_body:
+                        html_body = wrap_in_app_email_html(
+                            html_body, sendgrid_template.header_image_url
+                        )
                     # In-app HTML is sent as content (SendGrid = transport).
                     # Legacy templates still use their SendGrid dynamic template id.
                     send_id = (
@@ -1247,6 +1254,7 @@ def email_template_preview(request, pk):
     context = {**context, "subject": subject}
     if template.is_in_app:
         html = render_merge_fields(template.html_body, context)
+        html = wrap_in_app_email_html(html, template.header_image_url)
     else:
         html = (
             "<p><em>This template is a legacy SendGrid dynamic template "
@@ -1260,6 +1268,7 @@ def email_template_preview(request, pk):
             "html": html,
             "is_in_app": template.is_in_app,
             "sendgrid_id": template.sendgrid_id or "",
+            "header_image_url": template.header_image_url or "",
         }
     )
 
@@ -1286,27 +1295,36 @@ def upload_attachment(request):
         folder = (request.POST.get("folder") or "email_attachments").strip()
         if not re.fullmatch(r"[A-Za-z0-9_-]+", folder):
             folder = "email_attachments"
-        unique_name = f"{folder}/{uuid.uuid4()}_{uploaded_file.name}"
+        email_fit = folder == "email_templates" or request.POST.get("email_fit") == "1"
+        original_name = uploaded_file.name or "file"
+        unique_name = f"{folder}/{uuid.uuid4()}_{original_name}"
 
         try:
             # ✅ Resize if it's an image
             if uploaded_file.content_type.startswith("image/"):
                 try:
-                    image = Image.open(uploaded_file)
+                    if email_fit:
+                        buffer, ext, _ctype = prepare_email_image(
+                            uploaded_file, filename=original_name
+                        )
+                        stem = Path(original_name).stem or "image"
+                        unique_name = f"{folder}/{uuid.uuid4()}_{stem}.{ext}"
+                    else:
+                        image = Image.open(uploaded_file)
 
-                    # Choose resampling method safely
-                    try:
-                        resample_filter = Image.Resampling.LANCZOS  # Pillow ≥ 10
-                    except AttributeError:
-                        resample_filter = Image.LANCZOS  # Older versions
+                        # Choose resampling method safely
+                        try:
+                            resample_filter = Image.Resampling.LANCZOS  # Pillow ≥ 10
+                        except AttributeError:
+                            resample_filter = Image.LANCZOS  # Older versions
 
-                    thumbnail_size = (1500, 1500)
-                    image.thumbnail(thumbnail_size, resample=resample_filter)
+                        thumbnail_size = (1500, 1500)
+                        image.thumbnail(thumbnail_size, resample=resample_filter)
 
-                    buffer = BytesIO()
-                    image_format = image.format or "JPEG"
-                    image.save(buffer, format=image_format)
-                    buffer.seek(0)
+                        buffer = BytesIO()
+                        image_format = image.format or "JPEG"
+                        image.save(buffer, format=image_format)
+                        buffer.seek(0)
 
                     # Upload resized image
                     upload_to_linode_object_storage(buffer, unique_name)

@@ -1,15 +1,20 @@
 import json
+from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from arl.msg.email_utils import (
+    EMAIL_IMAGE_MAX_WIDTH,
     extract_sendgrid_event_subject,
+    prepare_email_image,
     render_merge_fields,
     resolve_email_subject,
+    wrap_in_app_email_html,
 )
 from arl.msg.models import EmailEvent, EmailLog, EmailTemplate
 from arl.msg.tasks import master_email_send_task, process_sendgrid_webhook
@@ -63,6 +68,51 @@ class EmailUtilsTests(TestCase):
             extract_sendgrid_event_subject({"subject": "Native"}),
             "Native",
         )
+
+    def test_prepare_email_image_caps_width_and_keeps_aspect(self):
+        img = Image.new("RGB", (1200, 800), color=(200, 10, 10))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, content_type = prepare_email_image(buf, filename="wide.png")
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_IMAGE_MAX_WIDTH)
+        self.assertEqual(result.height, 400)
+        self.assertEqual(ext, "jpg")
+        self.assertEqual(content_type, "image/jpeg")
+
+    def test_prepare_email_image_leaves_narrow_images(self):
+        img = Image.new("RGB", (300, 180), color=(10, 10, 200))
+        buf = BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
+        out, ext, _ctype = prepare_email_image(buf, filename="narrow.jpg")
+        result = Image.open(out)
+        self.assertEqual(result.width, 300)
+        self.assertEqual(result.height, 180)
+        self.assertEqual(ext, "jpg")
+
+    def test_prepare_email_image_keeps_png_transparency(self):
+        img = Image.new("RGBA", (800, 400), color=(255, 0, 0, 128))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, content_type = prepare_email_image(buf, filename="logo.png")
+        result = Image.open(out)
+        self.assertEqual(ext, "png")
+        self.assertEqual(content_type, "image/png")
+        self.assertEqual(result.width, EMAIL_IMAGE_MAX_WIDTH)
+        self.assertEqual(result.mode, "RGBA")
+
+    def test_wrap_header_image_above_body(self):
+        wrapped = wrap_in_app_email_html(
+            "<p>Hello</p>", "https://cdn.example/header.jpg"
+        )
+        self.assertIn("https://cdn.example/header.jpg", wrapped)
+        self.assertLess(wrapped.index("<img"), wrapped.index("<p>Hello</p>"))
+        self.assertIn("max-width:600px", wrapped)
+        self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", ""), "<p>Hello</p>")
+        self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), "<p>Hello</p>")
 
 
 class EmailLogSubjectTests(TestCase):
@@ -210,5 +260,87 @@ class InAppEmailTemplateViewTests(TestCase):
         kwargs = mock_task.delay.call_args.kwargs
         self.assertEqual(kwargs["subject"], "Please read")
         self.assertEqual(kwargs["template_name"], "Policy update")
+        self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
+
+    def test_preview_and_send_include_header_image(self):
+        template = EmailTemplate.objects.create(
+            name="Welcome",
+            subject="Hello {{name}}",
+            html_body="<p>From {{company_name}}</p>",
+            header_image_url="https://cdn.example/header.jpg",
+        )
+        template.employers.add(self.employer)
+        response = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        )
+        data = response.json()
+        self.assertIn("https://cdn.example/header.jpg", data["html"])
+        self.assertTrue(
+            data["html"].index("https://cdn.example/header.jpg")
+            < data["html"].index("From Acme Co")
+        )
+        self.assertEqual(data["header_image_url"], "https://cdn.example/header.jpg")
+
+    def test_save_and_clear_header_image_url(self):
+        response = self.client.post(
+            reverse("email_template_create"),
+            {
+                "name": "Branded",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "https://cdn.example/header.jpg",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        template = EmailTemplate.objects.get(name="Branded")
+        self.assertEqual(template.header_image_url, "https://cdn.example/header.jpg")
+
+        response = self.client.post(
+            reverse("email_template_edit", args=[template.pk]),
+            {
+                "name": "Branded",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        template.refresh_from_db()
+        self.assertEqual(template.header_image_url, "")
+
+    @patch("arl.msg.views.master_email_send_task")
+    def test_comms_send_wraps_header_image(self, mock_task):
+        comms_group, _created = Group.objects.get_or_create(name="SendCOMMS")
+        self.user.groups.add(comms_group)
+        recipient = CustomUser.objects.create_user(
+            username="worker2",
+            email="worker2@example.com",
+            password="pass12345",
+            phone_number="+15195550102",
+            employer=self.employer,
+            first_name="Sam",
+            last_name="Lee",
+            is_active=True,
+        )
+        template = EmailTemplate.objects.create(
+            name="Header send",
+            subject="Please read",
+            html_body="<p>Hello {{name}}</p>",
+            header_image_url="https://cdn.example/banner.jpg",
+        )
+        template.employers.add(self.employer)
+        response = self.client.post(
+            reverse("comms") + "?tab=email",
+            {
+                "form_type": "email",
+                "email_mode": "template",
+                "sendgrid_id": str(template.pk),
+                "selected_users": [str(recipient.pk)],
+                "subject": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        kwargs = mock_task.delay.call_args.kwargs
+        self.assertIn("https://cdn.example/banner.jpg", kwargs["html_body"])
         self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
 

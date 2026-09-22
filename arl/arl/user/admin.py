@@ -719,6 +719,7 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         "name",
         "subject",
         "html_body",
+        "header_image_url",
         "sendgrid_id",
         "employers",
         "include_in_report",

@@ -25,14 +25,43 @@
 
       <form method="post" id="template-form">
         {% csrf_token %}
+        {{ form.header_image_url }}
         <div class="row g-3">
           <div class="col-12 col-lg-6">
             {{ form.name|as_crispy_field }}
             {{ form.subject|as_crispy_field }}
+
+            <div class="mb-3">
+              <label class="form-label">Header image (optional)</label>
+              <p class="small text-muted mb-2">
+                Shown at the top of the email, centered, max width 600px.
+                Uploads are resized to 600px wide for email.
+              </p>
+              <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
+                <img id="header-preview-img"
+                     src="{{ form.header_image_url.value|default:'' }}"
+                     alt="Header preview"
+                     class="img-fluid border rounded"
+                     style="max-width:600px;">
+                <div class="mt-1">
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="clear-header">
+                    Remove header image
+                  </button>
+                </div>
+              </div>
+              <div class="dz-header-image border rounded p-3 text-muted"
+                   data-upload-url="{% url 'upload_attachment' %}">
+                Drop a header image or click to upload.
+              </div>
+            </div>
+
             {{ form.html_body|as_crispy_field }}
 
             <div class="mb-3">
               <label class="form-label">Insert image</label>
+              <p class="small text-muted mb-2">
+                Images are resized to a max width of 600px (aspect ratio kept) before they are stored.
+              </p>
               <div class="dz-template-image border rounded p-3 text-muted"
                    data-upload-url="{% url 'upload_attachment' %}">
                 Drop an image or click to upload. It is stored on Linode and inserted as a public URL.
@@ -64,9 +93,18 @@ function getCSRFToken() {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
+function headerMarkup(url) {
+  if (!url) return '';
+  return '<div style="text-align:center;margin:0 auto 16px auto;max-width:600px;">'
+    + '<img src="' + url + '" alt="" width="600" '
+    + 'style="display:block;margin:0 auto;width:100%;max-width:600px;height:auto;border:0;outline:none;">'
+    + '</div>';
+}
+
 function renderPreview() {
   const subject = document.getElementById('id_subject')?.value || '';
   const html = document.getElementById('id_html_body')?.value || '';
+  const headerUrl = document.getElementById('id_header_image_url')?.value || '';
   const sample = {
     name: "{{ preview_context.name|escapejs }}",
     company_name: "{{ preview_context.company_name|escapejs }}",
@@ -82,7 +120,17 @@ function renderPreview() {
   });
   document.getElementById('preview-subject').textContent = renderedSubject || '(No subject)';
   const iframe = document.getElementById('template-preview');
-  iframe.srcdoc = renderedHtml || '<p class="text-muted">HTML preview will appear here.</p>';
+  iframe.srcdoc = headerMarkup(headerUrl) + (renderedHtml || '<p class="text-muted">HTML preview will appear here.</p>');
+}
+
+function setHeaderUrl(url) {
+  const input = document.getElementById('id_header_image_url');
+  const wrap = document.getElementById('header-preview-wrap');
+  const img = document.getElementById('header-preview-img');
+  if (input) input.value = url || '';
+  if (img) img.src = url || '';
+  if (wrap) wrap.style.display = url ? '' : 'none';
+  renderPreview();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -94,40 +142,55 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
   document.getElementById('refresh-preview')?.addEventListener('click', renderPreview);
+  document.getElementById('clear-header')?.addEventListener('click', function () {
+    setHeaderUrl('');
+  });
 
   if (window.Dropzone) Dropzone.autoDiscover = false;
   const CSRF = getCSRFToken();
-  document.querySelectorAll('.dz-template-image').forEach(function (el) {
-    const url = el.getAttribute('data-upload-url');
-    new Dropzone(el, {
-      url: url,
-      headers: { 'X-CSRFToken': CSRF },
-      paramName: 'file',
-      acceptedFiles: 'image/*',
-      maxFilesize: 8,
-      init: function () {
-        this.on('sending', function (file, xhr, formData) {
-          formData.append('folder', 'email_templates');
-        });
-        this.on('success', function (file, resp) {
-          if (resp && resp.success && resp.url) {
-            const body = document.getElementById('id_html_body');
-            if (body) {
-              const tag = '<p><img src="' + resp.url + '" alt="" style="max-width:100%;"></p>\n';
-              body.value = (body.value || '') + tag;
-              renderPreview();
+
+  function emailImageDropzone(selector, onUrl) {
+    document.querySelectorAll(selector).forEach(function (el) {
+      const url = el.getAttribute('data-upload-url');
+      new Dropzone(el, {
+        url: url,
+        headers: { 'X-CSRFToken': CSRF },
+        paramName: 'file',
+        acceptedFiles: 'image/*',
+        maxFilesize: 8,
+        init: function () {
+          this.on('sending', function (file, xhr, formData) {
+            formData.append('folder', 'email_templates');
+            formData.append('email_fit', '1');
+          });
+          this.on('success', function (file, resp) {
+            if (resp && resp.success && resp.url) {
+              onUrl(resp.url);
+            } else {
+              alert('Upload finished but no URL was returned.');
             }
-          } else {
-            alert('Upload finished but no URL was returned.');
-          }
-          this.removeFile(file);
-        });
-        this.on('error', function (file, message) {
-          alert(typeof message === 'string' ? message : 'Image upload failed.');
-          this.removeFile(file);
-        });
-      }
+            this.removeFile(file);
+          });
+          this.on('error', function (file, message) {
+            alert(typeof message === 'string' ? message : 'Image upload failed.');
+            this.removeFile(file);
+          });
+        }
+      });
     });
+  }
+
+  emailImageDropzone('.dz-template-image', function (url) {
+    const body = document.getElementById('id_html_body');
+    if (body) {
+      const tag = '<p style="text-align:center;"><img src="' + url + '" alt="" width="600" style="display:block;max-width:600px;width:100%;height:auto;margin:0 auto;border:0;"></p>\n';
+      body.value = (body.value || '') + tag;
+      renderPreview();
+    }
+  });
+
+  emailImageDropzone('.dz-header-image', function (url) {
+    setHeaderUrl(url);
   });
 });
 </script>
