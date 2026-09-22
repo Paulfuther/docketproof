@@ -979,10 +979,15 @@ def sendgrid_webhook_view(request):
     if form.is_valid() and form.cleaned_data.get("template_id"):
         date_from = form.cleaned_data["date_from"]
         date_to = form.cleaned_data["date_to"]
-        template_id = form.cleaned_data["template_id"].sendgrid_id
+        template = form.cleaned_data["template_id"]
 
         # Trigger the Celery task and get the result
-        task = filter_sendgrid_events.delay(date_from, date_to, template_id)
+        task = filter_sendgrid_events.delay(
+            date_from=date_from,
+            date_to=date_to,
+            template_id=template.sendgrid_id,
+            app_template_id=template.pk,
+        )
         events = task.get()  # Wait for the task to complete and get the result
 
     return render(
@@ -1004,13 +1009,17 @@ def email_event_summary_view(request):
         employer_id = (
             request.user.employer.id if hasattr(request.user, "employer") else None
         )
-        template_id = form.cleaned_data["template_id"].sendgrid_id
+        template = form.cleaned_data["template_id"]
         start_date = form.cleaned_data.get("date_from")
         end_date = form.cleaned_data.get("date_to")
         # print(start_date, end_date, employer_id)
         # Call the Celery task
         result = generate_email_event_summary.delay(
-            template_id, start_date, end_date, employer_id
+            template.sendgrid_id,
+            start_date,
+            end_date,
+            employer_id,
+            app_template_id=template.pk,
         )
         summary_table = result.get(timeout=10)  # Wait for task completion
 

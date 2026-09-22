@@ -212,6 +212,20 @@ def extract_sendgrid_event_meta(event_data):
     }
 
 
+def email_event_template_q(sendgrid_id=None, app_template_id=None):
+    """Match EmailEvents for a template by SendGrid id and/or app pk."""
+    from django.db.models import Q
+
+    q = Q()
+    sid = (sendgrid_id or "").strip()
+    if sid:
+        q |= Q(sg_template_id=sid)
+    pk = parse_app_template_id(app_template_id)
+    if pk:
+        q |= Q(app_template_id=pk)
+    return q
+
+
 _TRIPLE_BRACE = re.compile(r"\{\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}\}")
 _DOUBLE_BRACE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 

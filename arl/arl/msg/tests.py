@@ -25,6 +25,7 @@ from arl.msg.email_utils import (
 )
 from arl.msg.models import EmailEvent, EmailLog, EmailTemplate
 from arl.msg.tasks import (
+    generate_email_event_summary,
     generate_employee_email_report_task,
     master_email_send_task,
     process_sendgrid_webhook,
@@ -420,6 +421,36 @@ class EmailLogSubjectTests(TestCase):
         html = generate_employee_email_report_task.run(employee.id)
         self.assertIn("Safety Reminder", html)
 
+    def test_event_summary_matches_in_app_template_by_app_id(self):
+        template = EmailTemplate.objects.create(
+            name="Policy update",
+            subject="Please read",
+            html_body="<p>Hello</p>",
+            include_in_report=True,
+        )
+        EmailEvent.objects.create(
+            email="pat@example.com",
+            event="click",
+            ip="192.0.2.1",
+            sg_event_id="evt-summary-in-app",
+            sg_message_id="msg-summary-in-app",
+            sg_template_id="",
+            sg_template_name="Policy update",
+            source=EMAIL_SOURCE_IN_APP,
+            app_template_id=template.pk,
+            employer=self.employer,
+            timestamp=timezone.now(),
+            url="",
+            username="pat",
+        )
+        html = generate_email_event_summary.run(
+            template_id="",
+            employer_id=self.employer.id,
+            app_template_id=template.pk,
+        )
+        self.assertIn("Policy update", html)
+        self.assertIn("pat@example.com", html)
+
 
 class InAppEmailTemplateViewTests(TestCase):
     def setUp(self):
@@ -613,6 +644,33 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(kwargs["source"], EMAIL_SOURCE_COMPOSE)
         self.assertEqual(kwargs["sendgrid_id"], GENERIC_SENDGRID_TEMPLATE_ID)
         self.assertNotIn("app_template_id", kwargs)
+
+    @patch("arl.msg.helpers.SendGridAPIClient")
+    def test_in_app_html_enables_click_and_open_tracking(self, mock_client):
+        mock_client.return_value.send.return_value.status_code = 202
+        from arl.msg.helpers import create_master_email
+
+        ok = create_master_email(
+            to_email="pat@example.com",
+            sendgrid_id="",
+            template_data={"subject": "Hello", "name": "Pat"},
+            verified_sender="noreply@example.com",
+            custom_args={
+                "subject": "Hello",
+                "template_name": "Welcome",
+                "source": EMAIL_SOURCE_IN_APP,
+                "app_template_id": "12",
+            },
+            html_content='<p>Hi <a href="https://example.com/policy">policy</a></p>',
+        )
+        self.assertTrue(ok)
+        mail = mock_client.return_value.send.call_args[0][0]
+        payload = mail.get()
+        self.assertTrue(payload["tracking_settings"]["click_tracking"]["enable"])
+        self.assertTrue(payload["tracking_settings"]["open_tracking"]["enable"])
+        custom = payload["personalizations"][0]["custom_args"]
+        self.assertEqual(custom["app_template_id"], "12")
+        self.assertEqual(custom["source"], EMAIL_SOURCE_IN_APP)
 
     @patch("arl.msg.views.master_email_send_task")
     def test_comms_send_wraps_header_image(self, mock_task):

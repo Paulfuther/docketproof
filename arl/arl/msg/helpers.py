@@ -13,6 +13,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Asm,
     Attachment,
+    ClickTracking,
     Content,
     ContentId,
     CustomArg,
@@ -21,8 +22,10 @@ from sendgrid.helpers.mail import (
     FileName,
     FileType,
     Mail,
+    OpenTracking,
     Personalization,
     To,
+    TrackingSettings,
 )
 from twilio.base.exceptions import TwilioException
 from twilio.rest import Client
@@ -140,6 +143,13 @@ def create_master_email(
             if template_data.get("subject"):
                 message.subject = template_data["subject"]
             message.add_content(Content("text/html", html_content))
+            # Dynamic templates inherit account/template click tracking.
+            # Raw HTML does not, so enable it here so in-app audit/engagement
+            # events still reach the webhook.
+            tracking = TrackingSettings()
+            tracking.click_tracking = ClickTracking(enable=True, enable_text=False)
+            tracking.open_tracking = OpenTracking(enable=True)
+            message.tracking_settings = tracking
         elif sendgrid_id:
             message.template_id = sendgrid_id
         asm = Asm(

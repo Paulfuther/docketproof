@@ -34,6 +34,7 @@ from arl.msg.models import (
 from arl.msg.email_utils import (
     EMAIL_SOURCE_SENDGRID,
     build_email_custom_args,
+    email_event_template_q,
     email_identity,
     extract_sendgrid_event_meta,
     get_generic_sendgrid_template_id,
@@ -1040,14 +1041,17 @@ def process_sendgrid_webhook(payload):
 
 
 @app.task(name="filter_sendgrid_events")
-def filter_sendgrid_events(date_from=None, date_to=None, template_id=None):
+def filter_sendgrid_events(
+    date_from=None, date_to=None, template_id=None, app_template_id=None
+):
     # Initialize the queryset
     events = EmailEvent.objects.none()
 
-    # Ensure template_id is provided
-    if template_id:
-        # Filter events based on template_id
-        events = EmailEvent.objects.filter(sg_template_id=template_id)
+    match_q = email_event_template_q(
+        sendgrid_id=template_id, app_template_id=app_template_id
+    )
+    if match_q:
+        events = EmailEvent.objects.filter(match_q)
 
         # Apply date filters if provided
         if date_from:
@@ -1086,15 +1090,21 @@ def filter_sendgrid_events(date_from=None, date_to=None, template_id=None):
 
 @app.task(name="email_event_summary")
 def generate_email_event_summary(
-    template_id=None, start_date=None, end_date=None, employer_id=None
+    template_id=None, start_date=None, end_date=None, employer_id=None,
+    app_template_id=None,
 ):
     # Filter events based on template_id if provided
     events = EmailEvent.objects.all()
     if employer_id:
         events = events.filter(employer_id=employer_id)
 
-    if template_id:
-        events = events.filter(sg_template_id=template_id)
+    match_q = email_event_template_q(
+        sendgrid_id=template_id, app_template_id=app_template_id
+    )
+    if match_q:
+        events = events.filter(match_q)
+    elif template_id or app_template_id:
+        events = EmailEvent.objects.none()
 
     # Apply date range filtering if provided
     if start_date:
