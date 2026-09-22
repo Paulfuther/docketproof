@@ -28,6 +28,190 @@ def get_generic_sendgrid_template_id():
         return GENERIC_SENDGRID_TEMPLATE_ID
 
 
+EMAIL_SOURCE_IN_APP = "in_app"
+EMAIL_SOURCE_SENDGRID = "sendgrid"
+EMAIL_SOURCE_COMPOSE = "compose"
+COMPOSE_TEMPLATE_NAME = "Compose"
+EMAIL_SOURCE_CHOICES = [
+    (EMAIL_SOURCE_IN_APP, "In-app"),
+    (EMAIL_SOURCE_SENDGRID, "SendGrid"),
+    (EMAIL_SOURCE_COMPOSE, "Compose"),
+]
+
+
+def email_source_label(source, sendgrid_id=None):
+    if source:
+        return dict(EMAIL_SOURCE_CHOICES).get(source, source)
+    if sendgrid_id:
+        return "SendGrid"
+    return ""
+
+
+def infer_email_source(source=None, html_body=None, sendgrid_id=None):
+    if source:
+        return source
+    if html_body and str(html_body).strip():
+        return EMAIL_SOURCE_IN_APP
+    sid = (sendgrid_id or "").strip()
+    if sid and sid != get_generic_sendgrid_template_id():
+        return EMAIL_SOURCE_SENDGRID
+    return EMAIL_SOURCE_COMPOSE
+
+
+def friendly_template_name(source, template_name=None, sendgrid_id=None):
+    name = (template_name or "").strip()
+    if name:
+        return name
+    if source == EMAIL_SOURCE_COMPOSE:
+        return COMPOSE_TEMPLATE_NAME
+    if source == EMAIL_SOURCE_IN_APP:
+        return "In-app template"
+    sid = (sendgrid_id or "").strip()
+    return sid
+
+
+def logged_sendgrid_id(source, sendgrid_id=None):
+    """SendGrid dynamic template id to persist; empty for in-app HTML."""
+    sid = (sendgrid_id or "").strip()
+    generic = get_generic_sendgrid_template_id()
+    if source == EMAIL_SOURCE_IN_APP:
+        if sid and sid != generic:
+            return sid
+        return ""
+    if source == EMAIL_SOURCE_COMPOSE:
+        return sid or generic
+    return sid
+
+
+def parse_app_template_id(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def email_identity(
+    source=None,
+    html_body=None,
+    sendgrid_id=None,
+    template_name=None,
+    app_template_id=None,
+):
+    """Human-facing template identity for logs, unique_args, and the webhook."""
+    resolved_source = infer_email_source(
+        source=source, html_body=html_body, sendgrid_id=sendgrid_id
+    )
+    name = friendly_template_name(
+        resolved_source, template_name=template_name, sendgrid_id=sendgrid_id
+    )
+    sid = logged_sendgrid_id(resolved_source, sendgrid_id=sendgrid_id)
+    return {
+        "source": resolved_source,
+        "template_name": name,
+        "sendgrid_id": sid,
+        "app_template_id": parse_app_template_id(app_template_id),
+    }
+
+
+def build_email_custom_args(
+    subject,
+    template_name,
+    source,
+    sendgrid_id=None,
+    app_template_id=None,
+):
+    args = {
+        "subject": subject or "",
+        "template_name": template_name or "",
+        "source": source or "",
+    }
+    if sendgrid_id:
+        args["sendgrid_id"] = str(sendgrid_id)
+    if app_template_id not in (None, ""):
+        args["app_template_id"] = str(app_template_id)
+    return args
+
+
+def sendgrid_unique_args(event_data):
+    """Merge nested unique/custom args and flattened copies of our keys."""
+    merged = {}
+    if not isinstance(event_data, dict):
+        return merged
+    for key in ("unique_args", "custom_args"):
+        extra = event_data.get(key)
+        if isinstance(extra, str):
+            try:
+                extra = json.loads(extra)
+            except (TypeError, ValueError):
+                extra = None
+        if isinstance(extra, dict):
+            for k, value in extra.items():
+                if value is None or value == "":
+                    continue
+                merged[str(k)] = value
+    for k in (
+        "subject",
+        "template_name",
+        "source",
+        "sendgrid_id",
+        "app_template_id",
+    ):
+        value = event_data.get(k)
+        if value not in (None, "") and k not in merged:
+            merged[k] = value
+    return merged
+
+
+def extract_sendgrid_event_meta(event_data):
+    """Subject + template identity from a SendGrid Event Webhook payload."""
+    empty = {
+        "subject": None,
+        "template_name": "",
+        "sendgrid_id": "",
+        "source": "",
+        "app_template_id": None,
+    }
+    if not isinstance(event_data, dict):
+        return empty
+    extra = sendgrid_unique_args(event_data)
+    native_name = (event_data.get("sg_template_name") or "").strip()
+    native_id = (event_data.get("sg_template_id") or "").strip()
+    generic = get_generic_sendgrid_template_id()
+    subject = event_data.get("subject") or extra.get("subject") or None
+    if subject:
+        subject = str(subject)
+    source = str(extra.get("source") or "").strip()
+    extra_name = str(extra.get("template_name") or "").strip()
+    extra_sid = str(extra.get("sendgrid_id") or "").strip()
+    # In-app HTML and compose use unique_args; do not let the generic
+    # wrapper template overwrite the human-facing name. Legacy dynamic
+    # templates keep SendGrid's native sg_template_id / name.
+    if source in (EMAIL_SOURCE_IN_APP, EMAIL_SOURCE_COMPOSE):
+        template_name = extra_name or native_name
+        if source == EMAIL_SOURCE_IN_APP:
+            sendgrid_id = extra_sid
+            if sendgrid_id == generic:
+                sendgrid_id = ""
+            if not sendgrid_id and native_id and native_id != generic:
+                sendgrid_id = native_id
+        else:
+            sendgrid_id = extra_sid or native_id
+    else:
+        template_name = native_name or extra_name
+        sendgrid_id = native_id or extra_sid
+        if not source and native_id:
+            source = EMAIL_SOURCE_SENDGRID
+    return {
+        "subject": subject,
+        "template_name": template_name,
+        "sendgrid_id": sendgrid_id,
+        "source": source,
+        "app_template_id": parse_app_template_id(extra.get("app_template_id")),
+    }
+
+
 _TRIPLE_BRACE = re.compile(r"\{\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}\}")
 _DOUBLE_BRACE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 
@@ -91,30 +275,8 @@ def sample_preview_context(user=None, employer=None):
 
 
 def extract_sendgrid_event_subject(event_data):
-    """Read subject from a SendGrid Event Webhook payload.
-
-    SendGrid does not reliably include ``subject`` for dynamic-template
-    sends. We pass the resolved subject as a custom/unique arg at send
-    time so it shows up here either flattened or nested.
-    """
-    if not isinstance(event_data, dict):
-        return None
-
-    subject = event_data.get("subject")
-    if subject:
-        return str(subject)
-
-    for key in ("unique_args", "custom_args"):
-        extra = event_data.get(key)
-        if isinstance(extra, str):
-            try:
-                extra = json.loads(extra)
-            except (TypeError, ValueError):
-                extra = None
-        if isinstance(extra, dict) and extra.get("subject"):
-            return str(extra.get("subject"))
-
-    return None
+    """Read subject from a SendGrid Event Webhook payload."""
+    return extract_sendgrid_event_meta(event_data).get("subject")
 
 
 def sendgrid_id_for_template(template):

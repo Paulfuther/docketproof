@@ -150,8 +150,15 @@
       <div class="text-muted small">
         {{ e.timestamp|date:"Y-m-d H:i:s" }}
         • {{ e.sg_template_name|default:"-" }}
+        {% if e.source_label %}
+          <span class="badge text-bg-light border">{{ e.source_label }}</span>
+        {% endif %}
       </div>
-
+      {% if e.sg_template_id %}
+      <div class="small text-muted text-truncate">
+        {{ e.sg_template_id }}
+      </div>
+      {% endif %}
       <div class="small text-muted text-truncate">
         {{ e.sg_message_id }}
       </div>
@@ -201,7 +208,12 @@
             </td>
           <td class="small">
             <div class="fw-semibold text-truncate" style="max-width:260px;">{{ e.sg_template_name|default:"-" }}</div>
-            <div class="text-muted text-truncate" style="max-width:260px;">{{ e.sg_template_id|default:"-" }}</div>
+            {% if e.source_label %}
+              <span class="badge text-bg-light border">{{ e.source_label }}</span>
+            {% endif %}
+            {% if e.sg_template_id %}
+              <div class="text-muted text-truncate" style="max-width:260px;">{{ e.sg_template_id }}</div>
+            {% endif %}
           </td>
         </tr>
       {% empty %}

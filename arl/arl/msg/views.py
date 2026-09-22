@@ -34,7 +34,11 @@ from arl.bucket.helpers import conn, upload_to_linode_object_storage
 from arl.dsign.forms import NameEmailForm
 from arl.dsign.tasks import create_docusign_envelope_task
 from arl.msg.email_utils import (
-    GENERIC_SENDGRID_TEMPLATE_ID,
+    COMPOSE_TEMPLATE_NAME,
+    EMAIL_SOURCE_COMPOSE,
+    EMAIL_SOURCE_IN_APP,
+    EMAIL_SOURCE_SENDGRID,
+    get_generic_sendgrid_template_id,
     prepare_email_image,
     render_merge_fields,
     resolve_email_subject,
@@ -360,6 +364,7 @@ def communications(request):
             | Q(sg_message_id__icontains=log_q)
             | Q(sg_event_id__icontains=log_q)
             | Q(sg_template_name__icontains=log_q)
+            | Q(source__icontains=log_q)
             | Q(username__icontains=log_q)
         )
 
@@ -370,6 +375,7 @@ def communications(request):
         email_log_qs = email_log_qs.filter(
             Q(sg_template_id__icontains=log_template)
             | Q(sg_template_name__icontains=log_template)
+            | Q(source__icontains=log_template)
         )   
 
     email_timeline = (
@@ -506,22 +512,22 @@ def communications(request):
 
                 if mode == "text":
                     print("going to send")
-                    subject = email_form.cleaned_data["subject"]
+                    subject = resolve_email_subject(
+                        subject=email_form.cleaned_data.get("subject"),
+                        employer=user.employer,
+                    )
                     raw_message = email_form.cleaned_data["message"]
                     message = render_message_to_sendgrid(raw_message)
                     print(message)
                     res = master_email_send_task.delay(
                         recipients=recipients,  # ensure JSON-serializable!
-                        sendgrid_id=getattr(
-                            settings,
-                            "SENDGRID_GENERIC_TEMPLATE_ID",
-                            GENERIC_SENDGRID_TEMPLATE_ID,
-                        ),
+                        sendgrid_id=get_generic_sendgrid_template_id(),
                         employer_id=user.employer.id,  # ensure int
                         body=message,  # str
                         subject=subject,  # str
                         attachment_urls=attachment_urls,  # ensure list[str]
-                        template_name="Custom message",
+                        template_name=COMPOSE_TEMPLATE_NAME,
+                        source=EMAIL_SOURCE_COMPOSE,
                     )
                     print("queued master_email_send_task:", res.id)
 
@@ -552,6 +558,9 @@ def communications(request):
                         if html_body
                         else sendgrid_id_for_template(sendgrid_template)
                     )
+                    source = (
+                        EMAIL_SOURCE_IN_APP if html_body else EMAIL_SOURCE_SENDGRID
+                    )
 
                     master_email_send_task.delay(
                         recipients=recipients,
@@ -561,6 +570,8 @@ def communications(request):
                         html_body=html_body,
                         body=html_body,
                         template_name=sendgrid_template.name,
+                        source=source,
+                        app_template_id=sendgrid_template.pk,
                         attachment_urls=attachment_urls,
                     )
 

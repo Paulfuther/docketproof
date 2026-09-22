@@ -256,7 +256,7 @@ class StoreTargetForm(forms.ModelForm):
 class EmailTemplateForm(forms.ModelForm):
     class Meta:
         model = EmailTemplate
-        fields = ["name", "subject", "header_image_url", "html_body"]
+        fields = ["name", "subject", "header_image_url", "html_body", "include_in_report"]
         widgets = {
             "name": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Template name"}
@@ -275,12 +275,19 @@ class EmailTemplateForm(forms.ModelForm):
                     "placeholder": "<h1>Hello {{name}}</h1>\n<p>A message from {{company_name}}.</p>",
                 }
             ),
+            "include_in_report": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+        }
+        labels = {
+            "include_in_report": "Include in compliance audit",
         }
         help_texts = {
             "name": "Shown in the Communications template picker.",
             "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
             "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
             "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
+            "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
         }
 
     def clean_name(self):
@@ -323,7 +330,12 @@ class EmailForm(forms.Form):
         max_length=255,
         required=False,
         label="Email Subject",
-        widget=forms.TextInput(attrs={"placeholder": "Enter a subject..."}),
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "Enter a subject...",
+                "class": "form-control",
+            }
+        ),
     )
 
     message = forms.CharField(
@@ -435,9 +447,11 @@ class EmailForm(forms.Form):
 
         # Validate mode-based inputs
         if mode == "text":
+            subject = (subject or "").strip()
+            cleaned_data["subject"] = subject
             if not subject or not message:
                 raise forms.ValidationError(
-                    "Subject and message are required for text mode."
+                    "Subject and message are required for compose (one-off) emails."
                 )
         elif mode == "template":
             if not sendgrid_id:

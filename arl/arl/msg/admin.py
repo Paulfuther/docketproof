@@ -89,15 +89,17 @@ class EmailEventAdmin(admin.ModelAdmin):
         "event",
         "subject",
         "sg_template_name",
+        "source",
         "employer",
     )
-    list_filter = ("event", "employer", "sg_template_name", "timestamp")
+    list_filter = ("event", "employer", "source", "sg_template_name", "timestamp")
     search_fields = (
         "email",
         "subject",
         "sg_template_name",
         "sg_message_id",
         "sg_event_id",
+        "source",
     )
     ordering = ("-timestamp",)
     actions = ["export_selected_to_xlsx"]
@@ -113,6 +115,7 @@ class EmailEventAdmin(admin.ModelAdmin):
             "Event",
             "Subject",
             "Template Name",
+            "Source",
             "Template ID",
             "Message ID",
             "Event ID",
@@ -132,6 +135,7 @@ class EmailEventAdmin(admin.ModelAdmin):
                     obj.event,
                     obj.subject or "",
                     obj.sg_template_name or "",
+                    obj.source or "",
                     obj.sg_template_id or "",
                     obj.sg_message_id or "",
                     obj.sg_event_id or "",
@@ -164,9 +168,10 @@ class EmailLogAdmin(admin.ModelAdmin):
         "employer",
         "subject",
         "template_name",
+        "source",
         "status",
         "sender_email",
     )
-    list_filter = ("status", "employer", "sent_at")
+    list_filter = ("status", "source", "employer", "sent_at")
     search_fields = ("subject", "template_name", "template_id", "sender_email")
     ordering = ("-sent_at",)

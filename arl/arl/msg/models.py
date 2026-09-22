@@ -6,6 +6,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.timezone import now
 from arl.user.models import CustomUser, Employer
+from arl.msg.email_utils import EMAIL_SOURCE_CHOICES, email_source_label
 
 from arl.bucket.helpers import conn, upload_to_linode_object_storage
 
@@ -41,6 +42,18 @@ class EmailEvent(models.Model):
     sg_message_id = models.CharField(max_length=255)
     sg_template_id = models.CharField(max_length=255)
     sg_template_name = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=EMAIL_SOURCE_CHOICES,
+        blank=True,
+        default="",
+        help_text="in_app, sendgrid, or compose — from unique args when SendGrid has no template.",
+    )
+    app_template_id = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="EmailTemplate.pk for in-app/legacy template sends (audit join).",
+    )
     subject = models.CharField(max_length=255, blank=True, null=True)
     timestamp = models.DateTimeField()
     url = models.URLField()
@@ -48,6 +61,10 @@ class EmailEvent(models.Model):
 
     def __str__(self):
         return f"{self.email} - {self.event}"
+
+    @property
+    def source_label(self):
+        return email_source_label(self.source, sendgrid_id=self.sg_template_id)
 
     class Meta:
         ordering = ["-timestamp"]
@@ -68,9 +85,19 @@ class EmailLog(models.Model):
     )
     sender_email = models.EmailField(help_text="The verified sender email used")
     template_id = models.CharField(
-        max_length=100, help_text="SendGrid Template ID used"
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="SendGrid template ID when one was used (empty for in-app HTML)",
     )
     template_name = models.CharField(max_length=255, blank=True, null=True)
+    source = models.CharField(
+        max_length=20,
+        choices=EMAIL_SOURCE_CHOICES,
+        blank=True,
+        default="",
+        help_text="in_app, sendgrid, or compose",
+    )
     subject = models.CharField(
         max_length=255,
         blank=True,
@@ -89,6 +116,10 @@ class EmailLog(models.Model):
 
     def __str__(self):
         return f"EmailLog {self.id} - {self.employer.name} - {self.sent_at.strftime('%Y-%m-%d %H:%M')}"
+
+    @property
+    def source_label(self):
+        return email_source_label(self.source, sendgrid_id=self.template_id)
 
 
 class EmailTemplate(models.Model):
@@ -122,7 +153,10 @@ class EmailTemplate(models.Model):
         default="",
         help_text="Optional public header image URL (Linode). Shown at the top of preview and outbound HTML.",
     )
-    include_in_report = models.BooleanField(default=False)  # ✅ For analytics
+    include_in_report = models.BooleanField(
+        default=False,
+        help_text="Include this template in the employee compliance / click-engagement report.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 

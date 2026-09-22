@@ -1089,17 +1089,23 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
 
 
 def send_quick_email(user, recipients, subject, message, attachment_urls):
+    from arl.msg.email_utils import (
+        COMPOSE_TEMPLATE_NAME,
+        EMAIL_SOURCE_COMPOSE,
+        get_generic_sendgrid_template_id,
+        resolve_email_subject,
+    )
     from .tasks import master_email_send_task
 
     master_email_send_task.delay(
         recipients=recipients,
-        sendgrid_id=getattr(
-            settings,
-            "SENDGRID_GENERIC_TEMPLATE_ID",
-            "d-4ac0497efd864e29b4471754a9c836eb",
-        ),
+        sendgrid_id=get_generic_sendgrid_template_id(),
         employer_id=user.employer.id,
         body=message,
-        subject=subject,
+        subject=resolve_email_subject(
+            subject=subject, employer=getattr(user, "employer", None)
+        ),
         attachment_urls=attachment_urls,
+        template_name=COMPOSE_TEMPLATE_NAME,
+        source=EMAIL_SOURCE_COMPOSE,
     )

@@ -29,6 +29,7 @@
               <th>Name</th>
               <th>Subject</th>
               <th>Type</th>
+              <th>Audit</th>
               <th></th>
             </tr>
           </thead>
@@ -44,6 +45,13 @@
                     <span class="badge text-bg-secondary">SendGrid ID</span>
                   {% endif %}
                 </td>
+                <td>
+                  {% if t.include_in_report %}
+                    <span class="badge text-bg-success">Audit</span>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
                 <td class="text-end">
                   {% if t.pk in owned_template_ids %}
                     <a class="btn btn-sm btn-outline-primary" href="{% url 'email_template_edit' t.pk %}">Edit</a>
@@ -55,7 +63,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="4" class="text-muted">No templates yet. Create one to send branded mail without using the SendGrid template editor.</td>
+                <td colspan="5" class="text-muted">No templates yet. Create one to send branded mail without using the SendGrid template editor.</td>
               </tr>
             {% endfor %}
           </tbody>

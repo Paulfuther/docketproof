@@ -13,7 +13,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import connection
-from django.db.models import F, Func, IntegerField, OuterRef, Subquery
+from django.db.models import F, Func, IntegerField, OuterRef, Q, Subquery
 from django.utils import timezone
 from django.utils.timezone import now
 from django_celery_results.models import TaskResult
@@ -32,7 +32,10 @@ from arl.msg.models import (
     SmsLog,
 )
 from arl.msg.email_utils import (
-    extract_sendgrid_event_subject,
+    EMAIL_SOURCE_SENDGRID,
+    build_email_custom_args,
+    email_identity,
+    extract_sendgrid_event_meta,
     get_generic_sendgrid_template_id,
     render_merge_fields,
     resolve_email_subject,
@@ -72,6 +75,8 @@ def master_email_send_task(
     attachment_urls=None,
     html_body=None,
     template_name=None,
+    source=None,
+    app_template_id=None,
 ):
     logger.info(
         "[EmailTask] start sg_id=%s employer_id=%s recipients_count=%s",
@@ -92,6 +97,8 @@ def master_email_send_task(
         subject (str, optional): Subject from user input or the in-app template.
         html_body (str, optional): In-app HTML template body (SendGrid is transport only).
         template_name (str, optional): Friendly name stored on EmailLog.
+        source (str, optional): in_app, sendgrid, or compose.
+        app_template_id (int, optional): EmailTemplate.pk for audit/click reports.
 
     Returns:
         str: Success or error message.
@@ -145,6 +152,13 @@ def master_email_send_task(
             subject=subject, employer=employer
         )
         send_template_id = sendgrid_id or get_generic_sendgrid_template_id()
+        identity = email_identity(
+            source=source,
+            html_body=html_body,
+            sendgrid_id=sendgrid_id,
+            template_name=template_name,
+            app_template_id=app_template_id,
+        )
 
         failed_emails = []
         any_success = False
@@ -173,9 +187,13 @@ def master_email_send_task(
             td = dict(merge_context)
             if not td.get("body") and html_body:
                 td["body"] = render_merge_fields(html_body, merge_context)
-            ca = {
-                "subject": resolved_subject,
-            }
+            ca = build_email_custom_args(
+                subject=resolved_subject,
+                template_name=identity["template_name"],
+                source=identity["source"],
+                sendgrid_id=identity["sendgrid_id"] or None,
+                app_template_id=identity["app_template_id"],
+            )
             logger.info("template data :", td, "custom args :", ca)
             # ensure attachments is a list of dicts
             att_list = attachments if isinstance(attachments, list) else []
@@ -218,8 +236,9 @@ def master_email_send_task(
             EmailLog.objects.create(
                 employer=employer,
                 sender_email=verified_sender or "",
-                template_id=str(send_template_id or "in-app")[:100],
-                template_name=template_name or "",
+                template_id=(identity["sendgrid_id"] or "")[:100],
+                template_name=identity["template_name"],
+                source=identity["source"],
                 subject=raw_subject,
                 status="SUCCESS" if any_success else "FAILED",
                 error_message=(
@@ -765,6 +784,7 @@ def send_weekly_tobacco_email():
                 sender_email=verified_sender,
                 template_id=template_id,
                 template_name=template_name,
+                source=EMAIL_SOURCE_SENDGRID,
                 status="SUCCESS" if email_sent else "FAILED",
             )
 
@@ -959,9 +979,12 @@ def process_sendgrid_webhook(payload):
             email = event_data.get("email", "")
             sg_event_id = event_data.get("sg_event_id", "")
             sg_message_id = event_data.get("sg_message_id", "")
-            sg_template_id = event_data.get("sg_template_id", "")
-            sg_template_name = event_data.get("sg_template_name", "")
-            subject = extract_sendgrid_event_subject(event_data)
+            meta = extract_sendgrid_event_meta(event_data)
+            sg_template_id = meta.get("sendgrid_id") or ""
+            sg_template_name = meta.get("template_name") or ""
+            subject = meta.get("subject")
+            event_source = meta.get("source") or ""
+            app_template_id = meta.get("app_template_id")
             event = event_data.get("event", "")
             timestamp = timezone.datetime.fromtimestamp(
                 event_data.get("timestamp", 0), tz=timezone.utc
@@ -998,6 +1021,8 @@ def process_sendgrid_webhook(payload):
                 sg_message_id=sg_message_id,
                 sg_template_id=sg_template_id,
                 sg_template_name=sg_template_name,
+                source=event_source,
+                app_template_id=app_template_id,
                 subject=subject,
                 timestamp=timestamp,
                 url=url,
@@ -1249,14 +1274,24 @@ def generate_employee_email_report_task(employee_id):
     employee = CustomUser.objects.get(pk=employee_id)
     email = employee.email
 
-    # Fetch template IDs for templates marked as "include_in_report"
-    template_ids = EmailTemplate.objects.filter(include_in_report=True).values_list(
-        "sendgrid_id", flat=True
-    )
-    # print(template_ids)
-    # Search for all email events related to this email address
-    email_events = EmailEvent.objects.filter(
-        email=email, sg_template_id__in=template_ids
+    # Audited templates: legacy SendGrid dynamic ids *or* in-app pk
+    # carried on webhook unique_args (sg_template_id is empty for HTML).
+    audited = list(EmailTemplate.objects.filter(include_in_report=True))
+    sg_ids = [
+        (t.sendgrid_id or "").strip()
+        for t in audited
+        if (t.sendgrid_id or "").strip()
+    ]
+    app_ids = [t.pk for t in audited]
+    match_q = Q()
+    if sg_ids:
+        match_q |= Q(sg_template_id__in=sg_ids)
+    if app_ids:
+        match_q |= Q(app_template_id__in=app_ids)
+    email_events = (
+        EmailEvent.objects.filter(email=email).filter(match_q)
+        if match_q
+        else EmailEvent.objects.none()
     )
 
     # Summarize the events into a DataFrame
