@@ -11,9 +11,20 @@ from PIL import Image, ImageOps
 # Default wrapper template used by compose-your-own messages.
 # Override with settings.SENDGRID_GENERIC_TEMPLATE_ID when Django is configured.
 GENERIC_SENDGRID_TEMPLATE_ID = "d-4ac0497efd864e29b4471754a9c836eb"
-# Email clients clip wide images; keep inline/header art within a common
-# single-column width.
+# Email clients clip wide images; keep inline body art within a common
+# single-column width. Headers are smaller and must not stretch to 100%.
 EMAIL_IMAGE_MAX_WIDTH = 600
+EMAIL_HEADER_MAX_WIDTH = 600
+EMAIL_HEADER_MAX_HEIGHT = 180
+EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT = 280
+EMAIL_HEADER_DISPLAY_WIDTH_CHOICES = [
+    (180, "Small (180px)"),
+    (240, "Compact (240px)"),
+    (280, "Medium (280px)"),
+    (360, "Large (360px)"),
+    (440, "Wide (440px)"),
+    (520, "Full (520px)"),
+]
 EMAIL_JPEG_QUALITY = 80
 
 
@@ -321,13 +332,17 @@ def _image_has_alpha(image):
     return False
 
 
-def prepare_email_image(file_obj, filename=""):
+def prepare_email_image(
+    file_obj, filename="", max_width=None, max_height=None, crop=False
+):
     """Resize/compress an image for inline email use.
 
-    Caps width at EMAIL_IMAGE_MAX_WIDTH (keeps aspect ratio). Opaque images
+    Caps width at ``max_width`` (default EMAIL_IMAGE_MAX_WIDTH) and optionally
+    height. ``crop=True`` center-crops to that box (banner). Opaque images
     become JPEG; images with transparency stay PNG. Returns
     ``(BytesIO, extension_without_dot, content_type)``.
     """
+    max_width = max_width or EMAIL_IMAGE_MAX_WIDTH
     if hasattr(file_obj, "seek"):
         try:
             file_obj.seek(0)
@@ -343,14 +358,9 @@ def prepare_email_image(file_obj, filename=""):
     if getattr(image, "n_frames", 1) > 1:
         image.seek(0)
 
-    width, height = image.size
-    if width > EMAIL_IMAGE_MAX_WIDTH:
-        ratio = EMAIL_IMAGE_MAX_WIDTH / float(width)
-        new_size = (
-            EMAIL_IMAGE_MAX_WIDTH,
-            max(1, int(round(height * ratio))),
-        )
-        image = image.resize(new_size, _lanczos())
+    image = _resize_email_image(
+        image, max_width=max_width, max_height=max_height, crop=crop
+    )
 
     buffer = BytesIO()
     if _image_has_alpha(image):
@@ -373,19 +383,77 @@ def prepare_email_image(file_obj, filename=""):
     return buffer, "jpg", "image/jpeg"
 
 
-def wrap_in_app_email_html(html_body, header_image_url=None):
-    """Prepend an optional header image above in-app template HTML."""
+def _resize_email_image(image, max_width, max_height=None, crop=False):
+    width, height = image.size
+    if width < 1 or height < 1:
+        return image
+    if crop and max_height:
+        target_w = min(int(max_width), width)
+        target_h = min(int(max_height), height)
+        banner_h = max(1, int(round(target_w * max_height / float(max_width))))
+        if banner_h <= height:
+            target_h = banner_h
+        else:
+            target_h = height
+            target_w = max(1, int(round(target_h * max_width / float(max_height))))
+            target_w = min(target_w, width)
+        return ImageOps.fit(
+            image,
+            (max(1, target_w), max(1, target_h)),
+            method=_lanczos(),
+            centering=(0.5, 0.35),
+        )
+    box_h = int(max_height) if max_height else 10**6
+    if width > max_width or height > box_h:
+        image = image.copy()
+        image.thumbnail((int(max_width), box_h), _lanczos())
+    return image
+
+
+def prepare_header_image(file_obj, filename="", crop=False):
+    """Resize a header image: max 600×180, optional center-crop to that banner."""
+    return prepare_email_image(
+        file_obj,
+        filename=filename,
+        max_width=EMAIL_HEADER_MAX_WIDTH,
+        max_height=EMAIL_HEADER_MAX_HEIGHT,
+        crop=bool(crop),
+    )
+
+
+def resolve_header_display_width(width=None):
+    allowed = {choice[0] for choice in EMAIL_HEADER_DISPLAY_WIDTH_CHOICES}
+    try:
+        value = int(width)
+    except (TypeError, ValueError):
+        return EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+    if value in allowed:
+        return value
+    return max(120, min(EMAIL_HEADER_MAX_WIDTH, value))
+
+
+def wrap_in_app_email_html(
+    html_body, header_image_url=None, header_display_width=None
+):
+    """Prepend an optional header image above in-app template HTML.
+
+    Uses a fixed pixel width (not width:100%) plus HTML width attributes so
+    Outlook and other clients do not stretch the header into a giant banner.
+    """
     body = html_body or ""
     url = (header_image_url or "").strip()
     if not url:
         return body
     safe_url = escape(url)
+    width = resolve_header_display_width(header_display_width)
     header = (
-        '<div style="text-align:center;margin:0 auto 16px auto;'
-        f'max-width:{EMAIL_IMAGE_MAX_WIDTH}px;">'
-        f'<img src="{safe_url}" alt="" width="{EMAIL_IMAGE_MAX_WIDTH}" '
-        'style="display:block;margin:0 auto;width:100%;'
-        f'max-width:{EMAIL_IMAGE_MAX_WIDTH}px;height:auto;border:0;outline:none;">'
-        "</div>\n"
+        f'<table role="presentation" align="center" border="0" cellpadding="0" '
+        f'cellspacing="0" width="{width}" '
+        f'style="margin:0 auto 16px auto;width:{width}px;max-width:{width}px;">'
+        '<tr><td align="center" style="padding:0;">'
+        f'<img src="{safe_url}" alt="" width="{width}" '
+        f'style="display:block;width:{width}px;max-width:{width}px;height:auto;'
+        'border:0;outline:none;text-decoration:none;">'
+        "</td></tr></table>\n"
     )
     return header + body

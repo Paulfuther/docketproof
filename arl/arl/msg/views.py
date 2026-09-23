@@ -40,6 +40,7 @@ from arl.msg.email_utils import (
     EMAIL_SOURCE_SENDGRID,
     get_generic_sendgrid_template_id,
     prepare_email_image,
+    prepare_header_image,
     render_merge_fields,
     resolve_email_subject,
     sample_preview_context,
@@ -549,7 +550,9 @@ def communications(request):
                     html_body = (sendgrid_template.html_body or "").strip() or None
                     if html_body:
                         html_body = wrap_in_app_email_html(
-                            html_body, sendgrid_template.header_image_url
+                            html_body,
+                            sendgrid_template.header_image_url,
+                            header_display_width=sendgrid_template.header_display_width,
                         )
                     # In-app HTML is sent as content (SendGrid = transport).
                     # Legacy templates still use their SendGrid dynamic template id.
@@ -1274,7 +1277,11 @@ def email_template_preview(request, pk):
     context = {**context, "subject": subject}
     if template.is_in_app:
         html = render_merge_fields(template.html_body, context)
-        html = wrap_in_app_email_html(html, template.header_image_url)
+        html = wrap_in_app_email_html(
+            html,
+            template.header_image_url,
+            header_display_width=template.header_display_width,
+        )
     else:
         html = (
             "<p><em>This template is a legacy SendGrid dynamic template "
@@ -1289,6 +1296,7 @@ def email_template_preview(request, pk):
             "is_in_app": template.is_in_app,
             "sendgrid_id": template.sendgrid_id or "",
             "header_image_url": template.header_image_url or "",
+            "header_display_width": template.header_display_width,
         }
     )
 
@@ -1324,9 +1332,16 @@ def upload_attachment(request):
             if uploaded_file.content_type.startswith("image/"):
                 try:
                     if email_fit:
-                        buffer, ext, _ctype = prepare_email_image(
-                            uploaded_file, filename=original_name
-                        )
+                        if request.POST.get("email_header") == "1":
+                            buffer, ext, _ctype = prepare_header_image(
+                                uploaded_file,
+                                filename=original_name,
+                                crop=request.POST.get("header_crop") == "1",
+                            )
+                        else:
+                            buffer, ext, _ctype = prepare_email_image(
+                                uploaded_file, filename=original_name
+                            )
                         stem = Path(original_name).stem or "image"
                         unique_name = f"{folder}/{uuid.uuid4()}_{stem}.{ext}"
                     else:

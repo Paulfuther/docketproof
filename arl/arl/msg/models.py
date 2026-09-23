@@ -6,7 +6,12 @@ from django.db import models
 from django.utils import timezone
 from django.utils.timezone import now
 from arl.user.models import CustomUser, Employer
-from arl.msg.email_utils import EMAIL_SOURCE_CHOICES, email_source_label
+from arl.msg.email_utils import (
+    EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
+    EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+    EMAIL_SOURCE_CHOICES,
+    email_source_label,
+)
 
 from arl.bucket.helpers import conn, upload_to_linode_object_storage
 
@@ -152,6 +157,11 @@ class EmailTemplate(models.Model):
         blank=True,
         default="",
         help_text="Optional public header image URL (Linode). Shown at the top of preview and outbound HTML.",
+    )
+    header_display_width = models.PositiveSmallIntegerField(
+        default=EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+        choices=EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
+        help_text="How wide the header appears in the email, in pixels. Not stretched to the full column.",
     )
     include_in_report = models.BooleanField(
         default=False,

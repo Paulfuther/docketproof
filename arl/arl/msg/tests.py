@@ -10,6 +10,9 @@ from PIL import Image
 
 from arl.msg.email_utils import (
     COMPOSE_TEMPLATE_NAME,
+    EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+    EMAIL_HEADER_MAX_HEIGHT,
+    EMAIL_HEADER_MAX_WIDTH,
     EMAIL_IMAGE_MAX_WIDTH,
     EMAIL_SOURCE_COMPOSE,
     EMAIL_SOURCE_IN_APP,
@@ -19,6 +22,7 @@ from arl.msg.email_utils import (
     extract_sendgrid_event_meta,
     extract_sendgrid_event_subject,
     prepare_email_image,
+    prepare_header_image,
     render_merge_fields,
     resolve_email_subject,
     wrap_in_app_email_html,
@@ -192,9 +196,40 @@ class EmailUtilsTests(TestCase):
         )
         self.assertIn("https://cdn.example/header.jpg", wrapped)
         self.assertLess(wrapped.index("<img"), wrapped.index("<p>Hello</p>"))
-        self.assertIn("max-width:600px", wrapped)
+        self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', wrapped)
+        self.assertIn(f"width:{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}px", wrapped)
+        self.assertNotIn("width:100%", wrapped)
+        self.assertIn("<table", wrapped)
+        large = wrap_in_app_email_html(
+            "<p>Hello</p>",
+            "https://cdn.example/header.jpg",
+            header_display_width=440,
+        )
+        self.assertIn('width="440"', large)
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", ""), "<p>Hello</p>")
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), "<p>Hello</p>")
+
+    def test_prepare_header_image_caps_height(self):
+        img = Image.new("RGB", (1200, 800), color=(200, 10, 10))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, _ctype = prepare_header_image(buf, filename="tall.png")
+        result = Image.open(out)
+        self.assertLessEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
+        self.assertLessEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
+        self.assertEqual(ext, "jpg")
+
+    def test_prepare_header_image_crops_banner(self):
+        img = Image.new("RGB", (1200, 800), color=(10, 200, 10))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, _ctype = prepare_header_image(buf, filename="crop.png", crop=True)
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
+        self.assertEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
+        self.assertEqual(ext, "jpg")
 
 
 class EmailLogSubjectTests(TestCase):
@@ -558,6 +593,9 @@ class InAppEmailTemplateViewTests(TestCase):
             < data["html"].index("From Acme Co")
         )
         self.assertEqual(data["header_image_url"], "https://cdn.example/header.jpg")
+        self.assertEqual(data["header_display_width"], EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT)
+        self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', data["html"])
+        self.assertNotIn("width:100%", data["html"])
 
     def test_save_and_clear_header_image_url(self):
         response = self.client.post(
@@ -585,6 +623,25 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         template.refresh_from_db()
         self.assertEqual(template.header_image_url, "")
+
+    def test_save_header_display_width(self):
+        response = self.client.post(
+            reverse("email_template_create"),
+            {
+                "name": "Sized header",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "https://cdn.example/header.jpg",
+                "header_display_width": "180",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        template = EmailTemplate.objects.get(name="Sized header")
+        self.assertEqual(template.header_display_width, 180)
+        response = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        )
+        self.assertIn('width="180"', response.json()["html"])
 
     def test_include_in_report_persists_and_defaults_off(self):
         response = self.client.post(
@@ -691,6 +748,7 @@ class InAppEmailTemplateViewTests(TestCase):
             subject="Please read",
             html_body="<p>Hello {{name}}</p>",
             header_image_url="https://cdn.example/banner.jpg",
+            header_display_width=180,
         )
         template.employers.add(self.employer)
         response = self.client.post(
@@ -707,4 +765,6 @@ class InAppEmailTemplateViewTests(TestCase):
         kwargs = mock_task.delay.call_args.kwargs
         self.assertIn("https://cdn.example/banner.jpg", kwargs["html_body"])
         self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
+        self.assertIn('width="180"', kwargs["html_body"])
+        self.assertNotIn("width:100%", kwargs["html_body"])
 

@@ -256,7 +256,14 @@ class StoreTargetForm(forms.ModelForm):
 class EmailTemplateForm(forms.ModelForm):
     class Meta:
         model = EmailTemplate
-        fields = ["name", "subject", "header_image_url", "html_body", "include_in_report"]
+        fields = [
+            "name",
+            "subject",
+            "header_image_url",
+            "header_display_width",
+            "html_body",
+            "include_in_report",
+        ]
         widgets = {
             "name": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Template name"}
@@ -268,6 +275,7 @@ class EmailTemplateForm(forms.ModelForm):
                 }
             ),
             "header_image_url": forms.HiddenInput(),
+            "header_display_width": forms.Select(attrs={"class": "form-select"}),
             "html_body": forms.Textarea(
                 attrs={
                     "class": "form-control font-monospace",
@@ -281,14 +289,23 @@ class EmailTemplateForm(forms.ModelForm):
         }
         labels = {
             "include_in_report": "Include in compliance audit",
+            "header_display_width": "Header size",
         }
         help_texts = {
             "name": "Shown in the Communications template picker.",
             "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
             "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
+            "header_display_width": "How wide the header looks in the email. It is not stretched to the full column.",
             "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
             "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from arl.msg.email_utils import EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+
+        self.fields["header_display_width"].required = False
+        self.fields["header_display_width"].initial = EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
 
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip()
@@ -310,6 +327,13 @@ class EmailTemplateForm(forms.ModelForm):
 
     def clean_header_image_url(self):
         return (self.cleaned_data.get("header_image_url") or "").strip()
+
+    def clean_header_display_width(self):
+        from arl.msg.email_utils import resolve_header_display_width
+
+        return resolve_header_display_width(
+            self.cleaned_data.get("header_display_width")
+        )
 
 
 class EmailForm(forms.Form):
