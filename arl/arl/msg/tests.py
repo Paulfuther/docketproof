@@ -1,5 +1,8 @@
 import json
+import shutil
+import subprocess
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
@@ -576,6 +579,35 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertTrue(template.is_in_app)
         self.assertFalse(template.include_in_report)
         self.assertIn(self.employer, template.employers.all())
+
+    def test_template_form_javascript_parses(self):
+        path = (
+            Path(__file__).resolve().parent.parent
+            / "templates"
+            / "msg"
+            / "email_template_form.html"
+        )
+        html = path.read_text()
+        self.assertIn('id="template-preview"', html)
+        self.assertIn('id="insert-body-image-btn"', html)
+        self.assertIn("function renderPreview(", html)
+        self.assertIn("function insertBodyImageFromUpload(", html)
+        start = html.find("<script>\nfunction getCSRFToken")
+        end = html.rfind("</script>")
+        self.assertGreater(start, 0)
+        js = html[start + len("<script>") : end]
+        # The broken single-quoted ['"] class used to SyntaxError the page
+        # and kill both preview and insert handlers.
+        self.assertNotRegex(js, r"""src=\["\\'\]""")
+        node = shutil.which("node")
+        if node:
+            result = subprocess.run(
+                [node, "--check"],
+                input=js,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_preview_renders_merge_fields(self):
         template = EmailTemplate.objects.create(

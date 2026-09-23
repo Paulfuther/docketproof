@@ -100,9 +100,15 @@
                   <label class="form-check-label" for="place-right">Float right</label>
                 </div>
               </div>
+              <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="insert-body-image-btn">
+                  Insert image
+                </button>
+                <input type="file" id="body-image-file" accept="image/*" class="d-none">
+              </div>
               <div class="dz-template-image border rounded p-3 text-muted"
                    data-upload-url="{% url 'upload_attachment' %}">
-                Drop an image or click to upload. It is stored on Linode and inserted as a public URL.
+                Or drop an image here. It is stored on Linode and inserted as a public URL.
               </div>
               <div id="body-images-list" class="mt-2"></div>
             </div>
@@ -203,13 +209,15 @@ function listBodyImageUrls(html) {
 function stripBodyImage(html, url) {
   if (!html || !url) return html || '';
   const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Double-quoted patterns: a ['"] class inside a single-quoted JS string
+  // is a SyntaxError and used to kill preview + insert on this page.
   const patterns = [
-    new RegExp('<table\\b[^>]*\\bdata-dp-body-image\\b[^>]*>[\\s\\S]*?<img\\b[^>]*\\bsrc=["\\']' + escaped + '["\\'][\\s\\S]*?<\\/table>\\s*', 'gi'),
-    new RegExp('<p\\b[^>]*>\\s*<img\\b[^>]*\\bsrc=["\\']' + escaped + '["\\'][^>]*>\\s*<\\/p>\\s*', 'gi'),
-    new RegExp('<img\\b[^>]*\\bsrc=["\\']' + escaped + '["\\'][^>]*>\\s*', 'gi')
+    new RegExp("<table\\b[^>]*\\bdata-dp-body-image\\b[^>]*>[\\s\\S]*?<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][\\s\\S]*?</table>\\s*", "gi"),
+    new RegExp("<p\\b[^>]*>\\s*<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][^>]*>\\s*</p>\\s*", "gi"),
+    new RegExp("<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][^>]*>\\s*", "gi")
   ];
   patterns.forEach(function (re) {
-    html = html.replace(re, '');
+    html = html.replace(re, "");
   });
   return html;
 }
@@ -321,14 +329,59 @@ function proxyImageUrl(url) {
   return proxy + '?url=' + encodeURIComponent(url);
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function insertBodyImageFromUpload(resp) {
+  const body = document.getElementById('id_html_body');
+  if (!body || !resp || !resp.url) return;
+  insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()));
+  renderBodyImageList();
+  renderPreview();
+  persistAssets({ action: 'set_html_body', html_body: body.value }).catch(function (err) {
+    alert(err.message || 'Picture inserted in preview. Click Save template to keep it.');
+  });
+}
+
+function uploadEmailImage(file, extra, onSuccess) {
+  const input = document.querySelector('.dz-template-image, .dz-header-image');
+  const url = (input && input.getAttribute('data-upload-url')) || "{% url 'upload_attachment' %}";
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('folder', 'email_templates');
+  fd.append('email_fit', '1');
+  Object.keys(extra || {}).forEach(function (key) {
+    fd.append(key, extra[key]);
+  });
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCSRFToken() },
+    body: fd
+  }).then(function (resp) { return resp.json(); }).then(function (data) {
+    if (!data || !data.success || !data.url) {
+      throw new Error((data && data.error) || 'Upload finished but no URL was returned.');
+    }
+    onSuccess(data, file);
+  });
+}
+
+function initTemplateForm() {
   let headerLocalSource = '';
   let headerCropper = null;
+  let bodyDropzone = null;
   const cropModalEl = document.getElementById('header-crop-modal');
-  const cropModal = (window.bootstrap && cropModalEl) ? new bootstrap.Modal(cropModalEl) : null;
+  let cropModal = null;
+  try {
+    cropModal = (window.bootstrap && cropModalEl) ? new bootstrap.Modal(cropModalEl) : null;
+  } catch (err) {
+    cropModal = null;
+  }
 
-  renderPreview();
-  renderBodyImageList();
+  try {
+    renderPreview();
+    renderBodyImageList();
+    syncHeaderThumb();
+  } catch (err) {
+    console.error('Email template preview failed', err);
+  }
+
   ['id_subject', 'id_html_body'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) {
@@ -338,37 +391,46 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
   });
-  document.getElementById('id_header_display_width')?.addEventListener('change', function () {
-    syncHeaderThumb();
-    renderPreview();
-  });
-  syncHeaderThumb();
-  document.getElementById('refresh-preview')?.addEventListener('click', renderPreview);
-
-  document.getElementById('clear-header')?.addEventListener('click', function () {
-    if (headerLocalSource) {
-      URL.revokeObjectURL(headerLocalSource);
-      headerLocalSource = '';
-    }
-    setHeaderUrl('', '');
-    persistAssets({ action: 'clear_header' }).catch(function (err) {
-      alert(err.message || 'Could not remove header.');
+  const widthEl = document.getElementById('id_header_display_width');
+  if (widthEl) {
+    widthEl.addEventListener('change', function () {
+      syncHeaderThumb();
+      renderPreview();
     });
-  });
+  }
+  const refreshBtn = document.getElementById('refresh-preview');
+  if (refreshBtn) refreshBtn.addEventListener('click', renderPreview);
 
-  document.getElementById('body-images-list')?.addEventListener('click', function (event) {
-    const btn = event.target.closest('.js-remove-body-image');
-    if (!btn) return;
-    const url = btn.getAttribute('data-url');
-    const body = document.getElementById('id_html_body');
-    if (!body) return;
-    body.value = stripBodyImage(body.value, url);
-    renderBodyImageList();
-    renderPreview();
-    persistAssets({ action: 'remove_body_image', url: url, html_body: body.value }).catch(function (err) {
-      alert(err.message || 'Could not remove picture.');
+  const clearHeader = document.getElementById('clear-header');
+  if (clearHeader) {
+    clearHeader.addEventListener('click', function () {
+      if (headerLocalSource) {
+        URL.revokeObjectURL(headerLocalSource);
+        headerLocalSource = '';
+      }
+      setHeaderUrl('', '');
+      persistAssets({ action: 'clear_header' }).catch(function (err) {
+        alert(err.message || 'Could not remove header.');
+      });
     });
-  });
+  }
+
+  const bodyList = document.getElementById('body-images-list');
+  if (bodyList) {
+    bodyList.addEventListener('click', function (event) {
+      const btn = event.target.closest('.js-remove-body-image');
+      if (!btn) return;
+      const url = btn.getAttribute('data-url');
+      const body = document.getElementById('id_html_body');
+      if (!body) return;
+      body.value = stripBodyImage(body.value, url);
+      renderBodyImageList();
+      renderPreview();
+      persistAssets({ action: 'remove_body_image', url: url, html_body: body.value }).catch(function (err) {
+        alert(err.message || 'Could not remove picture.');
+      });
+    });
+  }
 
   function destroyCropper() {
     if (headerCropper) {
@@ -386,6 +448,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     const img = document.getElementById('header-crop-img');
+    if (!img) return;
     destroyCropper();
     img.onload = function () {
       if (!window.Cropper) {
@@ -409,124 +472,153 @@ document.addEventListener('DOMContentLoaded', function () {
     if (cropModal) cropModal.show();
   }
 
-  document.getElementById('reframe-header')?.addEventListener('click', openCropper);
-  cropModalEl?.addEventListener('hidden.bs.modal', destroyCropper);
-  document.getElementById('header-zoom-in')?.addEventListener('click', function () {
+  const reframeBtn = document.getElementById('reframe-header');
+  if (reframeBtn) reframeBtn.addEventListener('click', openCropper);
+  if (cropModalEl) cropModalEl.addEventListener('hidden.bs.modal', destroyCropper);
+  const zoomIn = document.getElementById('header-zoom-in');
+  if (zoomIn) zoomIn.addEventListener('click', function () {
     if (headerCropper) headerCropper.zoom(0.1);
   });
-  document.getElementById('header-zoom-out')?.addEventListener('click', function () {
+  const zoomOut = document.getElementById('header-zoom-out');
+  if (zoomOut) zoomOut.addEventListener('click', function () {
     if (headerCropper) headerCropper.zoom(-0.1);
   });
-  document.getElementById('header-crop-apply')?.addEventListener('click', function () {
-    if (!headerCropper) return;
-    const canvas = headerCropper.getCroppedCanvas({
-      width: 600,
-      height: 180,
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: 'high'
-    });
-    if (!canvas) {
-      alert('Could not crop this image. Try uploading it again.');
-      return;
-    }
-    canvas.toBlob(function (blob) {
-      if (!blob) {
-        alert('Could not crop this image.');
+  const applyCrop = document.getElementById('header-crop-apply');
+  if (applyCrop) {
+    applyCrop.addEventListener('click', function () {
+      if (!headerCropper) return;
+      const canvas = headerCropper.getCroppedCanvas({
+        width: 600,
+        height: 180,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      });
+      if (!canvas) {
+        alert('Could not crop this image. Try uploading it again.');
         return;
       }
-      const fd = new FormData();
-      fd.append('file', blob, 'header.jpg');
-      fd.append('folder', 'email_templates');
-      fd.append('email_fit', '1');
-      fd.append('email_header', '1');
-      fd.append('header_ready', '1');
-      const sourceInput = document.getElementById('id_header_source_url');
-      if (sourceInput && sourceInput.value) fd.append('source_url', sourceInput.value);
-      fetch("{% url 'upload_attachment' %}", {
-        method: 'POST',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-        body: fd
-      }).then(function (resp) { return resp.json(); }).then(function (data) {
-        if (!data || !data.success || !data.url) throw new Error('Upload finished but no URL was returned.');
-        const source = (sourceInput && sourceInput.value) || '';
-        setHeaderUrl(data.url, source);
-        return persistAssets({
-          action: 'set_header',
-          header_image_url: data.url,
-          header_source_url: source
-        });
-      }).then(function () {
-        if (cropModal) cropModal.hide();
-      }).catch(function (err) {
-        alert(err.message || 'Could not save the cropped header.');
-      });
-    }, 'image/jpeg', 0.85);
-  });
-
-  if (window.Dropzone) Dropzone.autoDiscover = false;
-  const CSRF = getCSRFToken();
-
-  function emailImageDropzone(selector, onSuccess) {
-    document.querySelectorAll(selector).forEach(function (el) {
-      const url = el.getAttribute('data-upload-url');
-      new Dropzone(el, {
-        url: url,
-        headers: { 'X-CSRFToken': CSRF },
-        paramName: 'file',
-        acceptedFiles: 'image/*',
-        maxFilesize: 8,
-        init: function () {
-          this.on('sending', function (file, xhr, formData) {
-            formData.append('folder', 'email_templates');
-            formData.append('email_fit', '1');
-            if (selector === '.dz-header-image') {
-              formData.append('email_header', '1');
-            }
-          });
-          this.on('success', function (file, resp) {
-            if (resp && resp.success && resp.url) {
-              onSuccess(resp, file);
-            } else {
-              alert('Upload finished but no URL was returned.');
-            }
-            this.removeFile(file);
-          });
-          this.on('error', function (file, message) {
-            alert(typeof message === 'string' ? message : 'Image upload failed.');
-            this.removeFile(file);
-          });
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          alert('Could not crop this image.');
+          return;
         }
+        uploadEmailImage(blob, {
+          email_header: '1',
+          header_ready: '1',
+          source_url: (document.getElementById('id_header_source_url') || {}).value || ''
+        }, function (data) {
+          const source = (document.getElementById('id_header_source_url') || {}).value || '';
+          setHeaderUrl(data.url, source);
+          persistAssets({
+            action: 'set_header',
+            header_image_url: data.url,
+            header_source_url: source
+          }).then(function () {
+            if (cropModal) cropModal.hide();
+          }).catch(function (err) {
+            alert(err.message || 'Could not save the cropped header.');
+          });
+        }).catch(function (err) {
+          alert(err.message || 'Could not save the cropped header.');
+        });
+      }, 'image/jpeg', 0.85);
+    });
+  }
+
+  const fileInput = document.getElementById('body-image-file');
+  const insertBtn = document.getElementById('insert-body-image-btn');
+  if (insertBtn) {
+    insertBtn.addEventListener('click', function () {
+      if (bodyDropzone && bodyDropzone.hiddenFileInput) {
+        bodyDropzone.hiddenFileInput.click();
+        return;
+      }
+      if (fileInput) fileInput.click();
+    });
+  }
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      uploadEmailImage(file, {}, function (data) {
+        insertBodyImageFromUpload(data);
+      }).catch(function (err) {
+        alert(err.message || 'Image upload failed.');
       });
     });
   }
 
-  emailImageDropzone('.dz-template-image', function (resp) {
-    const body = document.getElementById('id_html_body');
-    if (!body) return;
-    insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()));
-    renderBodyImageList();
-    renderPreview();
-    persistAssets({ action: 'set_html_body', html_body: body.value }).catch(function (err) {
-      alert(err.message || 'Picture inserted in preview. Click Save template to keep it.');
-    });
-  });
+  try {
+    if (window.Dropzone) Dropzone.autoDiscover = false;
+    const CSRF = getCSRFToken();
 
-  emailImageDropzone('.dz-header-image', function (resp, file) {
-    if (headerLocalSource) URL.revokeObjectURL(headerLocalSource);
-    try {
-      headerLocalSource = file ? URL.createObjectURL(file) : '';
-    } catch (err) {
-      headerLocalSource = '';
+    function emailImageDropzone(selector, onSuccess) {
+      const zones = [];
+      document.querySelectorAll(selector).forEach(function (el) {
+        const url = el.getAttribute('data-upload-url');
+        const dz = new Dropzone(el, {
+          url: url,
+          headers: { 'X-CSRFToken': CSRF },
+          paramName: 'file',
+          acceptedFiles: 'image/*',
+          maxFilesize: 8,
+          init: function () {
+            this.on('sending', function (file, xhr, formData) {
+              formData.append('folder', 'email_templates');
+              formData.append('email_fit', '1');
+              if (selector === '.dz-header-image') {
+                formData.append('email_header', '1');
+              }
+            });
+            this.on('success', function (file, resp) {
+              if (resp && resp.success && resp.url) {
+                onSuccess(resp, file);
+              } else {
+                alert('Upload finished but no URL was returned.');
+              }
+              this.removeFile(file);
+            });
+            this.on('error', function (file, message) {
+              alert(typeof message === 'string' ? message : 'Image upload failed.');
+              this.removeFile(file);
+            });
+          }
+        });
+        zones.push(dz);
+      });
+      return zones[0] || null;
     }
-    setHeaderUrl(resp.url, resp.source_url || '');
-    persistAssets({
-      action: 'set_header',
-      header_image_url: resp.url,
-      header_source_url: resp.source_url || ''
-    }).catch(function (err) {
-      alert(err.message || 'Header is in the preview. Click Save template to keep it.');
+
+    bodyDropzone = emailImageDropzone('.dz-template-image', function (resp) {
+      insertBodyImageFromUpload(resp);
     });
-  });
-});
+
+    emailImageDropzone('.dz-header-image', function (resp, file) {
+      if (headerLocalSource) URL.revokeObjectURL(headerLocalSource);
+      try {
+        headerLocalSource = file ? URL.createObjectURL(file) : '';
+      } catch (err) {
+        headerLocalSource = '';
+      }
+      setHeaderUrl(resp.url, resp.source_url || '');
+      persistAssets({
+        action: 'set_header',
+        header_image_url: resp.url,
+        header_source_url: resp.source_url || ''
+      }).catch(function (err) {
+        alert(err.message || 'Header is in the preview. Click Save template to keep it.');
+      });
+    });
+  } catch (err) {
+    console.error('Email template dropzone failed', err);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTemplateForm);
+} else {
+  initTemplateForm();
+}
 </script>
 {% endblock %}
