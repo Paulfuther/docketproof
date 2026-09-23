@@ -22,6 +22,7 @@ from arl.msg.email_utils import (
     EMAIL_HEADER_MAX_WIDTH,
     EMAIL_HEADER_SOURCE_MAX_WIDTH,
     EMAIL_IMAGE_MAX_WIDTH,
+    EMAIL_DOC_PAD,
     EMAIL_SIDE_GUTTER_PX,
     EMAIL_SOURCE_COMPOSE,
     EMAIL_SOURCE_IN_APP,
@@ -244,7 +245,8 @@ class EmailUtilsTests(TestCase):
         self.assertIn("width:100%", wrapped)
         self.assertIn('data-dp-email="1"', wrapped)
         self.assertIn('data-dp-email-gutter="1"', wrapped)
-        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", wrapped)
+        self.assertIn(f"padding:{EMAIL_DOC_PAD}", wrapped)
+        self.assertEqual(EMAIL_SIDE_GUTTER_PX, 16)
         self.assertLess(
             wrapped.index('data-dp-email-gutter="1"'),
             wrapped.index("</body>"),
@@ -283,7 +285,7 @@ class EmailUtilsTests(TestCase):
         self.assertIn("<p>Hello</p>", body_only)
         self.assertIn('data-dp-email="1"', body_only)
         self.assertIn('data-dp-email-gutter="1"', body_only)
-        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", body_only)
+        self.assertIn(f"padding:{EMAIL_DOC_PAD}", body_only)
         self.assertIn('name="viewport"', body_only)
         injected = body_only.replace(
             "</body>",
@@ -720,7 +722,7 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("These fill in for each person when you send.", html)
         self.assertIn("Back to Comms", html)
         self.assertIn("{% url 'comms' %}?tab=email", html)
-        self.assertIn("padding:16px 24px", html)
+        self.assertIn("padding:12px 16px", html)
         self.assertIn("Advanced HTML", html)
         self.assertIn("No pictures yet.", html)
         self.assertIn("function renderPreview(", html)
@@ -872,7 +874,7 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("width:100%", data["html"])
         self.assertIn('name="viewport"', data["html"])
         self.assertIn('data-dp-email-gutter="1"', data["html"])
-        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", data["html"])
+        self.assertIn(f"padding:{EMAIL_DOC_PAD}", data["html"])
         self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', data["html"])
         self.assertEqual(data["header_space_below"], EMAIL_HEADER_SPACE_DEFAULT)
 
