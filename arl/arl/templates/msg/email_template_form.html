@@ -669,23 +669,80 @@ function initTemplateForm() {
         }
       });
     };
-    if (img.complete && img.naturalWidth) boot();
-    else img.onload = boot;
+    loadCropperImage(boot, function () {
+      alert('Could not load the header to reframe. Try Replace.');
+    });
+  }
+
+  function headerReframeRawUrls() {
+    const sourceInput = document.getElementById('id_header_source_url');
+    const headerInput = document.getElementById('id_header_image_url');
+    const urls = [];
+    if (headerLocalSource) urls.push(headerLocalSource);
+    [sourceInput && sourceInput.value, headerInput && headerInput.value].forEach(function (url) {
+      url = (url || '').trim();
+      if (url && urls.indexOf(url) === -1) urls.push(url);
+    });
+    return urls;
+  }
+
+  function headerReframeCandidates() {
+    const out = [];
+    headerReframeRawUrls().forEach(function (url) {
+      if (url.indexOf('blob:') === 0 || url.indexOf('data:') === 0) {
+        out.push(url);
+        return;
+      }
+      const proxied = proxyImageUrl(url);
+      if (proxied && out.indexOf(proxied) === -1) out.push(proxied);
+      if (out.indexOf(url) === -1) out.push(url);
+    });
+    return out;
+  }
+
+  function loadCropperImage(done, fail) {
+    const img = document.getElementById('header-crop-img');
+    const candidates = headerReframeCandidates();
+    if (!img || !candidates.length) {
+      if (fail) fail();
+      return;
+    }
+    let i = 0;
+    const tryNext = function () {
+      if (i >= candidates.length) {
+        if (fail) fail();
+        return;
+      }
+      const src = candidates[i++];
+      img.onload = function () {
+        img.onload = img.onerror = null;
+        if (!img.naturalWidth) {
+          tryNext();
+          return;
+        }
+        if (done) done();
+      };
+      img.onerror = tryNext;
+      if (img.src === src && img.complete) {
+        if (img.naturalWidth) {
+          img.onload = img.onerror = null;
+          if (done) done();
+        } else {
+          tryNext();
+        }
+        return;
+      }
+      img.src = src;
+    };
+    tryNext();
   }
 
   function openCropper() {
-    const sourceInput = document.getElementById('id_header_source_url');
-    const headerInput = document.getElementById('id_header_image_url');
-    const raw = headerLocalSource || (sourceInput && sourceInput.value) || (headerInput && headerInput.value);
-    if (!raw) {
+    if (!headerReframeRawUrls().length) {
       alert('Upload a header image first.');
       return;
     }
-    const img = document.getElementById('header-crop-img');
-    if (!img) return;
     destroyCropper();
-    img.onload = null;
-    img.src = headerLocalSource ? raw : proxyImageUrl(raw);
     if (cropModal) cropModal.show();
     else startCropperWhenReady();
   }
@@ -704,12 +761,6 @@ function initTemplateForm() {
   if (zoomOut) zoomOut.addEventListener('click', function () {
     if (headerCropper) headerCropper.zoom(-0.1);
   });
-  function headerSourceRaw() {
-    const sourceInput = document.getElementById('id_header_source_url');
-    const headerInput = document.getElementById('id_header_image_url');
-    return headerLocalSource || (sourceInput && sourceInput.value) || (headerInput && headerInput.value);
-  }
-
   function persistHeaderFromUpload(data) {
     const source = (document.getElementById('id_header_source_url') || {}).value || '';
     setHeaderUrl(data.url, source);
@@ -721,31 +772,37 @@ function initTemplateForm() {
   }
 
   function useFullHeader() {
-    const raw = headerSourceRaw();
-    if (!raw) {
+    const candidates = headerReframeCandidates();
+    if (!candidates.length) {
       alert('Upload a header image first.');
       return;
     }
-    const url = headerLocalSource ? raw : proxyImageUrl(raw);
-    fetch(url).then(function (resp) {
-      if (!resp.ok) throw new Error('Could not load the original picture.');
-      return resp.blob();
-    }).then(function (blob) {
-      const file = new File([blob], 'header-full.jpg', { type: blob.type || 'image/jpeg' });
-      return uploadEmailImage(file, {
-        email_header: '1',
-        header_ready: '1',
-        source_url: (document.getElementById('id_header_source_url') || {}).value || ''
-      }, function (data) {
-        persistHeaderFromUpload(data).then(function () {
-          if (cropModal) cropModal.hide();
-        }).catch(function (err) {
-          alert(err.message || 'Could not save the full header.');
+    let i = 0;
+    const tryFetch = function () {
+      if (i >= candidates.length) {
+        alert('Could not use the full image.');
+        return;
+      }
+      const url = candidates[i++];
+      fetch(url).then(function (resp) {
+        if (!resp.ok) throw new Error('Could not load the original picture.');
+        return resp.blob();
+      }).then(function (blob) {
+        const file = new File([blob], 'header-full.jpg', { type: blob.type || 'image/jpeg' });
+        return uploadEmailImage(file, {
+          email_header: '1',
+          header_ready: '1',
+          source_url: (document.getElementById('id_header_source_url') || {}).value || ''
+        }, function (data) {
+          persistHeaderFromUpload(data).then(function () {
+            if (cropModal) cropModal.hide();
+          }).catch(function (err) {
+            alert(err.message || 'Could not save the full header.');
+          });
         });
-      });
-    }).catch(function (err) {
-      alert(err.message || 'Could not use the full image.');
-    });
+      }).catch(tryFetch);
+    };
+    tryFetch();
   }
 
   ['header-use-full', 'header-use-full-card'].forEach(function (id) {

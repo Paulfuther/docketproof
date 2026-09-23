@@ -1396,7 +1396,7 @@ def _allowed_email_image_host(url):
         parsed = urllib.parse.urlparse(url)
     except Exception:
         return False
-    if parsed.scheme != "https":
+    if parsed.scheme not in ("http", "https"):
         return False
     host = (parsed.hostname or "").lower()
     if not host:
@@ -1412,13 +1412,26 @@ def _allowed_email_image_host(url):
     return False
 
 
+def _employer_owns_header_url(user, url):
+    """Allow the cropper proxy to reload a header already saved on a template."""
+    employer = getattr(user, "employer", None)
+    if not employer or not url:
+        return False
+    return EmailTemplate.objects.filter(employers=employer).filter(
+        Q(header_image_url=url) | Q(header_source_url=url)
+    ).exists()
+
+
 @login_required
 @user_passes_test(is_member_of_email_group)
 @require_GET
 def email_template_image_proxy(request):
     """Same-origin fetch so the header cropper can export a canvas."""
     url = (request.GET.get("url") or "").strip()
-    if not _allowed_email_image_host(url):
+    if not (
+        _allowed_email_image_host(url)
+        or _employer_owns_header_url(request.user, url)
+    ):
         return HttpResponse("Invalid image URL", status=400)
     try:
         with urllib.request.urlopen(url, timeout=15) as incoming:

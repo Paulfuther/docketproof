@@ -463,6 +463,19 @@ def prepare_header_source_image(file_obj, filename=""):
     )
 
 
+def header_reframe_urls(source_url=None, header_url=None):
+    """URLs to try when reopening Reframe on a saved template.
+
+    Prefer the original source so the cropper is not stuck on a banner crop.
+    Fall back to the current header if source was never stored.
+    """
+    urls = []
+    for url in ((source_url or "").strip(), (header_url or "").strip()):
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
 def resolve_header_display_width(width=None):
     allowed = {choice[0] for choice in EMAIL_HEADER_DISPLAY_WIDTH_CHOICES}
     try:

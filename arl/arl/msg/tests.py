@@ -41,6 +41,7 @@ from arl.msg.email_utils import (
     render_merge_fields,
     resolve_email_subject,
     sample_preview_context,
+    header_reframe_urls,
     wrap_body_image,
     wrap_in_app_email_html,
 )
@@ -302,6 +303,23 @@ class EmailUtilsTests(TestCase):
             EMAIL_HEADER_MAX_WIDTH / float(EMAIL_HEADER_MAX_HEIGHT),
             places=2,
         )
+
+    def test_header_reframe_urls_prefer_source_then_current(self):
+        self.assertEqual(
+            header_reframe_urls(
+                "https://cdn.example/source.jpg",
+                "https://cdn.example/header.jpg",
+            ),
+            [
+                "https://cdn.example/source.jpg",
+                "https://cdn.example/header.jpg",
+            ],
+        )
+        self.assertEqual(
+            header_reframe_urls("", "https://cdn.example/header.jpg"),
+            ["https://cdn.example/header.jpg"],
+        )
+        self.assertEqual(header_reframe_urls("  ", None), [])
 
     def test_prepare_header_source_image_keeps_aspect(self):
         img = Image.new("RGB", (1600, 800), color=(10, 200, 10))
@@ -696,6 +714,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("autoCropArea: 0.8", html)
         self.assertIn("shown.bs.modal", html)
         self.assertIn("function startCropperWhenReady(", html)
+        self.assertIn("function loadCropperImage(", html)
+        self.assertIn("function headerReframeCandidates(", html)
         self.assertIn("id=\"header-crop-wrap\"", html)
         self.assertIn("cropper.min.js?v=reframe2", html)
         self.assertNotIn("aspectRatio: 600 / 180", html)
@@ -943,6 +963,44 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         template = EmailTemplate.objects.get(name="Source header")
         self.assertEqual(template.header_source_url, "https://cdn.example/header-source.jpg")
+
+    @patch("arl.msg.views.urllib.request.urlopen")
+    def test_header_proxy_allows_saved_template_source(self, mock_open):
+        template = EmailTemplate.objects.create(
+            name="Saved header",
+            subject="Hello",
+            html_body="<p>Body</p>",
+            header_image_url="https://cdn.example/header.jpg",
+            header_source_url="https://cdn.example/header-source.jpg",
+        )
+        template.employers.add(self.employer)
+
+        class _Resp:
+            headers = {"Content-Type": "image/jpeg"}
+
+            def read(self, _n):
+                return b"\xff\xd8fake"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        mock_open.return_value = _Resp()
+        response = self.client.get(
+            reverse("email_template_image_proxy"),
+            {"url": "https://cdn.example/header-source.jpg"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"\xff\xd8fake")
+
+    def test_header_proxy_rejects_unknown_url(self):
+        response = self.client.get(
+            reverse("email_template_image_proxy"),
+            {"url": "https://evil.example/x.jpg"},
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_save_header_display_width(self):
         response = self.client.post(
