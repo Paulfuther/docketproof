@@ -47,7 +47,9 @@
 
       <form method="post" id="template-form"
             {% if template %}data-assets-url="{% url 'email_template_assets' template.pk %}"{% endif %}
-            data-proxy-url="{% url 'email_template_image_proxy' %}">
+            data-proxy-url="{% url 'email_template_image_proxy' %}"
+            data-header-source="{{ form.header_source_url.value|default:'' }}"
+            data-header-url="{{ form.header_image_url.value|default:'' }}">
         {% csrf_token %}
         {{ form.header_image_url }}
         {{ form.header_source_url }}
@@ -379,8 +381,13 @@ function setHeaderUrl(url, sourceUrl) {
   const input = document.getElementById('id_header_image_url');
   const source = document.getElementById('id_header_source_url');
   const img = document.getElementById('header-preview-img');
+  const form = document.getElementById('template-form');
   if (input) input.value = url || '';
   if (source && sourceUrl !== undefined) source.value = sourceUrl || '';
+  if (form) {
+    form.setAttribute('data-header-url', url || '');
+    if (sourceUrl !== undefined) form.setAttribute('data-header-source', sourceUrl || '');
+  }
   if (img) {
     img.src = url || '';
     if (url) img.setAttribute('src', url);
@@ -677,13 +684,22 @@ function initTemplateForm() {
   }
 
   function headerReframeRawUrls() {
+    const form = document.getElementById('template-form');
     const sourceInput = document.getElementById('id_header_source_url');
     const headerInput = document.getElementById('id_header_image_url');
+    const preview = document.getElementById('header-preview-img');
     const urls = [];
     if (headerLocalSource) urls.push(headerLocalSource);
-    [sourceInput && sourceInput.value, headerInput && headerInput.value].forEach(function (url) {
+    [
+      sourceInput && sourceInput.value,
+      form && form.getAttribute('data-header-source'),
+      headerInput && headerInput.value,
+      form && form.getAttribute('data-header-url'),
+      preview && preview.getAttribute('src')
+    ].forEach(function (url) {
       url = (url || '').trim();
-      if (url && urls.indexOf(url) === -1) urls.push(url);
+      if (url.indexOf('//') === 0) url = 'https:' + url;
+      if (url && url.indexOf('blob:') !== 0 && urls.indexOf(url) === -1) urls.push(url);
     });
     return urls;
   }
@@ -716,25 +732,34 @@ function initTemplateForm() {
         return;
       }
       const src = candidates[i++];
-      img.onload = function () {
-        img.onload = img.onerror = null;
-        if (!img.naturalWidth) {
-          tryNext();
-          return;
-        }
-        if (done) done();
-      };
-      img.onerror = tryNext;
-      if (img.src === src && img.complete) {
-        if (img.naturalWidth) {
+      if (src.indexOf('blob:') === 0 || src.indexOf('data:') === 0) {
+        img.onload = function () {
           img.onload = img.onerror = null;
-          if (done) done();
-        } else {
-          tryNext();
-        }
+          if (img.naturalWidth && done) done();
+          else tryNext();
+        };
+        img.onerror = tryNext;
+        img.src = src;
         return;
       }
-      img.src = src;
+      fetch(src, { credentials: 'same-origin' }).then(function (resp) {
+        if (!resp.ok) throw new Error('bad image');
+        const type = (resp.headers.get('Content-Type') || '');
+        if (type && type.indexOf('image/') !== 0 && type.indexOf('octet-stream') === -1) {
+          throw new Error('not an image');
+        }
+        return resp.blob();
+      }).then(function (blob) {
+        if (!blob || !blob.size) throw new Error('empty image');
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = function () {
+          img.onload = img.onerror = null;
+          if (img.naturalWidth && done) done();
+          else tryNext();
+        };
+        img.onerror = tryNext;
+        img.src = objectUrl;
+      }).catch(tryNext);
     };
     tryNext();
   }

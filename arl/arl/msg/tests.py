@@ -45,6 +45,7 @@ from arl.msg.email_utils import (
     wrap_body_image,
     wrap_in_app_email_html,
 )
+from arl.msg.forms import EmailTemplateForm
 from arl.msg.models import EmailEvent, EmailLog, EmailTemplate
 from arl.msg.tasks import (
     filter_sendgrid_events,
@@ -320,6 +321,10 @@ class EmailUtilsTests(TestCase):
             ["https://cdn.example/header.jpg"],
         )
         self.assertEqual(header_reframe_urls("  ", None), [])
+        self.assertEqual(
+            header_reframe_urls("//cdn.example/source.jpg", ""),
+            ["https://cdn.example/source.jpg"],
+        )
 
     def test_prepare_header_source_image_keeps_aspect(self):
         img = Image.new("RGB", (1600, 800), color=(10, 200, 10))
@@ -716,6 +721,9 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("function startCropperWhenReady(", html)
         self.assertIn("function loadCropperImage(", html)
         self.assertIn("function headerReframeCandidates(", html)
+        self.assertIn("data-header-source", html)
+        self.assertIn("data-header-url", html)
+        self.assertIn("createObjectURL", html)
         self.assertIn("id=\"header-crop-wrap\"", html)
         self.assertIn("cropper.min.js?v=reframe3", html)
         self.assertIn("aspectRatio: NaN", html)
@@ -964,6 +972,33 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         template = EmailTemplate.objects.get(name="Source header")
         self.assertEqual(template.header_source_url, "https://cdn.example/header-source.jpg")
+
+    def test_edit_form_keeps_source_url_when_hidden_field_blank(self):
+        template = EmailTemplate.objects.create(
+            name="Keep source",
+            subject="Hello",
+            html_body="<p>Body</p>",
+            header_image_url="https://cdn.example/header.jpg",
+            header_source_url="https://cdn.example/header-source.jpg",
+        )
+        form = EmailTemplateForm(
+            {
+                "name": "Keep source",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "https://cdn.example/header.jpg",
+                "header_source_url": "",
+            },
+            instance=template,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(saved.header_source_url, "https://cdn.example/header-source.jpg")
+        rendered = EmailTemplateForm(instance=saved)
+        self.assertIn(
+            "https://cdn.example/header-source.jpg",
+            rendered["header_source_url"].as_widget(),
+        )
 
     @patch("arl.msg.views.urllib.request.urlopen")
     def test_header_proxy_allows_saved_template_source(self, mock_open):

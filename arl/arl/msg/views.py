@@ -1409,6 +1409,16 @@ def _allowed_email_image_host(url):
         return True
     if bucket and host.startswith(f"{bucket}."):
         return True
+    for extra in (
+        getattr(settings, "LINODE_URL", ""),
+        getattr(settings, "LINODE_ENDPOINT", ""),
+    ):
+        try:
+            extra_host = (urllib.parse.urlparse(extra).hostname or "").lower()
+        except Exception:
+            extra_host = ""
+        if extra_host and host == extra_host:
+            return True
     return False
 
 
@@ -1434,7 +1444,11 @@ def email_template_image_proxy(request):
     ):
         return HttpResponse("Invalid image URL", status=400)
     try:
-        with urllib.request.urlopen(url, timeout=15) as incoming:
+        request_url = urllib.request.Request(
+            url,
+            headers={"User-Agent": "DocketProof-email-header/1.0"},
+        )
+        with urllib.request.urlopen(request_url, timeout=15) as incoming:
             content_type = incoming.headers.get("Content-Type", "image/jpeg")
             data = incoming.read(8 * 1024 * 1024)
     except Exception:

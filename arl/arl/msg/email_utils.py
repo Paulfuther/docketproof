@@ -463,6 +463,16 @@ def prepare_header_source_image(file_obj, filename=""):
     )
 
 
+def absolute_header_url(url):
+    """Make a stored header URL safe to load after save/re-edit."""
+    url = (url or "").strip()
+    if not url:
+        return ""
+    if url.startswith("//"):
+        return "https:" + url
+    return url
+
+
 def header_reframe_urls(source_url=None, header_url=None):
     """URLs to try when reopening Reframe on a saved template.
 
@@ -470,7 +480,7 @@ def header_reframe_urls(source_url=None, header_url=None):
     Fall back to the current header if source was never stored.
     """
     urls = []
-    for url in ((source_url or "").strip(), (header_url or "").strip()):
+    for url in (absolute_header_url(source_url), absolute_header_url(header_url)):
         if url and url not in urls:
             urls.append(url)
     return urls

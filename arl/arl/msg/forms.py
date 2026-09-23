@@ -353,6 +353,18 @@ class EmailTemplateForm(forms.ModelForm):
     def clean_header_source_url(self):
         return (self.cleaned_data.get("header_source_url") or "").strip()
 
+    def clean(self):
+        cleaned = super().clean()
+        header = (cleaned.get("header_image_url") or "").strip()
+        source = (cleaned.get("header_source_url") or "").strip()
+        if not header:
+            cleaned["header_source_url"] = ""
+        elif not source and getattr(self.instance, "pk", None):
+            cleaned["header_source_url"] = (
+                getattr(self.instance, "header_source_url", None) or ""
+            ).strip()
+        return cleaned
+
     def clean_header_display_width(self):
         from arl.msg.email_utils import resolve_header_display_width
 
