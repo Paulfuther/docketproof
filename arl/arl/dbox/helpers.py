@@ -1,24 +1,67 @@
 import logging
-import os
-from datetime import datetime
+
 import dropbox
 import requests
-from celery.utils.log import get_task_logger
 from django.conf import settings
 from dropbox.exceptions import ApiError
 from dropbox.files import WriteMode
 
-logger = get_task_logger(__name__)
+logger = logging.getLogger(__name__)
+
+DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
 
 
-def generate_new_access_token():
-    refresh_token = settings.DROP_BOX_REFRESH_TOKEN
-    # print(refresh_token)
-    if not refresh_token:
+def _credentials_for_employer(employer):
+    """Return the active DropboxCredentials row for an employer, if any."""
+    if not employer:
         return None
-    app_key = settings.DROP_BOX_KEY
-    app_secret = settings.DROP_BOX_SECRET
-    token_url = "https://api.dropboxapi.com/oauth2/token"
+    from arl.dbox.models import DropboxCredentials
+
+    return DropboxCredentials.objects.filter(
+        employer=employer, is_active=True
+    ).first()
+
+
+def generate_new_access_token(employer=None):
+    """
+    Exchange a refresh token for a short-lived Dropbox access token.
+
+    When an employer is provided and an active DropboxCredentials row exists,
+    that tenant's encrypted refresh token is used (app key/secret fall back to
+    settings if the tenant did not store its own). Otherwise the legacy
+    DROP_BOX_* environment settings are used.
+    """
+    creds = _credentials_for_employer(employer)
+    refresh_token = None
+    app_key = None
+    app_secret = None
+
+    if creds is not None:
+        try:
+            refresh_token = creds.get_refresh_token()
+            app_key = creds.get_app_key()
+            app_secret = creds.get_app_secret()
+        except ValueError:
+            logger.exception(
+                "Failed to decrypt Dropbox credentials for employer %s",
+                getattr(employer, "pk", employer),
+            )
+            return None
+        if not refresh_token:
+            logger.error(
+                "Active DropboxCredentials for employer %s has no refresh token.",
+                getattr(employer, "pk", employer),
+            )
+            return None
+
+    refresh_token = refresh_token or settings.DROP_BOX_REFRESH_TOKEN
+    app_key = app_key or settings.DROP_BOX_KEY
+    app_secret = app_secret or settings.DROP_BOX_SECRET
+
+    if not refresh_token:
+        logger.error("Dropbox refresh token is not configured.")
+        return None
+
     data = {
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -26,199 +69,47 @@ def generate_new_access_token():
         "client_secret": app_secret,
     }
 
-    response = requests.post(token_url, data=data)
+    response = requests.post(DROPBOX_TOKEN_URL, data=data)
     if response.status_code == 200:
-        response_data = response.json()
-        new_access_token = response_data.get("access_token")
-        # print("New Access Token: ", new_access_token)
-        return new_access_token
-    else:
-        # Handle error response
-        print("Error generating new access token:", response.text)
-        return None
+        return response.json().get("access_token")
+
+    logger.error("Error generating Dropbox access token: %s", response.text)
+    return None
 
 
-# may not need
-def upload_to_dropbox(uploaded_file):
-    # Note. This helper file uploads a New Hire File
-    # to a folder called NEWHIREFILES
-    # New hire quizes have their own helper file.
-    # Upload_to_dropbox_quiz
-    try:
-        new_access_token = generate_new_access_token()
-        if new_access_token:
-            dbx = dropbox.Dropbox(new_access_token)
-            with open(uploaded_file, "rb") as file:
-                file_content = file.read()
-            # Ensure unique file name in Dropbox by replacing problematic characters
-            file_name = os.path.basename(uploaded_file).replace(
-                "/", "-"
-            )  # Replace '/' with '-'
-            file_path = f"/NEWHRFILES/{file_name}"
-
-            # Upload the file content to Dropbox in the NEWHRFILES folder
-            dbx.files_upload(file_content, file_path, mode=WriteMode("overwrite"))
-
-            return (
-                True,
-                print(f"Uploaded file: {file_name} to dropbox."),
-                logger.info("{file_name} uploaded to dropbox"),
-            )
-        else:
-            return False, "Refresh token not found in .env file."
-    except ApiError as e:
-        return False, f"Dropbox API Error: {str(e)}"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-
-# may not need
-def upload_incident_file_to_dropbox(file_content, file_name):
-    try:
-        new_access_token = generate_new_access_token()
-        if new_access_token:
-            dbx = dropbox.Dropbox(new_access_token)
-            # Upload the file content to Dropbox
-            dbx.files_upload(
-                file_content, f"/SITEINCIDENTS/{file_name}", mode=WriteMode("overwrite")
-            )
-            return True, f"Uploaded file: {file_name} to Dropbox."
-        else:
-            return False, "Refresh token not found in .env file."
-    except dropbox.exceptions.ApiError as e:
-        logging.error(f"Dropbox API Error: {str(e)}")
-        return False, f"Dropbox API Error: {str(e)}"
-    except Exception as e:
-        logging.error(f"Error: {str(e)}")
-        return False, f"Error: {str(e)}"
-
-
-# may not need
-def upload_major_incident_file_to_dropbox(file_content, file_name):
-    try:
-        new_access_token = generate_new_access_token()
-        if new_access_token:
-            dbx = dropbox.Dropbox(new_access_token)
-            # Upload the file content to Dropbox
-            dbx.files_upload(
-                file_content, f"/MAJORSITEINCIDENTS/{file_name}",
-                mode=WriteMode("overwrite")
-            )
-            return True, f"Uploaded file: {file_name} to Dropbox."
-        else:
-            return False, "Refresh token not found in .env file."
-    except dropbox.exceptions.ApiError as e:
-        logging.error(f"Dropbox API Error: {str(e)}")
-        return False, f"Dropbox API Error: {str(e)}"
-    except Exception as e:
-        logging.error(f"Error: {str(e)}")
-        return False, f"Error: {str(e)}"
-
-
-def upload_to_dropbox_quiz(uploaded_file):
-    # This uploads a completed new hire quiz
-    # to dropbox in the folder NEWHIREQUIZ
-    
-    try:
-        new_access_token = generate_new_access_token()
-        if new_access_token:
-            dbx = dropbox.Dropbox(new_access_token)
-            with open(uploaded_file, "rb") as file:
-                file_content = file.read()
-            # Ensure unique file name in Dropbox by replacing problematic characters
-            file_name = os.path.basename(uploaded_file).replace(
-                "/", "-"
-            )  # Replace '/' with '-'
-            file_path = f"/NEWHIREQUIZ/{file_name}"
-
-            # Upload the file content to Dropbox in the NEWHRFILES folder
-            dbx.files_upload(file_content, file_path, mode=WriteMode("overwrite"))
-
-            return (
-                True,
-                print(f"Uploaded file: {file_name} to dropbox."),
-                logger.info("{file_name} uploaded to dropbox"),
-            )
-        else:
-            return False, "Refresh token not found in .env file."
-    except ApiError as e:
-        return False, f"Dropbox API Error: {str(e)}"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-
-"""
-def upload_any_file_to_dropbox(file_content, file_name, company_name, store_name):
-    try:
-        new_access_token = generate_new_access_token()
-        if not new_access_token:
-            return False, "Refresh token not found in .env file."
-
-        dbx = dropbox.Dropbox(new_access_token)
-
-        # Get current year and month
-        current_year = datetime.now().strftime("%Y")
-        current_month = datetime.now().strftime("%m-%B")  # e.g., "12-December"
-
-        # Define base folder path structure with year and month
-        base_folder_path = (
-            f"/SALTLOGS/{company_name}/{current_year}/"
-            f"{current_month}/{store_name}"
-        )
-
-        # Check and create nested folder structure if it doesn't exist
-        try:
-            dbx.files_get_metadata(base_folder_path)
-        except dropbox.exceptions.ApiError as e:
-            # If folder not found, create it
-            if isinstance(e.error, dropbox.files.GetMetadataError) and e.error.get_path().is_not_found():
-                dbx.files_create_folder_v2(base_folder_path)
-            else:
-                raise
-
-        # Generate a unique file name with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        unique_file_name = f"{timestamp}_{file_name}"
-        file_path = f"{base_folder_path}/{unique_file_name}"
-
-        # Upload the file with WriteMode("add") to avoid overwriting
-        dbx.files_upload(file_content, file_path, mode=dropbox.files.WriteMode("add"))
-
-        return True, f"Uploaded file: {unique_file_name} to Dropbox at {file_path}."
-
-    except dropbox.exceptions.ApiError as e:
-        logging.error(f"Dropbox API Error: {str(e)}")
-        return False, f"Dropbox API Error: {str(e)}"
-    except Exception as e:
-        logging.error(f"Error: {str(e)}")
-        return False, f"Error: {str(e)}"
-
-"""
-
-
-def master_upload_file_to_dropbox(file_content, file_path):
+def upload_to_dropbox(
+    file_content, dropbox_path, *, employer=None, write_mode="add"
+):
     """
-    Upload a file to Dropbox at the specified file path.
-    :param file_content: The content of the file to upload (bytes-like object).
-    :param file_path: Full file path in Dropbox, including folders and file name.
+    Upload file bytes to a full Dropbox path.
+
+    Callers/tasks are responsible for building dropbox_path (folder + filename)
+    and for choosing write_mode ("add" never overwrites; "overwrite" replaces).
+
+    When employer is provided, token generation uses that tenant's encrypted
+    Dropbox credentials if an active row exists; otherwise it falls back to
+    DROP_BOX_* settings (legacy single-tenant).
+
     :return: Tuple (success: bool, message: str).
     """
     try:
-        # Generate a new access token
-        new_access_token = generate_new_access_token()
+        if not dropbox_path:
+            return False, "Dropbox path is required."
+
+        new_access_token = generate_new_access_token(employer=employer)
         if not new_access_token:
-            return False, "Refresh token not found in .env file."
+            return False, (
+                "Dropbox credentials not found for this employer or in settings."
+            )
 
         dbx = dropbox.Dropbox(new_access_token)
-
-        # Upload the file with WriteMode("add") to avoid overwriting
-        dbx.files_upload(file_content, file_path, mode=dropbox.files.WriteMode("add"))
-
-        return True, f"Uploaded file to Dropbox at {file_path}."
-
-    except dropbox.exceptions.ApiError as e:
-        logging.error(f"Dropbox API Error: {str(e)}")
+        dbx.files_upload(
+            file_content, dropbox_path, mode=WriteMode(write_mode)
+        )
+        return True, f"Uploaded file to Dropbox at {dropbox_path}."
+    except ApiError as e:
+        logger.error("Dropbox API Error: %s", e)
         return False, f"Dropbox API Error: {str(e)}"
     except Exception as e:
-        logging.error(f"Error: {str(e)}")
+        logger.error("Dropbox upload error: %s", e)
         return False, f"Error: {str(e)}"

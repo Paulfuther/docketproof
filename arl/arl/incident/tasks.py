@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from arl.celery import app
-from arl.dbox.helpers import master_upload_file_to_dropbox
+from arl.dbox.helpers import upload_to_dropbox
 from arl.helpers import get_s3_images_for_incident, upload_to_linode_object_storage
 from arl.msg.helpers import (
     create_incident_file_email,
@@ -758,14 +758,24 @@ def upload_file_to_dropbox_task(data):
         # Extract data
         pdf_data = data["pdf_buffer"]
         pdf_filename = data["pdf_filename"]
-        # incident_id = data["incident_id"]
 
         # Construct the Dropbox file path
-        # user_employer = Incident.objects.get(pk=incident_id).user_employer
         dropbox_file_path = f"/SITEINCIDENTS/{pdf_filename}"
+        employer = None
+        incident_id = data.get("incident_id")
+        if incident_id:
+            try:
+                employer = Incident.objects.get(pk=incident_id).user_employer
+            except Incident.DoesNotExist:
+                employer = None
 
         # Call the helper function to upload the file
-        success, message = master_upload_file_to_dropbox(pdf_data, dropbox_file_path)
+        success, message = upload_to_dropbox(
+            pdf_data,
+            dropbox_file_path,
+            employer=employer,
+            write_mode="add",
+        )
 
         if not success:
             # Check for specific error cases

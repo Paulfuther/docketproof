@@ -11,7 +11,7 @@ from io import BytesIO
 import pdfkit
 import requests
 from arl.celery import app
-from arl.dbox.helpers import master_upload_file_to_dropbox
+from arl.dbox.helpers import upload_to_dropbox
 from arl.helpers import (
     get_s3_images_for_salt_log,
     get_signed_url_for_key,
@@ -135,8 +135,11 @@ def generate_salt_log_pdf_task(incident_id):
         full_file_path = f"{folder_path}/{pdf_filename}"
 
         # Upload the file using the helper function
-        upload_result = master_upload_file_to_dropbox(
-            pdf_buffer.getvalue(), full_file_path
+        upload_result = upload_to_dropbox(
+            pdf_buffer.getvalue(),
+            full_file_path,
+            employer=incident.user_employer,
+            write_mode="add",
         )
 
         pdf_buffer.seek(0)  # Reset buffer position
@@ -216,8 +219,13 @@ def generate_checklist_pdf_task(self, checklist_id: int):
             store_segment,
         )
 
-        # Upload to Dropbox (unchanged)
-        ok, msg = master_upload_file_to_dropbox(pdf_buffer.getvalue(), full_file_path)
+        # Upload to Dropbox (unchanged path; shared helper)
+        ok, msg = upload_to_dropbox(
+            pdf_buffer.getvalue(),
+            full_file_path,
+            employer=getattr(checklist.created_by, "employer", None),
+            write_mode="add",
+        )
 
         # ================== EMAIL CHECKLIST PDF (unchanged) ==================
         group_name = "quiz_email"  # or "checklist_email"

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import uuid
 import zipfile
 from datetime import datetime, timedelta
@@ -16,7 +17,7 @@ from docusign_esign.client.api_exception import ApiException
 from docusign_esign.models.envelope import Envelope
 
 from arl.bucket.helpers import upload_to_linode_object_storage
-from arl.dbox.helpers import upload_to_dropbox, upload_to_dropbox_quiz
+from arl.dbox.helpers import upload_to_dropbox
 from arl.documentflow.models import SentDocuSignEnvelope
 from arl.dsign.models import DocuSignTemplate
 from arl.msg.helpers import send_docusign_email_with_attachment
@@ -27,6 +28,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SCOPES = ["signature impersonation"]
+
+
+def _dropbox_bytes_from_local_file(uploaded_file):
+    """Read DocuSign temp-file output into bytes and a safe Dropbox filename."""
+    if isinstance(uploaded_file, (bytes, bytearray)):
+        return bytes(uploaded_file), "document.zip"
+    file_name = os.path.basename(str(uploaded_file)).replace("/", "-")
+    with open(uploaded_file, "rb") as handle:
+        return handle.read(), file_name
 
 
 def get_jwt_token(private_key, scopes, auth_server, client_id, impersonated_user_id):
@@ -378,8 +388,18 @@ def get_docusign_envelope_quiz(envelope_id, recipient_name, document_name):
         # envelope_id = "5d106d50-565e-4d70-85a4-0d1e29ff3abe"
 
         temp_file = envelopes_api.get_document(account_id, envelope_type, envelope_id)
-        # print(temp_file)
-        upload_to_dropbox_quiz(temp_file)
+        file_content, file_name = _dropbox_bytes_from_local_file(temp_file)
+        hr_user = (
+            CustomUser.objects.filter(email__in=hr_users_emails)
+            .select_related("employer")
+            .first()
+        )
+        upload_to_dropbox(
+            file_content,
+            f"/NEWHIREQUIZ/{file_name}",
+            employer=hr_user.employer if hr_user else None,
+            write_mode="overwrite",
+        )
         # Process the temp_file or perform actions like sending an email
         # Example: Sending an email with the retrieved document attached
         email_subject = f"{document_name} completed for {recipient_name}"
@@ -679,9 +699,18 @@ def get_docusign_envelope(envelope_id, recipient_name=None, document_name=None):
         # envelope_id = "5d106d50-565e-4d70-85a4-0d1e29ff3abe"
 
         zip_file = envelopes_api.get_document(account_id, envelope_type, envelope_id)
-        # print(temp_file)
-
-        upload_to_dropbox(zip_file)
+        file_content, file_name = _dropbox_bytes_from_local_file(zip_file)
+        hr_user = (
+            CustomUser.objects.filter(email__in=hr_users_emails)
+            .select_related("employer")
+            .first()
+        )
+        upload_to_dropbox(
+            file_content,
+            f"/NEWHRFILES/{file_name}",
+            employer=hr_user.employer if hr_user else None,
+            write_mode="overwrite",
+        )
         logger.info("☁️ Uploaded ZIP file to Dropbox.")
         print("Uploaded zip file to dropox")
         # ✅ Extract ZIP contents
