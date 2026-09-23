@@ -3,8 +3,8 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 {% load crispy_forms_tags %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css?v=reframe2">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js?v=reframe2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css?v=reframe3">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js?v=reframe3"></script>
 <style>
   .template-card { background: #fff; border: 1px solid #e7e7e7; border-radius: 8px; padding: 12px 14px; }
   .template-save-bar { position: sticky; bottom: 0; z-index: 20; background: #fff; padding: 10px 0 4px; border-top: 1px solid #eee; }
@@ -12,7 +12,8 @@
     .template-preview-col { position: sticky; top: 72px; }
   }
   .dz-header-image, .dz-template-image { min-height: 64px; cursor: pointer; }
-  #header-crop-wrap { padding: 18px; background: #111; overflow: visible; }
+  #header-crop-wrap { padding: 18px; background: #111; overflow: visible; min-height: 280px; }
+  #header-crop-wrap .cropper-container { min-height: 240px; }
   #header-crop-wrap .cropper-point {
     width: 16px;
     height: 16px;
@@ -184,7 +185,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="small text-muted mb-2">Drag the blue corners and edges to crop. Or keep the whole picture.</p>
+        <p class="small text-muted mb-2">Drag the blue corners and edges to resize. Need the whole picture? Use full image.</p>
         <div id="header-crop-wrap">
           <img id="header-crop-img" alt="Header crop" style="max-width:100%; display:block;">
         </div>
@@ -195,8 +196,8 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-outline-primary" id="header-use-full">Use full image</button>
-        <button type="button" class="btn btn-primary" id="header-crop-apply">Apply crop</button>
+        <button type="button" class="btn btn-outline-secondary" id="header-crop-apply">Apply crop</button>
+        <button type="button" class="btn btn-primary" id="header-use-full">Use full image</button>
       </div>
     </div>
   </div>
@@ -639,6 +640,7 @@ function initTemplateForm() {
     const boot = function () {
       if (headerCropper) return;
       headerCropper = new Cropper(img, {
+        aspectRatio: NaN,
         viewMode: 1,
         dragMode: 'move',
         autoCropArea: 0.8,
