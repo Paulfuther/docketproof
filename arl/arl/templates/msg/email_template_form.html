@@ -5,6 +5,14 @@
 {% load crispy_forms_tags %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<style>
+  .template-card { background: #fff; border: 1px solid #e7e7e7; border-radius: 8px; padding: 12px 14px; }
+  .template-save-bar { position: sticky; bottom: 0; z-index: 20; background: #fff; padding: 10px 0 4px; border-top: 1px solid #eee; }
+  @media (min-width: 992px) {
+    .template-preview-col { position: sticky; top: 72px; }
+  }
+  .dz-header-image, .dz-template-image { min-height: 64px; cursor: pointer; }
+</style>
 
 <div class="container">
   <div class="row justify-content-center pt-5 mt-5"></div>
@@ -19,10 +27,9 @@
         <div class="alert alert-{{ message.tags }}">{{ message }}</div>
       {% endfor %}
 
-      <p class="text-muted">
-        Write the email in plain words. Pictures go in the list below — you do not need to look at any code.
-        To fill in a name automatically you can type
-        {% verbatim %}<code>{{name}}</code>, <code>{{company_name}}</code>, or <code>{{senior_contact_name}}</code>.{% endverbatim %}
+      <p class="text-muted small mb-3">
+        Write the message. Add a header or pictures if you want.
+        {% verbatim %}Example: <code>{{name}}</code>{% endverbatim %}
       </p>
 
       <form method="post" id="template-form"
@@ -40,99 +47,88 @@
               <label class="form-check-label" for="{{ form.include_in_report.id_for_label }}">
                 {{ form.include_in_report.label }}
               </label>
-              {% if form.include_in_report.help_text %}
-                <div class="form-text">{{ form.include_in_report.help_text }}</div>
-              {% endif %}
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">Header image (optional)</label>
-              <p class="small text-muted mb-2">
-                Drop any photo — it is cropped automatically to a 600×180 header banner.
-                Then drag to reframe if you want a different part of the photo.
-                Use <strong>Header size</strong> to pick how wide it appears in the email.
-              </p>
-              {{ form.header_display_width|as_crispy_field }}
-              {{ form.header_space_below|as_crispy_field }}
-              <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
-                <img id="header-preview-img"
-                     src="{{ form.header_image_url.value|default:'' }}"
-                     alt="Header preview"
-                     class="border rounded"
-                     style="height:auto;">
-                <div class="mt-2 d-flex flex-wrap gap-2">
-                  <button type="button" class="btn btn-sm btn-outline-primary" id="reframe-header">
-                    Reframe header
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline-danger" id="clear-header">
-                    Remove header image
-                  </button>
-                </div>
-              </div>
-              <div class="dz-header-image border rounded p-3 text-muted"
-                   data-upload-url="{% url 'upload_attachment' %}">
-                Drop a header image or click to upload.
-              </div>
             </div>
 
             <div class="mb-3">
               <label class="form-label" for="plain-message">Message</label>
-              <p class="small text-muted mb-2">
-                Type the words people will read. Add or remove pictures below. You do not need to see any HTML.
-              </p>
-              <textarea id="plain-message" class="form-control" rows="8"
+              <textarea id="plain-message" class="form-control" rows="10"
                         placeholder="Write the email here…"></textarea>
             </div>
 
-            <div class="mb-3">
-              <label class="form-label">Pictures in this email</label>
-              <p class="small text-muted mb-2">
-                Pick Full width, Left, or Right, then add a photo. Remove it from the list if you change your mind.
-                Left/right sit beside the words in many inboxes. Outlook often puts them above the words.
-              </p>
-              <div class="d-flex flex-wrap gap-3 mb-2">
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="body-image-place" id="place-full" value="full" checked>
-                  <label class="form-check-label" for="place-full">Full width</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="body-image-place" id="place-left" value="left">
-                  <label class="form-check-label" for="place-left">Float left</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="body-image-place" id="place-right" value="right">
-                  <label class="form-check-label" for="place-right">Float right</label>
+            <div class="template-card mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Header</label>
+                <button type="button" class="btn btn-sm btn-link py-0" id="replace-header"
+                        {% if not form.header_image_url.value %}style="display:none;"{% endif %}>Replace</button>
+              </div>
+              <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
+                <img id="header-preview-img"
+                     src="{{ form.header_image_url.value|default:'' }}"
+                     alt="Header"
+                     class="border rounded"
+                     style="height:auto;display:block;">
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="reframe-header">Reframe</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="clear-header">Remove</button>
                 </div>
               </div>
-              <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" id="insert-body-image-btn">
-                  Insert image
-                </button>
+              <div id="header-drop-wrap" {% if form.header_image_url.value %}style="display:none;"{% endif %}>
+                <div class="dz-header-image border rounded p-2 text-muted small"
+                     data-upload-url="{% url 'upload_attachment' %}">
+                  Add a header
+                </div>
+                <input type="file" id="header-image-file" accept="image/*" class="d-none">
+              </div>
+              <div class="row g-2 mt-1">
+                <div class="col-6">{{ form.header_display_width|as_crispy_field }}</div>
+                <div class="col-6">{{ form.header_space_below|as_crispy_field }}</div>
+              </div>
+            </div>
+
+            <div class="template-card mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Pictures</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="insert-body-image-btn">Add picture</button>
+              </div>
+              <div id="add-picture-panel" class="mb-2" style="display:none;">
+                <div class="d-flex flex-wrap gap-3 mb-2 small">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-full" value="full" checked>
+                    <label class="form-check-label" for="place-full">Full width</label>
+                  </div>
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-left" value="left">
+                    <label class="form-check-label" for="place-left">Float left</label>
+                  </div>
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-right" value="right">
+                    <label class="form-check-label" for="place-right">Float right</label>
+                  </div>
+                </div>
                 <input type="file" id="body-image-file" accept="image/*" class="d-none">
+                <div class="dz-template-image border rounded p-2 text-muted small"
+                     data-upload-url="{% url 'upload_attachment' %}">
+                  Choose a photo
+                </div>
               </div>
-              <div class="dz-template-image border rounded p-3 text-muted"
-                   data-upload-url="{% url 'upload_attachment' %}">
-                Or drop a photo here.
-              </div>
-              <div id="body-images-list" class="mt-2"></div>
+              <div id="body-images-list"></div>
             </div>
 
             <details class="mb-3" id="advanced-html">
-              <summary class="mb-2">Advanced HTML (optional)</summary>
-              <p class="small text-muted mb-2">
-                This is the real email. Most people never need to open it.
-              </p>
+              <summary class="mb-2">Advanced HTML</summary>
               {{ form.html_body|as_crispy_field }}
             </details>
 
-            <div class="d-flex gap-2">
+            <div class="template-save-bar">
               <button type="submit" class="btn btn-primary">Save template</button>
-              <button type="button" class="btn btn-outline-secondary" id="refresh-preview">Refresh preview</button>
             </div>
           </div>
 
-          <div class="col-12 col-lg-6">
-            <div class="fw-semibold mb-1">Preview</div>
+          <div class="col-12 col-lg-6 template-preview-col">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="fw-semibold">Preview</div>
+              <button type="button" class="btn btn-sm btn-link py-0" id="refresh-preview">Refresh</button>
+            </div>
             <div class="small text-muted mb-2" id="preview-subject"></div>
             <iframe id="template-preview" title="Email preview" sandbox=""
                     class="w-100 bg-white border rounded"
@@ -152,7 +148,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="small text-muted">Drag the photo to choose which part stays in the banner. Use zoom if needed.</p>
+        <p class="small text-muted mb-2">Drag to pick the part you want.</p>
         <div class="bg-dark" style="max-height: 420px;">
           <img id="header-crop-img" alt="Header crop" style="max-width:100%; display:block;">
         </div>
@@ -328,10 +324,19 @@ function syncHeaderThumb() {
   img.setAttribute('width', String(w));
 }
 
+function syncHeaderCard() {
+  const url = (document.getElementById('id_header_image_url') || {}).value || '';
+  const wrap = document.getElementById('header-preview-wrap');
+  const drop = document.getElementById('header-drop-wrap');
+  const replaceBtn = document.getElementById('replace-header');
+  if (wrap) wrap.style.display = url ? '' : 'none';
+  if (drop) drop.style.display = url ? 'none' : '';
+  if (replaceBtn) replaceBtn.style.display = url ? '' : 'none';
+}
+
 function setHeaderUrl(url, sourceUrl) {
   const input = document.getElementById('id_header_image_url');
   const source = document.getElementById('id_header_source_url');
-  const wrap = document.getElementById('header-preview-wrap');
   const img = document.getElementById('header-preview-img');
   if (input) input.value = url || '';
   if (source && sourceUrl !== undefined) source.value = sourceUrl || '';
@@ -339,7 +344,7 @@ function setHeaderUrl(url, sourceUrl) {
     img.src = url || '';
     if (url) img.setAttribute('src', url);
   }
-  if (wrap) wrap.style.display = url ? '' : 'none';
+  syncHeaderCard();
   syncHeaderThumb();
   renderPreview();
 }
@@ -367,16 +372,15 @@ function renderBodyImageList() {
   if (!list || !body) return;
   const urls = listBodyImageUrls(body.value);
   if (!urls.length) {
-    list.innerHTML = '';
+    list.innerHTML = '<p class="text-muted small mb-0">No pictures yet.</p>';
     return;
   }
-  list.innerHTML = '<div class="small fw-semibold mb-1">Pictures in the email body</div>'
-    + urls.map(function (url, idx) {
-      return '<div class="d-flex align-items-center gap-2 mb-2" data-body-image="' + idx + '">'
-        + '<img src="' + url.replace(/"/g, '&quot;') + '" alt="" class="border rounded" style="width:72px;height:48px;object-fit:cover;">'
-        + '<button type="button" class="btn btn-sm btn-outline-danger js-remove-body-image" data-url="' + url.replace(/"/g, '&quot;') + '">Remove picture</button>'
-        + '</div>';
-    }).join('');
+  list.innerHTML = urls.map(function (url, idx) {
+    return '<div class="d-flex align-items-center gap-2 mb-2" data-body-image="' + idx + '">'
+      + '<img src="' + url.replace(/"/g, '&quot;') + '" alt="" class="border rounded" style="width:72px;height:48px;object-fit:cover;">'
+      + '<button type="button" class="btn btn-sm btn-outline-danger js-remove-body-image" data-url="' + url.replace(/"/g, '&quot;') + '">Remove</button>'
+      + '</div>';
+  }).join('');
 }
 
 function persistAssets(payload) {
@@ -408,6 +412,8 @@ function insertBodyImageFromUpload(resp) {
   const body = document.getElementById('id_html_body');
   if (!body || !resp || !resp.url) return;
   insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()));
+  const panel = document.getElementById('add-picture-panel');
+  if (panel) panel.style.display = 'none';
   renderBodyImageList();
   renderPreview();
   persistAssets({ action: 'set_html_body', html_body: body.value }).catch(function (err) {
@@ -452,6 +458,7 @@ function initTemplateForm() {
 
   try {
     fillPlainFromHtml();
+    syncHeaderCard();
     renderPreview();
     renderBodyImageList();
     syncHeaderThumb();
@@ -635,13 +642,50 @@ function initTemplateForm() {
 
   const fileInput = document.getElementById('body-image-file');
   const insertBtn = document.getElementById('insert-body-image-btn');
+  const addPanel = document.getElementById('add-picture-panel');
   if (insertBtn) {
     insertBtn.addEventListener('click', function () {
+      if (addPanel && addPanel.style.display === 'none') {
+        addPanel.style.display = '';
+        return;
+      }
       if (bodyDropzone && bodyDropzone.hiddenFileInput) {
         bodyDropzone.hiddenFileInput.click();
         return;
       }
       if (fileInput) fileInput.click();
+    });
+  }
+  const replaceBtn = document.getElementById('replace-header');
+  const headerFile = document.getElementById('header-image-file');
+  if (replaceBtn && headerFile) {
+    replaceBtn.addEventListener('click', function () {
+      headerFile.click();
+    });
+  }
+  if (headerFile) {
+    headerFile.addEventListener('change', function () {
+      const file = headerFile.files && headerFile.files[0];
+      headerFile.value = '';
+      if (!file) return;
+      uploadEmailImage(file, { email_header: '1' }, function (data, uploaded) {
+        if (headerLocalSource) URL.revokeObjectURL(headerLocalSource);
+        try {
+          headerLocalSource = uploaded ? URL.createObjectURL(uploaded) : '';
+        } catch (err) {
+          headerLocalSource = '';
+        }
+        setHeaderUrl(data.url, data.source_url || '');
+        persistAssets({
+          action: 'set_header',
+          header_image_url: data.url,
+          header_source_url: data.source_url || ''
+        }).catch(function (err) {
+          alert(err.message || 'Header is in the preview. Click Save template to keep it.');
+        });
+      }).catch(function (err) {
+        alert(err.message || 'Image upload failed.');
+      });
     });
   }
   if (fileInput) {

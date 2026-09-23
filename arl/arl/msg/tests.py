@@ -623,6 +623,7 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn('id="insert-body-image-btn"', html)
         self.assertIn('id="plain-message"', html)
         self.assertIn("Advanced HTML", html)
+        self.assertIn("No pictures yet.", html)
         self.assertIn("function renderPreview(", html)
         self.assertIn("function insertBodyImageFromUpload(", html)
         self.assertIn("function headerSpaceBelow(", html)

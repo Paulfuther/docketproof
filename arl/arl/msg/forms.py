@@ -319,6 +319,15 @@ class EmailTemplateForm(forms.ModelForm):
         self.fields["header_display_width"].initial = EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
         self.fields["header_space_below"].required = False
         self.fields["header_space_below"].initial = EMAIL_HEADER_SPACE_DEFAULT
+        for name in (
+            "name",
+            "subject",
+            "header_display_width",
+            "header_space_below",
+            "include_in_report",
+            "html_body",
+        ):
+            self.fields[name].help_text = ""
 
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip()
