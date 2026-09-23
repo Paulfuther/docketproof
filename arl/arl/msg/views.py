@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import urllib.parse
+import urllib.request
 import uuid
 from io import BytesIO
 from pathlib import Path
@@ -41,6 +42,8 @@ from arl.msg.email_utils import (
     get_generic_sendgrid_template_id,
     prepare_email_image,
     prepare_header_image,
+    prepare_header_source_image,
+    remove_body_image,
     render_merge_fields,
     resolve_email_subject,
     sample_preview_context,
@@ -1296,9 +1299,120 @@ def email_template_preview(request, pk):
             "is_in_app": template.is_in_app,
             "sendgrid_id": template.sendgrid_id or "",
             "header_image_url": template.header_image_url or "",
+            "header_source_url": template.header_source_url or "",
             "header_display_width": template.header_display_width,
         }
     )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+@require_POST
+def email_template_assets(request, pk):
+    """Persist header/body image changes without a full template save."""
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return JsonResponse({"error": "No employer"}, status=400)
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    action = (payload.get("action") or "").strip()
+    if action == "clear_header":
+        template.header_image_url = ""
+        template.header_source_url = ""
+        template.save(
+            update_fields=["header_image_url", "header_source_url", "updated_at"]
+        )
+    elif action == "set_header":
+        template.header_image_url = (payload.get("header_image_url") or "").strip()
+        if "header_source_url" in payload:
+            template.header_source_url = (
+                payload.get("header_source_url") or ""
+            ).strip()
+        template.save(
+            update_fields=["header_image_url", "header_source_url", "updated_at"]
+        )
+    elif action == "remove_body_image":
+        html = payload.get("html_body")
+        if not isinstance(html, str):
+            html = template.html_body
+        template.html_body = remove_body_image(html, payload.get("url"))
+        template.save(update_fields=["html_body", "updated_at"])
+    elif action == "set_html_body":
+        html = payload.get("html_body")
+        if not isinstance(html, str):
+            return JsonResponse({"error": "html_body is required"}, status=400)
+        template.html_body = html
+        template.save(update_fields=["html_body", "updated_at"])
+    else:
+        return JsonResponse({"error": "Unknown action"}, status=400)
+
+    preview_html = template.html_body or ""
+    if template.is_in_app:
+        preview_html = wrap_in_app_email_html(
+            preview_html,
+            template.header_image_url,
+            header_display_width=template.header_display_width,
+        )
+    return JsonResponse(
+        {
+            "ok": True,
+            "header_image_url": template.header_image_url or "",
+            "header_source_url": template.header_source_url or "",
+            "html_body": template.html_body or "",
+            "html": preview_html,
+        }
+    )
+
+
+def _allowed_email_image_host(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if host.endswith(".linodeobjects.com"):
+        return True
+    region = (getattr(settings, "LINODE_REGION", "") or "").lower()
+    bucket = (getattr(settings, "LINODE_BUCKET_NAME", "") or "").lower()
+    if region and host.endswith(region):
+        return True
+    if bucket and host.startswith(f"{bucket}."):
+        return True
+    return False
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+@require_GET
+def email_template_image_proxy(request):
+    """Same-origin fetch so the header cropper can export a canvas."""
+    url = (request.GET.get("url") or "").strip()
+    if not _allowed_email_image_host(url):
+        return HttpResponse("Invalid image URL", status=400)
+    try:
+        with urllib.request.urlopen(url, timeout=15) as incoming:
+            content_type = incoming.headers.get("Content-Type", "image/jpeg")
+            data = incoming.read(8 * 1024 * 1024)
+    except Exception:
+        logger.exception("Header source proxy failed")
+        return HttpResponse("Could not load image", status=502)
+    if not content_type.startswith("image/"):
+        content_type = "image/jpeg"
+    response = HttpResponse(data, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 # View for weekly compliance notes
@@ -1326,6 +1440,17 @@ def upload_attachment(request):
         email_fit = folder == "email_templates" or request.POST.get("email_fit") == "1"
         original_name = uploaded_file.name or "file"
         unique_name = f"{folder}/{uuid.uuid4()}_{original_name}"
+        source_url = ""
+
+        def _publish_linode(buffer, object_name):
+            upload_to_linode_object_storage(buffer, object_name)
+            bucket = conn.get_bucket(settings.LINODE_BUCKET_NAME)
+            key = bucket.get_key(object_name)
+            key.set_acl("public-read")
+            return (
+                f"https://{settings.LINODE_BUCKET_NAME}."
+                f"{settings.LINODE_REGION}/{object_name}"
+            )
 
         try:
             # ✅ Resize if it's an image
@@ -1333,10 +1458,29 @@ def upload_attachment(request):
                 try:
                     if email_fit:
                         if request.POST.get("email_header") == "1":
+                            raw = uploaded_file.read()
+                            already_framed = request.POST.get("header_ready") == "1"
                             buffer, ext, _ctype = prepare_header_image(
-                                uploaded_file,
+                                BytesIO(raw),
                                 filename=original_name,
+                                crop=not already_framed,
                             )
+                            if not already_framed:
+                                source_buf, source_ext, _src_ctype = (
+                                    prepare_header_source_image(
+                                        BytesIO(raw), filename=original_name
+                                    )
+                                )
+                                source_stem = Path(original_name).stem or "image"
+                                source_name = (
+                                    f"{folder}/{uuid.uuid4()}_"
+                                    f"{source_stem}_source.{source_ext}"
+                                )
+                                source_url = _publish_linode(source_buf, source_name)
+                            else:
+                                source_url = (
+                                    request.POST.get("source_url") or ""
+                                ).strip()
                         else:
                             buffer, ext, _ctype = prepare_email_image(
                                 uploaded_file, filename=original_name
@@ -1361,7 +1505,11 @@ def upload_attachment(request):
                         buffer.seek(0)
 
                     # Upload resized image
-                    upload_to_linode_object_storage(buffer, unique_name)
+                    url = _publish_linode(buffer, unique_name)
+                    payload = {"success": True, "url": url}
+                    if source_url:
+                        payload["source_url"] = source_url
+                    return JsonResponse(payload)
 
                 except Exception as e:
                     return JsonResponse(

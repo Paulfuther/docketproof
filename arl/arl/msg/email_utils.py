@@ -25,7 +25,10 @@ EMAIL_HEADER_DISPLAY_WIDTH_CHOICES = [
     (440, "Wide (440px)"),
     (520, "Full (520px)"),
 ]
+EMAIL_HEADER_SOURCE_MAX_WIDTH = 1200
 EMAIL_JPEG_QUALITY = 80
+EMAIL_BODY_IMAGE_FLOAT_WIDTH = 240
+BODY_IMAGE_PLACEMENTS = ("full", "left", "right")
 
 
 def get_generic_sendgrid_template_id():
@@ -410,14 +413,27 @@ def _resize_email_image(image, max_width, max_height=None, crop=False):
     return image
 
 
-def prepare_header_image(file_obj, filename=""):
-    """Fit any upload into a 600×180 email-header banner (center-crop)."""
+def prepare_header_image(file_obj, filename="", crop=True):
+    """Fit a header into a 600×180 banner. Default is center-crop (auto-fit).
+
+    Pass ``crop=False`` when the file is already framed (cropper apply).
+    """
     return prepare_email_image(
         file_obj,
         filename=filename,
         max_width=EMAIL_HEADER_MAX_WIDTH,
         max_height=EMAIL_HEADER_MAX_HEIGHT,
-        crop=True,
+        crop=bool(crop),
+    )
+
+
+def prepare_header_source_image(file_obj, filename=""):
+    """Keep a wider original so Paul can reframe after the auto-fit crop."""
+    return prepare_email_image(
+        file_obj,
+        filename=filename,
+        max_width=EMAIL_HEADER_SOURCE_MAX_WIDTH,
+        crop=False,
     )
 
 
@@ -457,3 +473,75 @@ def wrap_in_app_email_html(
         "</td></tr></table>\n"
     )
     return header + body
+
+
+def resolve_body_image_placement(placement=None):
+    value = (placement or "full").strip().lower()
+    if value in BODY_IMAGE_PLACEMENTS:
+        return value
+    return "full"
+
+
+def wrap_body_image(url, placement="full"):
+    """Email-safe body image. HTML body stays the source of truth.
+
+    Left/right use align + float so text can sit beside the picture in
+    clients that honor it. Outlook's Word engine often stacks them.
+    """
+    url = (url or "").strip()
+    if not url:
+        return ""
+    safe = escape(url)
+    place = resolve_body_image_placement(placement)
+    if place in ("left", "right"):
+        width = EMAIL_BODY_IMAGE_FLOAT_WIDTH
+        margin = "0 16px 12px 0" if place == "left" else "0 0 12px 16px"
+        return (
+            f'<table role="presentation" data-dp-body-image="1" align="{place}" '
+            f'border="0" cellpadding="0" cellspacing="0" width="{width}" '
+            f'style="float:{place};margin:{margin};width:{width}px;max-width:100%;">'
+            f'<tr><td style="padding:0;">'
+            f'<img src="{safe}" alt="" width="{width}" '
+            f'style="display:block;width:{width}px;max-width:100%;height:auto;'
+            "border:0;outline:none;text-decoration:none;\">"
+            "</td></tr></table>\n"
+        )
+    width = EMAIL_IMAGE_MAX_WIDTH
+    return (
+        f'<table role="presentation" data-dp-body-image="1" align="center" '
+        f'border="0" cellpadding="0" cellspacing="0" width="{width}" '
+        f'style="margin:16px auto;width:{width}px;max-width:100%;">'
+        f'<tr><td align="center" style="padding:0;">'
+        f'<img src="{safe}" alt="" width="{width}" '
+        f'style="display:block;width:100%;max-width:{width}px;height:auto;'
+        "border:0;outline:none;text-decoration:none;\">"
+        "</td></tr></table>\n"
+    )
+
+
+def list_body_image_urls(html):
+    urls = []
+    for match in re.finditer(
+        r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']', html or "", flags=re.I
+    ):
+        url = match.group(1).strip()
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def remove_body_image(html, url):
+    """Strip one inserted picture (and its table/p wrapper) from HTML."""
+    html = html or ""
+    url = (url or "").strip()
+    if not html or not url:
+        return html
+    escaped = re.escape(url)
+    patterns = (
+        rf'<table\b[^>]*\bdata-dp-body-image\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc=["\']{escaped}["\'][\s\S]*?</table>\s*',
+        rf'<p\b[^>]*>\s*<img\b[^>]*\bsrc=["\']{escaped}["\'][^>]*>\s*</p>\s*',
+        rf'<img\b[^>]*\bsrc=["\']{escaped}["\'][^>]*>\s*',
+    )
+    for pattern in patterns:
+        html = re.sub(pattern, "", html, flags=re.I)
+    return html

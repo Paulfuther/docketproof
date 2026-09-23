@@ -6,8 +6,9 @@ from arl.msg.views import (EmailEventList, FetchTwilioCallsView,
                            compliance_file_view, delete_draft_email,
                            edit_draft_email, email_event_summary_view,
                            email_log_view, employee_email_report_view,
-                           email_template_create, email_template_delete,
-                           email_template_edit, email_template_list,
+                           email_template_assets, email_template_create,
+                           email_template_delete, email_template_edit,
+                           email_template_image_proxy, email_template_list,
                            email_template_preview,
                            fetch_shortlink_sms_data, fetch_sms_data,
                            fetch_twilio_data, generate_ai_content,
@@ -110,6 +111,16 @@ urlpatterns = [
         "comms/templates/<int:pk>/preview/",
         email_template_preview,
         name="email_template_preview",
+    ),
+    path(
+        "comms/templates/<int:pk>/assets/",
+        email_template_assets,
+        name="email_template_assets",
+    ),
+    path(
+        "comms/templates/image-proxy/",
+        email_template_image_proxy,
+        name="email_template_image_proxy",
     ),
 
 

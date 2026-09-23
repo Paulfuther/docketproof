@@ -10,9 +10,11 @@ from PIL import Image
 
 from arl.msg.email_utils import (
     COMPOSE_TEMPLATE_NAME,
+    EMAIL_BODY_IMAGE_FLOAT_WIDTH,
     EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
     EMAIL_HEADER_MAX_HEIGHT,
     EMAIL_HEADER_MAX_WIDTH,
+    EMAIL_HEADER_SOURCE_MAX_WIDTH,
     EMAIL_IMAGE_MAX_WIDTH,
     EMAIL_SOURCE_COMPOSE,
     EMAIL_SOURCE_IN_APP,
@@ -21,10 +23,14 @@ from arl.msg.email_utils import (
     email_identity,
     extract_sendgrid_event_meta,
     extract_sendgrid_event_subject,
+    list_body_image_urls,
     prepare_email_image,
     prepare_header_image,
+    prepare_header_source_image,
+    remove_body_image,
     render_merge_fields,
     resolve_email_subject,
+    wrap_body_image,
     wrap_in_app_email_html,
 )
 from arl.msg.models import EmailEvent, EmailLog, EmailTemplate
@@ -234,6 +240,54 @@ class EmailUtilsTests(TestCase):
             EMAIL_HEADER_MAX_WIDTH / float(EMAIL_HEADER_MAX_HEIGHT),
             places=2,
         )
+
+    def test_prepare_header_source_image_keeps_aspect(self):
+        img = Image.new("RGB", (1600, 800), color=(10, 200, 10))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, _ctype = prepare_header_source_image(buf, filename="wide.png")
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_HEADER_SOURCE_MAX_WIDTH)
+        self.assertEqual(result.height, 600)
+        self.assertGreater(result.height, EMAIL_HEADER_MAX_HEIGHT)
+        self.assertEqual(ext, "jpg")
+
+    def test_prepare_header_image_ready_skips_recrop(self):
+        img = Image.new("RGB", (600, 180), color=(10, 10, 200))
+        buf = BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
+        out, _ext, _ctype = prepare_header_image(buf, filename="ready.jpg", crop=False)
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
+        self.assertEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
+
+    def test_wrap_body_image_placements(self):
+        full = wrap_body_image("https://cdn.example/pic.jpg", "full")
+        self.assertIn('data-dp-body-image="1"', full)
+        self.assertIn('width="600"', full)
+        self.assertIn("https://cdn.example/pic.jpg", full)
+        left = wrap_body_image("https://cdn.example/pic.jpg", "left")
+        self.assertIn('align="left"', left)
+        self.assertIn("float:left", left)
+        self.assertIn(f'width="{EMAIL_BODY_IMAGE_FLOAT_WIDTH}"', left)
+        right = wrap_body_image("https://cdn.example/pic.jpg", "right")
+        self.assertIn('align="right"', right)
+        self.assertIn("float:right", right)
+        self.assertEqual(wrap_body_image(""), "")
+
+    def test_remove_body_image_clears_wrappers(self):
+        url = "https://cdn.example/bottom.jpg"
+        html = "<p>Hello</p>" + wrap_body_image(url, "full") + "<p>Bye</p>"
+        self.assertEqual(list_body_image_urls(html), [url])
+        cleaned = remove_body_image(html, url)
+        self.assertNotIn(url, cleaned)
+        self.assertNotIn("<img", cleaned)
+        self.assertIn("<p>Hello</p>", cleaned)
+        self.assertIn("<p>Bye</p>", cleaned)
+        legacy = f'<p style="text-align:center;"><img src="{url}" alt=""></p>'
+        self.assertNotIn(url, remove_body_image(legacy, url))
 
 
 class EmailLogSubjectTests(TestCase):
@@ -627,6 +681,114 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         template.refresh_from_db()
         self.assertEqual(template.header_image_url, "")
+
+    def test_assets_clear_header_updates_preview_and_send(self):
+        template = EmailTemplate.objects.create(
+            name="Has header",
+            subject="Hello",
+            html_body="<p>Body</p>",
+            header_image_url="https://cdn.example/header.jpg",
+            header_source_url="https://cdn.example/header-source.jpg",
+        )
+        template.employers.add(self.employer)
+        response = self.client.post(
+            reverse("email_template_assets", args=[template.pk]),
+            data=json.dumps({"action": "clear_header"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["header_image_url"], "")
+        self.assertEqual(data["header_source_url"], "")
+        self.assertNotIn("https://cdn.example/header.jpg", data["html"])
+        template.refresh_from_db()
+        self.assertEqual(template.header_image_url, "")
+        self.assertEqual(template.header_source_url, "")
+        preview = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        ).json()
+        self.assertEqual(preview["header_image_url"], "")
+        self.assertNotIn("https://cdn.example/header.jpg", preview["html"])
+
+    @patch("arl.msg.views.master_email_send_task")
+    def test_comms_send_omits_cleared_header(self, mock_task):
+        comms_group, _created = Group.objects.get_or_create(name="SendCOMMS")
+        self.user.groups.add(comms_group)
+        recipient = CustomUser.objects.create_user(
+            username="worker4",
+            email="worker4@example.com",
+            password="pass12345",
+            phone_number="+15195550104",
+            employer=self.employer,
+            first_name="Sam",
+            last_name="Lee",
+            is_active=True,
+        )
+        template = EmailTemplate.objects.create(
+            name="Cleared header send",
+            subject="Please read",
+            html_body="<p>Hello {{name}}</p>",
+            header_image_url="https://cdn.example/old-header.jpg",
+        )
+        template.employers.add(self.employer)
+        self.client.post(
+            reverse("email_template_assets", args=[template.pk]),
+            data=json.dumps({"action": "clear_header"}),
+            content_type="application/json",
+        )
+        response = self.client.post(
+            reverse("comms") + "?tab=email",
+            {
+                "form_type": "email",
+                "email_mode": "template",
+                "sendgrid_id": str(template.pk),
+                "selected_users": [str(recipient.pk)],
+                "subject": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        kwargs = mock_task.delay.call_args.kwargs
+        self.assertNotIn("https://cdn.example/old-header.jpg", kwargs["html_body"])
+        self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
+
+    def test_assets_remove_body_image_persists(self):
+        url = "https://cdn.example/bottom.jpg"
+        html = "<p>Hello</p>" + wrap_body_image(url, "full")
+        template = EmailTemplate.objects.create(
+            name="Has bottom",
+            subject="Hello",
+            html_body=html,
+        )
+        template.employers.add(self.employer)
+        response = self.client.post(
+            reverse("email_template_assets", args=[template.pk]),
+            data=json.dumps(
+                {"action": "remove_body_image", "url": url, "html_body": html}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertNotIn(url, data["html_body"])
+        self.assertNotIn(url, data["html"])
+        template.refresh_from_db()
+        self.assertNotIn(url, template.html_body)
+        self.assertIn("<p>Hello</p>", template.html_body)
+
+    def test_save_header_source_url(self):
+        response = self.client.post(
+            reverse("email_template_create"),
+            {
+                "name": "Source header",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "https://cdn.example/header.jpg",
+                "header_source_url": "https://cdn.example/header-source.jpg",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        template = EmailTemplate.objects.get(name="Source header")
+        self.assertEqual(template.header_source_url, "https://cdn.example/header-source.jpg")
 
     def test_save_header_display_width(self):
         response = self.client.post(

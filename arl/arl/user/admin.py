@@ -720,6 +720,7 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         "subject",
         "html_body",
         "header_image_url",
+        "header_source_url",
         "header_display_width",
         "sendgrid_id",
         "employers",

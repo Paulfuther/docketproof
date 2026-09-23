@@ -158,6 +158,12 @@ class EmailTemplate(models.Model):
         default="",
         help_text="Optional public header image URL (Linode). Shown at the top of preview and outbound HTML.",
     )
+    header_source_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Uncropped header original used to reframe the banner. Not sent in the email.",
+    )
     header_display_width = models.PositiveSmallIntegerField(
         default=EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
         choices=EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,

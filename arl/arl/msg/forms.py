@@ -260,6 +260,7 @@ class EmailTemplateForm(forms.ModelForm):
             "name",
             "subject",
             "header_image_url",
+            "header_source_url",
             "header_display_width",
             "html_body",
             "include_in_report",
@@ -275,6 +276,7 @@ class EmailTemplateForm(forms.ModelForm):
                 }
             ),
             "header_image_url": forms.HiddenInput(),
+            "header_source_url": forms.HiddenInput(),
             "header_display_width": forms.Select(attrs={"class": "form-select"}),
             "html_body": forms.Textarea(
                 attrs={
@@ -295,6 +297,7 @@ class EmailTemplateForm(forms.ModelForm):
             "name": "Shown in the Communications template picker.",
             "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
             "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
+            "header_source_url": "Original photo used only to reframe the header. Not shown in the email.",
             "header_display_width": "How wide the header looks in the email. It is not stretched to the full column.",
             "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
             "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
@@ -327,6 +330,9 @@ class EmailTemplateForm(forms.ModelForm):
 
     def clean_header_image_url(self):
         return (self.cleaned_data.get("header_image_url") or "").strip()
+
+    def clean_header_source_url(self):
+        return (self.cleaned_data.get("header_source_url") or "").strip()
 
     def clean_header_display_width(self):
         from arl.msg.email_utils import resolve_header_display_width
