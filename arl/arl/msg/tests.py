@@ -22,6 +22,7 @@ from arl.msg.email_utils import (
     EMAIL_HEADER_MAX_WIDTH,
     EMAIL_HEADER_SOURCE_MAX_WIDTH,
     EMAIL_IMAGE_MAX_WIDTH,
+    EMAIL_SIDE_GUTTER_PX,
     EMAIL_SOURCE_COMPOSE,
     EMAIL_SOURCE_IN_APP,
     EMAIL_SOURCE_SENDGRID,
@@ -242,6 +243,9 @@ class EmailUtilsTests(TestCase):
         self.assertIn(f"max-width:{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}px", wrapped)
         self.assertIn("width:100%", wrapped)
         self.assertIn('data-dp-email="1"', wrapped)
+        self.assertIn('data-dp-email-gutter="1"', wrapped)
+        self.assertIn(f'width="{EMAIL_SIDE_GUTTER_PX}"', wrapped)
+        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", wrapped)
         self.assertIn('name="viewport"', wrapped)
         self.assertIn("width=device-width", wrapped)
         self.assertIn("<table", wrapped)
@@ -275,6 +279,8 @@ class EmailUtilsTests(TestCase):
         body_only = wrap_in_app_email_html("<p>Hello</p>", "")
         self.assertIn("<p>Hello</p>", body_only)
         self.assertIn('data-dp-email="1"', body_only)
+        self.assertIn('data-dp-email-gutter="1"', body_only)
+        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", body_only)
         self.assertIn('name="viewport"', body_only)
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), body_only)
         self.assertEqual(wrap_in_app_email_html("", ""), "")
@@ -699,6 +705,7 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("These fill in for each person when you send.", html)
         self.assertIn("Back to Comms", html)
         self.assertIn("{% url 'comms' %}?tab=email", html)
+        self.assertIn("padding:16px 24px", html)
         self.assertIn("Advanced HTML", html)
         self.assertIn("No pictures yet.", html)
         self.assertIn("function renderPreview(", html)
@@ -756,6 +763,20 @@ class InAppEmailTemplateViewTests(TestCase):
         html = path.read_text()
         self.assertIn("Back to Comms", html)
         self.assertIn("{% url 'comms' %}?tab=email", html)
+
+    def test_comms_library_link_says_manage_templates(self):
+        templates_dir = Path(__file__).resolve().parent.parent / "templates" / "msg"
+        comms = (templates_dir / "master_comms.html").read_text()
+        send_form = (templates_dir / "template_email_form.html").read_text()
+        self.assertIn('data-title="Manage templates"', comms)
+        self.assertIn('title="Manage templates"', comms)
+        self.assertNotIn('data-title="Templates"', comms)
+        self.assertIn("{% url 'email_template_list' %}", comms)
+        self.assertEqual(comms.count('data-title="Manage templates"'), 2)
+        self.assertIn("Manage templates", send_form)
+        self.assertIn("Use Prebuilt Template", send_form)
+        self.assertIn("Compose Message", send_form)
+        self.assertIn("{% url 'email_template_list' %}", send_form)
 
     def test_preview_renders_merge_fields(self):
         template = EmailTemplate.objects.create(
@@ -835,6 +856,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', data["html"])
         self.assertIn("width:100%", data["html"])
         self.assertIn('name="viewport"', data["html"])
+        self.assertIn('data-dp-email-gutter="1"', data["html"])
+        self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", data["html"])
         self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', data["html"])
         self.assertEqual(data["header_space_below"], EMAIL_HEADER_SPACE_DEFAULT)
 

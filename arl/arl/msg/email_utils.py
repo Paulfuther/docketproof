@@ -40,6 +40,9 @@ EMAIL_HEADER_SOURCE_MAX_WIDTH = 1200
 EMAIL_JPEG_QUALITY = 80
 EMAIL_BODY_IMAGE_FLOAT_WIDTH = 240
 BODY_IMAGE_PLACEMENTS = ("full", "left", "right")
+# Side air for body copy + SendGrid ASM unsubscribe / disclaimer.
+# Table spacers (not CSS-only) so iPhone Mail keeps links off the glass.
+EMAIL_SIDE_GUTTER_PX = 24
 
 
 def get_generic_sendgrid_template_id():
@@ -526,8 +529,10 @@ def in_app_email_document(inner_html):
 
     Fragments without this meta are laid out at a wide desktop canvas, which
     parks the 600px column on the left and leaves a white gap on the right.
-    SendGrid still appends the ASM unsubscribe footer after this content.
+    SendGrid appends the ASM unsubscribe footer before </body>, so body
+    padding plus a 100% gutter table keep those links off the glass.
     """
+    gutter = EMAIL_SIDE_GUTTER_PX
     return (
         "<!DOCTYPE html>"
         '<html lang="en">'
@@ -536,9 +541,24 @@ def in_app_email_document(inner_html):
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta http-equiv="X-UA-Compatible" content="IE=edge">'
         "<title></title>"
+        '<style type="text/css">'
+        f"body{{margin:0!important;padding:16px {gutter}px!important;"
+        "width:100%!important;}}"
+        "</style>"
         "</head>"
-        '<body style="margin:0;padding:0;width:100%;background:#ffffff;">'
+        f'<body style="margin:0;padding:16px {gutter}px;width:100%;'
+        'background:#ffffff;">'
+        '<table role="presentation" data-dp-email-gutter="1" width="100%" '
+        'border="0" cellpadding="0" cellspacing="0" style="width:100%;">'
+        "<tr>"
+        f'<td width="{gutter}" style="width:{gutter}px;min-width:{gutter}px;'
+        'font-size:1px;line-height:1px;">&nbsp;</td>'
+        '<td align="center" valign="top" style="padding:16px 0;">'
         f"{inner_html or ''}"
+        "</td>"
+        f'<td width="{gutter}" style="width:{gutter}px;min-width:{gutter}px;'
+        'font-size:1px;line-height:1px;">&nbsp;</td>'
+        "</tr></table>"
         "</body></html>"
     )
 
@@ -554,7 +574,8 @@ def wrap_in_app_email_html(
     Header uses HTML width for Outlook and width:100% + max-width for phones
     so it sits in the available column without stretching past the chosen size.
     A 600px-only spacer is avoided: that forced a desktop canvas and left a
-    right-hand gap on iPhone. ASM unsubscribe is not part of this markup.
+    right-hand gap on iPhone. Horizontal air is table-cell padding plus the
+    document gutter so SendGrid's ASM footer is not flush to the screen edge.
     """
     body = html_body or ""
     url = (header_image_url or "").strip()
@@ -580,7 +601,7 @@ def wrap_in_app_email_html(
         '<table role="presentation" data-dp-email="1" align="center" border="0" '
         'cellpadding="0" cellspacing="0" width="100%" '
         f'style="width:100%;max-width:{EMAIL_IMAGE_MAX_WIDTH}px;margin:0 auto;">'
-        '<tr><td align="left" style="padding:12px 16px;">'
+        '<tr><td align="left" style="padding:16px 0;">'
         f"{''.join(parts)}"
         "</td></tr></table>"
     )

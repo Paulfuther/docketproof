@@ -71,7 +71,7 @@
                data-bs-toggle="tab" href="#email" role="tab" data-title="Email">
               <i class="material-symbols-outlined">mail</i>
             </a>
-            <a class="comms-nav-link" href="{% url 'email_template_list' %}" data-title="Templates">
+            <a class="comms-nav-link" href="{% url 'email_template_list' %}" data-title="Manage templates" title="Manage templates">
               <i class="material-symbols-outlined">edit_note</i>
             </a>
           {% endif %}
@@ -117,7 +117,7 @@
         <a class="comms-nav-link {% if active_tab == 'email' %}active{% endif %}" data-bs-toggle="tab" href="#email" role="tab" data-title="Email">
           <i class="material-symbols-outlined">mail</i>
         </a>
-        <a class="comms-nav-link" href="{% url 'email_template_list' %}" data-title="Templates">
+        <a class="comms-nav-link" href="{% url 'email_template_list' %}" data-title="Manage templates" title="Manage templates">
           <i class="material-symbols-outlined">edit_note</i>
         </a>
       {% endif %}
