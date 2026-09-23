@@ -312,6 +312,13 @@ MESSAGE_SERVICE_SID = os.environ.get("MESSAGE_SERVICE_SID")
 
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER")
+# Generic/wrapper dynamic template used for compose-your-own HTML.
+# In-app templates send HTML directly and do not require this, but
+# compose-message mode still uses it as the SendGrid body wrapper.
+SENDGRID_GENERIC_TEMPLATE_ID = os.environ.get(
+    "SENDGRID_GENERIC_TEMPLATE_ID",
+    "d-4ac0497efd864e29b4471754a9c836eb",
+)
 SENDGRID_NEWHIRE_ID = os.environ.get("SENDGRID_NEWHIRE_ID")
 SENDGRID_NEW_HIRE_FILE_ID = os.environ.get("SENDGRID_NEW_HIRE_FILE_ID")
 SENDGRID_SENDER_VERIFICATION_URL = os.environ.get("SENDGRID_SENDER_VERIFICATION_URL")

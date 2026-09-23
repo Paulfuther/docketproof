@@ -1,0 +1,1008 @@
+{% extends "../base/base.html" %}
+{% block title %}{% if template %}Edit template{% else %}New email template{% endif %}{% endblock %}
+{% block template %}
+{% include "../base/navbar.html" %}
+{% load crispy_forms_tags %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css?v=reframe3">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js?v=reframe3"></script>
+<style>
+  .template-card { background: #fff; border: 1px solid #e7e7e7; border-radius: 8px; padding: 12px 14px; }
+  .template-save-bar { position: sticky; bottom: 0; z-index: 20; background: #fff; padding: 10px 0 4px; border-top: 1px solid #eee; }
+  @media (min-width: 992px) {
+    .template-preview-col { position: sticky; top: 72px; }
+  }
+  .dz-header-image, .dz-template-image { min-height: 64px; cursor: pointer; }
+  #header-crop-wrap { padding: 18px; background: #111; overflow: visible; min-height: 280px; }
+  #header-crop-wrap .cropper-container { min-height: 240px; }
+  #header-crop-wrap .cropper-point {
+    width: 16px;
+    height: 16px;
+    opacity: 1;
+    background-color: #39f;
+  }
+  #header-crop-wrap .cropper-line { opacity: 0.75; }
+  #header-crop-wrap .cropper-view-box { outline: 2px solid #39f; }
+</style>
+
+<div class="container">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">{% if template %}{{ template.name }}{% else %}New email template{% endif %}</h3>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary" href="{% url 'comms' %}?tab=email">Back to Comms</a>
+          <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">All templates</a>
+        </div>
+      </div>
+
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+
+      <p class="text-muted small mb-3">
+        Write the message. Add a header or pictures if you want.
+        {% verbatim %}Example: <code>{{name}}</code>{% endverbatim %}
+      </p>
+
+      <form method="post" id="template-form"
+            {% if template %}data-assets-url="{% url 'email_template_assets' template.pk %}"{% endif %}
+            data-proxy-url="{% url 'email_template_image_proxy' %}"
+            data-header-source="{{ form.header_source_url.value|default:'' }}"
+            data-header-url="{{ form.header_image_url.value|default:'' }}">
+        {% csrf_token %}
+        {{ form.header_image_url }}
+        {{ form.header_source_url }}
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            {{ form.name|as_crispy_field }}
+            {{ form.subject|as_crispy_field }}
+            <div class="form-check mb-3">
+              {{ form.include_in_report }}
+              <label class="form-check-label" for="{{ form.include_in_report.id_for_label }}">
+                {{ form.include_in_report.label }}
+              </label>
+            </div>
+
+            <div class="mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0" for="plain-message">Message</label>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                          id="insert-field-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                    Insert field
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="insert-field-btn">
+                    {% regroup merge_fields by group as field_groups %}
+                    {% for group in field_groups %}
+                      <li><h6 class="dropdown-header">{{ group.grouper }}</h6></li>
+                      {% for field in group.list %}
+                        <li>
+                          <button type="button" class="dropdown-item js-insert-field"
+                                  data-tag="{{ field.tag }}">{{ field.label }}</button>
+                        </li>
+                      {% endfor %}
+                    {% empty %}
+                      <li><span class="dropdown-item-text text-muted">No fields</span></li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              </div>
+              <p class="small text-muted mb-2">These fill in for each person when you send.</p>
+              <textarea id="plain-message" class="form-control" rows="10"
+                        placeholder="Write the email here…"></textarea>
+            </div>
+
+            <div class="template-card mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Header</label>
+                <button type="button" class="btn btn-sm btn-link py-0" id="replace-header"
+                        {% if not form.header_image_url.value %}style="display:none;"{% endif %}>Replace</button>
+              </div>
+              <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
+                <img id="header-preview-img"
+                     src="{{ form.header_image_url.value|default:'' }}"
+                     alt="Header"
+                     class="border rounded"
+                     style="height:auto;display:block;">
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="reframe-header">Reframe</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="header-use-full-card">Use full image</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="clear-header">Remove</button>
+                </div>
+              </div>
+              <div id="header-drop-wrap" {% if form.header_image_url.value %}style="display:none;"{% endif %}>
+                <div class="dz-header-image border rounded p-2 text-muted small"
+                     data-upload-url="{% url 'upload_attachment' %}">
+                  Add a header
+                </div>
+                <input type="file" id="header-image-file" accept="image/*" class="d-none">
+              </div>
+              <div class="row g-2 mt-1">
+                <div class="col-6">{{ form.header_display_width|as_crispy_field }}</div>
+                <div class="col-6">{{ form.header_space_below|as_crispy_field }}</div>
+              </div>
+            </div>
+
+            <div class="template-card mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Pictures</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="insert-body-image-btn">Add picture</button>
+              </div>
+              <div id="add-picture-panel" class="mb-2" style="display:none;">
+                <div class="d-flex flex-wrap gap-3 mb-2 small">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-full" value="full" checked>
+                    <label class="form-check-label" for="place-full">Full width</label>
+                  </div>
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-left" value="left">
+                    <label class="form-check-label" for="place-left">Float left</label>
+                  </div>
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="radio" name="body-image-place" id="place-right" value="right">
+                    <label class="form-check-label" for="place-right">Float right</label>
+                  </div>
+                </div>
+                <input type="file" id="body-image-file" accept="image/*" class="d-none">
+                <div class="dz-template-image border rounded p-2 text-muted small"
+                     data-upload-url="{% url 'upload_attachment' %}">
+                  Choose a photo
+                </div>
+              </div>
+              <div id="body-images-list"></div>
+            </div>
+
+            <details class="mb-3" id="advanced-html">
+              <summary class="mb-2">Advanced HTML</summary>
+              {{ form.html_body|as_crispy_field }}
+            </details>
+
+            <div class="template-save-bar">
+              <button type="submit" class="btn btn-primary">Save template</button>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6 template-preview-col">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="fw-semibold">Preview</div>
+              <button type="button" class="btn btn-sm btn-link py-0" id="refresh-preview">Refresh</button>
+            </div>
+            <div class="small text-muted mb-2" id="preview-subject"></div>
+            <iframe id="template-preview" title="Email preview" sandbox=""
+                    class="w-100 bg-white border rounded"
+                    style="min-height: 480px;"></iframe>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="header-crop-modal" tabindex="-1" aria-labelledby="header-crop-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="header-crop-title">Reframe header</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Drag the blue corners and edges to resize. Need the whole picture? Use full image.</p>
+        <div id="header-crop-wrap">
+          <img id="header-crop-img" alt="Header crop" style="max-width:100%; display:block;">
+        </div>
+        <div class="mt-2 d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="header-zoom-out">Zoom out</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="header-zoom-in">Zoom in</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-secondary" id="header-crop-apply">Apply crop</button>
+        <button type="button" class="btn btn-primary" id="header-use-full">Use full image</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function getCSRFToken() {
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function headerDisplayWidth() {
+  const el = document.getElementById('id_header_display_width');
+  const n = parseInt(el && el.value, 10);
+  return n > 0 ? n : 280;
+}
+
+function headerSpaceBelow() {
+  const el = document.getElementById('id_header_space_below');
+  const n = parseInt(el && el.value, 10);
+  return n > 0 ? n : 24;
+}
+
+function headerMarkup(url) {
+  if (!url) return '';
+  const w = headerDisplayWidth();
+  const space = headerSpaceBelow();
+  return '<table role="presentation" data-dp-email="1" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;margin:0 auto;">'
+    + '<tr><td align="center" style="padding:12px 16px;">'
+    + '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 auto;width:100%;max-width:600px;">'
+    + '<tr><td align="center" style="padding:0;">'
+    + '<img src="' + url + '" alt="" width="' + w + '" '
+    + 'style="display:block;margin:0 auto;width:100%;max-width:' + w + 'px;height:auto;border:0;outline:none;text-decoration:none;">'
+    + '</td></tr></table>'
+    + '<table role="presentation" data-dp-header-space="1" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;">'
+    + '<tr><td height="' + space + '" style="height:' + space + 'px;line-height:' + space + 'px;font-size:1px;">&nbsp;</td></tr></table>'
+    + '</td></tr></table>';
+}
+
+function bodyImageMarkup(url, placement) {
+  const safe = String(url || '').replace(/"/g, '&quot;');
+  if (!safe) return '';
+  if (placement === 'left' || placement === 'right') {
+    const w = 240;
+    const margin = placement === 'left' ? '0 16px 12px 0' : '0 0 12px 16px';
+    return '<table role="presentation" data-dp-body-image="1" align="' + placement + '" border="0" cellpadding="0" cellspacing="0" width="' + w + '" style="float:' + placement + ';margin:' + margin + ';width:' + w + 'px;max-width:100%;">'
+      + '<tr><td style="padding:0;">'
+      + '<img src="' + safe + '" alt="" width="' + w + '" style="display:block;width:' + w + 'px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">'
+      + '</td></tr></table>\n';
+  }
+  return '<table role="presentation" data-dp-body-image="1" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="margin:16px auto;width:600px;max-width:100%;">'
+    + '<tr><td align="center" style="padding:0;">'
+    + '<img src="' + safe + '" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">'
+    + '</td></tr></table>\n';
+}
+
+function listBodyImageUrls(html) {
+  const urls = [];
+  const re = /<img\b[^>]*\bsrc=["']([^"']+)["']/gi;
+  let match;
+  while ((match = re.exec(html || ''))) {
+    if (urls.indexOf(match[1]) === -1) urls.push(match[1]);
+  }
+  return urls;
+}
+
+function stripBodyImage(html, url) {
+  if (!html || !url) return html || '';
+  const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Double-quoted patterns: a ['"] class inside a single-quoted JS string
+  // is a SyntaxError and used to kill preview + insert on this page.
+  const patterns = [
+    new RegExp("<table\\b[^>]*\\bdata-dp-body-image\\b[^>]*>[\\s\\S]*?<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][\\s\\S]*?</table>\\s*", "gi"),
+    new RegExp("<p\\b[^>]*>\\s*<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][^>]*>\\s*</p>\\s*", "gi"),
+    new RegExp("<img\\b[^>]*\\bsrc=[\"']" + escaped + "[\"'][^>]*>\\s*", "gi")
+  ];
+  patterns.forEach(function (re) {
+    html = html.replace(re, "");
+  });
+  return html;
+}
+
+function extractBodyImageHtml(html) {
+  const blocks = [];
+  const re = /<table\b[^>]*\bdata-dp-body-image\b[^>]*>[\s\S]*?<\/table>\s*|<p\b[^>]*>\s*<img\b[^>]*>\s*<\/p>\s*/gi;
+  let match;
+  while ((match = re.exec(html || ""))) {
+    blocks.push(match[0]);
+  }
+  return blocks.join("");
+}
+
+function htmlToMessageText(html) {
+  let text = html || "";
+  listBodyImageUrls(text).forEach(function (url) {
+    text = stripBodyImage(text, url);
+  });
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/p>/gi, "\n\n");
+  text = text.replace(/<\/div>/gi, "\n");
+  text = text.replace(/<[^>]+>/g, "");
+  const box = document.createElement("textarea");
+  box.innerHTML = text;
+  text = box.value;
+  return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function messageTextToHtml(text) {
+  text = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!text) return "";
+  return text.split(/\n\s*\n/).map(function (part) {
+    return "<p>" + escapeHtml(part).replace(/\n/g, "<br>") + "</p>";
+  }).join("\n") + "\n";
+}
+
+function syncPlainToHtml() {
+  const body = document.getElementById("id_html_body");
+  const plain = document.getElementById("plain-message");
+  if (!body || !plain) return;
+  body.value = messageTextToHtml(plain.value) + extractBodyImageHtml(body.value);
+}
+
+function fillPlainFromHtml() {
+  const body = document.getElementById("id_html_body");
+  const plain = document.getElementById("plain-message");
+  if (!body || !plain) return;
+  plain.value = htmlToMessageText(body.value);
+}
+
+function renderPreview() {
+  const subject = document.getElementById('id_subject')?.value || '';
+  const html = document.getElementById('id_html_body')?.value || '';
+  const headerUrl = document.getElementById('id_header_image_url')?.value || '';
+  const sample = {
+    name: "{{ preview_context.name|escapejs }}",
+    company_name: "{{ preview_context.company_name|escapejs }}",
+    senior_contact_name: "{{ preview_context.senior_contact_name|escapejs }}",
+    subject: subject
+  };
+  let renderedSubject = subject;
+  let renderedHtml = html;
+  Object.keys(sample).forEach(function (key) {
+    const re = new RegExp('\\{\\{\\s*' + key + '\\s*\\}\\}', 'g');
+    renderedSubject = renderedSubject.replace(re, sample[key]);
+    renderedHtml = renderedHtml.replace(re, sample[key]);
+  });
+  document.getElementById('preview-subject').textContent = renderedSubject || '(No subject)';
+  const iframe = document.getElementById('template-preview');
+  iframe.srcdoc = headerMarkup(headerUrl) + (renderedHtml || '<p class="text-muted">HTML preview will appear here.</p>');
+}
+
+function syncHeaderThumb() {
+  const img = document.getElementById('header-preview-img');
+  if (!img) return;
+  const w = headerDisplayWidth();
+  img.style.width = w + 'px';
+  img.style.maxWidth = w + 'px';
+  img.setAttribute('width', String(w));
+}
+
+function syncHeaderCard() {
+  const url = (document.getElementById('id_header_image_url') || {}).value || '';
+  const wrap = document.getElementById('header-preview-wrap');
+  const drop = document.getElementById('header-drop-wrap');
+  const replaceBtn = document.getElementById('replace-header');
+  if (wrap) wrap.style.display = url ? '' : 'none';
+  if (drop) drop.style.display = url ? 'none' : '';
+  if (replaceBtn) replaceBtn.style.display = url ? '' : 'none';
+}
+
+function setHeaderUrl(url, sourceUrl) {
+  const input = document.getElementById('id_header_image_url');
+  const source = document.getElementById('id_header_source_url');
+  const img = document.getElementById('header-preview-img');
+  const form = document.getElementById('template-form');
+  if (input) input.value = url || '';
+  if (source && sourceUrl !== undefined) source.value = sourceUrl || '';
+  if (form) {
+    form.setAttribute('data-header-url', url || '');
+    if (sourceUrl !== undefined) form.setAttribute('data-header-source', sourceUrl || '');
+  }
+  if (img) {
+    img.src = url || '';
+    if (url) img.setAttribute('src', url);
+  }
+  syncHeaderCard();
+  syncHeaderThumb();
+  renderPreview();
+}
+
+function bodyPlacement() {
+  const el = document.querySelector('input[name="body-image-place"]:checked');
+  return (el && el.value) || 'full';
+}
+
+function mergeToken(tag) {
+  return "{" + "{" + tag + "}" + "}";
+}
+
+function insertAtCursor(textarea, text, asBlock) {
+  const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+  const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : start;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  const prefix = asBlock && before && !before.endsWith('\n') ? '\n' : '';
+  const chunk = prefix + text;
+  textarea.value = before + chunk + after;
+  const pos = (before + chunk).length;
+  textarea.selectionStart = textarea.selectionEnd = pos;
+}
+
+function renderBodyImageList() {
+  const list = document.getElementById('body-images-list');
+  const body = document.getElementById('id_html_body');
+  if (!list || !body) return;
+  const urls = listBodyImageUrls(body.value);
+  if (!urls.length) {
+    list.innerHTML = '<p class="text-muted small mb-0">No pictures yet.</p>';
+    return;
+  }
+  list.innerHTML = urls.map(function (url, idx) {
+    return '<div class="d-flex align-items-center gap-2 mb-2" data-body-image="' + idx + '">'
+      + '<img src="' + url.replace(/"/g, '&quot;') + '" alt="" class="border rounded" style="width:72px;height:48px;object-fit:cover;">'
+      + '<button type="button" class="btn btn-sm btn-outline-danger js-remove-body-image" data-url="' + url.replace(/"/g, '&quot;') + '">Remove</button>'
+      + '</div>';
+  }).join('');
+}
+
+function persistAssets(payload) {
+  const form = document.getElementById('template-form');
+  const url = form && form.getAttribute('data-assets-url');
+  if (!url) return Promise.resolve(null);
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCSRFToken(),
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: JSON.stringify(payload)
+  }).then(function (resp) {
+    if (!resp.ok) throw new Error('Could not save image change');
+    return resp.json();
+  });
+}
+
+function proxyImageUrl(url) {
+  const form = document.getElementById('template-form');
+  const proxy = form && form.getAttribute('data-proxy-url');
+  if (!proxy || !url) return url;
+  return proxy + '?url=' + encodeURIComponent(url);
+}
+
+function insertBodyImageFromUpload(resp) {
+  const body = document.getElementById('id_html_body');
+  if (!body || !resp || !resp.url) return;
+  insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()), true);
+  const panel = document.getElementById('add-picture-panel');
+  if (panel) panel.style.display = 'none';
+  renderBodyImageList();
+  renderPreview();
+  persistAssets({ action: 'set_html_body', html_body: body.value }).catch(function (err) {
+    alert(err.message || 'Picture inserted in preview. Click Save template to keep it.');
+  });
+}
+
+function uploadEmailImage(file, extra, onSuccess) {
+  const input = document.querySelector('.dz-template-image, .dz-header-image');
+  const url = (input && input.getAttribute('data-upload-url')) || "{% url 'upload_attachment' %}";
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('folder', 'email_templates');
+  fd.append('email_fit', '1');
+  Object.keys(extra || {}).forEach(function (key) {
+    fd.append(key, extra[key]);
+  });
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCSRFToken() },
+    body: fd
+  }).then(function (resp) { return resp.json(); }).then(function (data) {
+    if (!data || !data.success || !data.url) {
+      throw new Error((data && data.error) || 'Upload finished but no URL was returned.');
+    }
+    onSuccess(data, file);
+  });
+}
+
+function initTemplateForm() {
+  let headerLocalSource = '';
+  let headerCropper = null;
+  let bodyDropzone = null;
+  let plainTouched = false;
+  const cropModalEl = document.getElementById('header-crop-modal');
+  let cropModal = null;
+  try {
+    cropModal = (window.bootstrap && cropModalEl) ? new bootstrap.Modal(cropModalEl) : null;
+  } catch (err) {
+    cropModal = null;
+  }
+
+  try {
+    fillPlainFromHtml();
+    syncHeaderCard();
+    renderPreview();
+    renderBodyImageList();
+    syncHeaderThumb();
+  } catch (err) {
+    console.error('Email template preview failed', err);
+  }
+
+  const plainEl = document.getElementById('plain-message');
+  let lastPlainPos = null;
+  function rememberPlainPos() {
+    if (!plainEl || document.activeElement !== plainEl) return;
+    if (typeof plainEl.selectionStart === 'number') {
+      lastPlainPos = plainEl.selectionStart;
+    }
+  }
+  function restorePlainPos() {
+    if (!plainEl) return;
+    const pos = lastPlainPos == null ? plainEl.value.length : lastPlainPos;
+    plainEl.focus();
+    plainEl.selectionStart = plainEl.selectionEnd = pos;
+  }
+  if (plainEl) {
+    ['keyup', 'mouseup', 'click', 'select', 'input'].forEach(function (evt) {
+      plainEl.addEventListener(evt, rememberPlainPos);
+    });
+    plainEl.addEventListener('input', function () {
+      plainTouched = true;
+      syncPlainToHtml();
+      renderPreview();
+      renderBodyImageList();
+    });
+  }
+  document.querySelectorAll('.js-insert-field').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const tag = btn.getAttribute('data-tag');
+      if (!tag || !plainEl) return;
+      restorePlainPos();
+      insertAtCursor(plainEl, mergeToken(tag));
+      lastPlainPos = plainEl.selectionStart;
+      plainEl.focus();
+      plainTouched = true;
+      syncPlainToHtml();
+      renderPreview();
+      renderBodyImageList();
+    });
+  });
+  const formEl = document.getElementById('template-form');
+  if (formEl) {
+    formEl.addEventListener('submit', function () {
+      if (plainTouched) syncPlainToHtml();
+    });
+  }
+
+  ['id_subject', 'id_html_body'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', function () {
+        if (id === 'id_html_body') {
+          if (!plainTouched) fillPlainFromHtml();
+          renderBodyImageList();
+        }
+        renderPreview();
+      });
+    }
+  });
+  const widthEl = document.getElementById('id_header_display_width');
+  if (widthEl) {
+    widthEl.addEventListener('change', function () {
+      syncHeaderThumb();
+      renderPreview();
+    });
+  }
+  const spaceEl = document.getElementById('id_header_space_below');
+  if (spaceEl) {
+    spaceEl.addEventListener('change', function () {
+      renderPreview();
+      persistAssets({
+        action: 'set_header_space',
+        header_space_below: headerSpaceBelow()
+      }).catch(function () {
+        /* New templates persist on Save. */
+      });
+    });
+  }
+  const refreshBtn = document.getElementById('refresh-preview');
+  if (refreshBtn) refreshBtn.addEventListener('click', renderPreview);
+
+  const clearHeader = document.getElementById('clear-header');
+  if (clearHeader) {
+    clearHeader.addEventListener('click', function () {
+      if (headerLocalSource) {
+        URL.revokeObjectURL(headerLocalSource);
+        headerLocalSource = '';
+      }
+      setHeaderUrl('', '');
+      persistAssets({ action: 'clear_header' }).catch(function (err) {
+        alert(err.message || 'Could not remove header.');
+      });
+    });
+  }
+
+  const bodyList = document.getElementById('body-images-list');
+  if (bodyList) {
+    bodyList.addEventListener('click', function (event) {
+      const btn = event.target.closest('.js-remove-body-image');
+      if (!btn) return;
+      const url = btn.getAttribute('data-url');
+      const body = document.getElementById('id_html_body');
+      if (!body) return;
+      body.value = stripBodyImage(body.value, url);
+      renderBodyImageList();
+      renderPreview();
+      persistAssets({ action: 'remove_body_image', url: url, html_body: body.value }).catch(function (err) {
+        alert(err.message || 'Could not remove picture.');
+      });
+    });
+  }
+
+  function destroyCropper() {
+    if (headerCropper) {
+      headerCropper.destroy();
+      headerCropper = null;
+    }
+  }
+
+  function startCropperWhenReady() {
+    const img = document.getElementById('header-crop-img');
+    if (!img) return;
+    if (!window.Cropper) {
+      alert('Cropper failed to load. Refresh the page and try again.');
+      return;
+    }
+    destroyCropper();
+    const boot = function () {
+      if (headerCropper) return;
+      headerCropper = new Cropper(img, {
+        aspectRatio: NaN,
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.8,
+        background: true,
+        modal: true,
+        guides: true,
+        highlight: true,
+        center: true,
+        movable: true,
+        zoomable: true,
+        scalable: false,
+        rotatable: false,
+        responsive: true,
+        restore: false,
+        checkCrossOrigin: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        ready: function () {
+          const box = headerCropper.getContainerData();
+          if (!box || !box.width || !box.height) return;
+          headerCropper.setCropBoxData({
+            left: box.width * 0.1,
+            top: box.height * 0.1,
+            width: box.width * 0.8,
+            height: box.height * 0.8
+          });
+        }
+      });
+    };
+    loadCropperImage(boot, function () {
+      alert('Could not load the header to reframe. Try Replace.');
+    });
+  }
+
+  function headerReframeRawUrls() {
+    const form = document.getElementById('template-form');
+    const sourceInput = document.getElementById('id_header_source_url');
+    const headerInput = document.getElementById('id_header_image_url');
+    const preview = document.getElementById('header-preview-img');
+    const urls = [];
+    if (headerLocalSource) urls.push(headerLocalSource);
+    [
+      sourceInput && sourceInput.value,
+      form && form.getAttribute('data-header-source'),
+      headerInput && headerInput.value,
+      form && form.getAttribute('data-header-url'),
+      preview && preview.getAttribute('src')
+    ].forEach(function (url) {
+      url = (url || '').trim();
+      if (url.indexOf('//') === 0) url = 'https:' + url;
+      if (url && url.indexOf('blob:') !== 0 && urls.indexOf(url) === -1) urls.push(url);
+    });
+    return urls;
+  }
+
+  function headerReframeCandidates() {
+    const out = [];
+    headerReframeRawUrls().forEach(function (url) {
+      if (url.indexOf('blob:') === 0 || url.indexOf('data:') === 0) {
+        out.push(url);
+        return;
+      }
+      const proxied = proxyImageUrl(url);
+      if (proxied && out.indexOf(proxied) === -1) out.push(proxied);
+      if (out.indexOf(url) === -1) out.push(url);
+    });
+    return out;
+  }
+
+  function loadCropperImage(done, fail) {
+    const img = document.getElementById('header-crop-img');
+    const candidates = headerReframeCandidates();
+    if (!img || !candidates.length) {
+      if (fail) fail();
+      return;
+    }
+    let i = 0;
+    const tryNext = function () {
+      if (i >= candidates.length) {
+        if (fail) fail();
+        return;
+      }
+      const src = candidates[i++];
+      if (src.indexOf('blob:') === 0 || src.indexOf('data:') === 0) {
+        img.onload = function () {
+          img.onload = img.onerror = null;
+          if (img.naturalWidth && done) done();
+          else tryNext();
+        };
+        img.onerror = tryNext;
+        img.src = src;
+        return;
+      }
+      fetch(src, { credentials: 'same-origin' }).then(function (resp) {
+        if (!resp.ok) throw new Error('bad image');
+        const type = (resp.headers.get('Content-Type') || '');
+        if (type && type.indexOf('image/') !== 0 && type.indexOf('octet-stream') === -1) {
+          throw new Error('not an image');
+        }
+        return resp.blob();
+      }).then(function (blob) {
+        if (!blob || !blob.size) throw new Error('empty image');
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = function () {
+          img.onload = img.onerror = null;
+          if (img.naturalWidth && done) done();
+          else tryNext();
+        };
+        img.onerror = tryNext;
+        img.src = objectUrl;
+      }).catch(tryNext);
+    };
+    tryNext();
+  }
+
+  function openCropper() {
+    if (!headerReframeRawUrls().length) {
+      alert('Upload a header image first.');
+      return;
+    }
+    destroyCropper();
+    if (cropModal) cropModal.show();
+    else startCropperWhenReady();
+  }
+
+  const reframeBtn = document.getElementById('reframe-header');
+  if (reframeBtn) reframeBtn.addEventListener('click', openCropper);
+  if (cropModalEl) {
+    cropModalEl.addEventListener('shown.bs.modal', startCropperWhenReady);
+    cropModalEl.addEventListener('hidden.bs.modal', destroyCropper);
+  }
+  const zoomIn = document.getElementById('header-zoom-in');
+  if (zoomIn) zoomIn.addEventListener('click', function () {
+    if (headerCropper) headerCropper.zoom(0.1);
+  });
+  const zoomOut = document.getElementById('header-zoom-out');
+  if (zoomOut) zoomOut.addEventListener('click', function () {
+    if (headerCropper) headerCropper.zoom(-0.1);
+  });
+  function persistHeaderFromUpload(data) {
+    const source = (document.getElementById('id_header_source_url') || {}).value || '';
+    setHeaderUrl(data.url, source);
+    return persistAssets({
+      action: 'set_header',
+      header_image_url: data.url,
+      header_source_url: source
+    });
+  }
+
+  function useFullHeader() {
+    const candidates = headerReframeCandidates();
+    if (!candidates.length) {
+      alert('Upload a header image first.');
+      return;
+    }
+    let i = 0;
+    const tryFetch = function () {
+      if (i >= candidates.length) {
+        alert('Could not use the full image.');
+        return;
+      }
+      const url = candidates[i++];
+      fetch(url).then(function (resp) {
+        if (!resp.ok) throw new Error('Could not load the original picture.');
+        return resp.blob();
+      }).then(function (blob) {
+        const file = new File([blob], 'header-full.jpg', { type: blob.type || 'image/jpeg' });
+        return uploadEmailImage(file, {
+          email_header: '1',
+          header_ready: '1',
+          source_url: (document.getElementById('id_header_source_url') || {}).value || ''
+        }, function (data) {
+          persistHeaderFromUpload(data).then(function () {
+            if (cropModal) cropModal.hide();
+          }).catch(function (err) {
+            alert(err.message || 'Could not save the full header.');
+          });
+        });
+      }).catch(tryFetch);
+    };
+    tryFetch();
+  }
+
+  ['header-use-full', 'header-use-full-card'].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', useFullHeader);
+  });
+  const applyCrop = document.getElementById('header-crop-apply');
+  if (applyCrop) {
+    applyCrop.addEventListener('click', function () {
+      if (!headerCropper) return;
+      const canvas = headerCropper.getCroppedCanvas({
+        maxWidth: 600,
+        maxHeight: 2000,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      });
+      if (!canvas) {
+        alert('Could not crop this image. Try uploading it again.');
+        return;
+      }
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          alert('Could not crop this image.');
+          return;
+        }
+        uploadEmailImage(blob, {
+          email_header: '1',
+          header_ready: '1',
+          source_url: (document.getElementById('id_header_source_url') || {}).value || ''
+        }, function (data) {
+          persistHeaderFromUpload(data).then(function () {
+            if (cropModal) cropModal.hide();
+          }).catch(function (err) {
+            alert(err.message || 'Could not save the cropped header.');
+          });
+        }).catch(function (err) {
+          alert(err.message || 'Could not save the cropped header.');
+        });
+      }, 'image/jpeg', 0.85);
+    });
+  }
+
+  const fileInput = document.getElementById('body-image-file');
+  const insertBtn = document.getElementById('insert-body-image-btn');
+  const addPanel = document.getElementById('add-picture-panel');
+  if (insertBtn) {
+    insertBtn.addEventListener('click', function () {
+      if (addPanel && addPanel.style.display === 'none') {
+        addPanel.style.display = '';
+        return;
+      }
+      if (bodyDropzone && bodyDropzone.hiddenFileInput) {
+        bodyDropzone.hiddenFileInput.click();
+        return;
+      }
+      if (fileInput) fileInput.click();
+    });
+  }
+  const replaceBtn = document.getElementById('replace-header');
+  const headerFile = document.getElementById('header-image-file');
+  if (replaceBtn && headerFile) {
+    replaceBtn.addEventListener('click', function () {
+      headerFile.click();
+    });
+  }
+  if (headerFile) {
+    headerFile.addEventListener('change', function () {
+      const file = headerFile.files && headerFile.files[0];
+      headerFile.value = '';
+      if (!file) return;
+      uploadEmailImage(file, { email_header: '1' }, function (data, uploaded) {
+        if (headerLocalSource) URL.revokeObjectURL(headerLocalSource);
+        try {
+          headerLocalSource = uploaded ? URL.createObjectURL(uploaded) : '';
+        } catch (err) {
+          headerLocalSource = '';
+        }
+        setHeaderUrl(data.url, data.source_url || '');
+        persistAssets({
+          action: 'set_header',
+          header_image_url: data.url,
+          header_source_url: data.source_url || ''
+        }).catch(function (err) {
+          alert(err.message || 'Header is in the preview. Click Save template to keep it.');
+        });
+      }).catch(function (err) {
+        alert(err.message || 'Image upload failed.');
+      });
+    });
+  }
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      uploadEmailImage(file, {}, function (data) {
+        insertBodyImageFromUpload(data);
+      }).catch(function (err) {
+        alert(err.message || 'Image upload failed.');
+      });
+    });
+  }
+
+  try {
+    if (window.Dropzone) Dropzone.autoDiscover = false;
+    const CSRF = getCSRFToken();
+
+    function emailImageDropzone(selector, onSuccess) {
+      const zones = [];
+      document.querySelectorAll(selector).forEach(function (el) {
+        const url = el.getAttribute('data-upload-url');
+        const dz = new Dropzone(el, {
+          url: url,
+          headers: { 'X-CSRFToken': CSRF },
+          paramName: 'file',
+          acceptedFiles: 'image/*',
+          maxFilesize: 8,
+          init: function () {
+            this.on('sending', function (file, xhr, formData) {
+              formData.append('folder', 'email_templates');
+              formData.append('email_fit', '1');
+              if (selector === '.dz-header-image') {
+                formData.append('email_header', '1');
+              }
+            });
+            this.on('success', function (file, resp) {
+              if (resp && resp.success && resp.url) {
+                onSuccess(resp, file);
+              } else {
+                alert('Upload finished but no URL was returned.');
+              }
+              this.removeFile(file);
+            });
+            this.on('error', function (file, message) {
+              alert(typeof message === 'string' ? message : 'Image upload failed.');
+              this.removeFile(file);
+            });
+          }
+        });
+        zones.push(dz);
+      });
+      return zones[0] || null;
+    }
+
+    bodyDropzone = emailImageDropzone('.dz-template-image', function (resp) {
+      insertBodyImageFromUpload(resp);
+    });
+
+    emailImageDropzone('.dz-header-image', function (resp, file) {
+      if (headerLocalSource) URL.revokeObjectURL(headerLocalSource);
+      try {
+        headerLocalSource = file ? URL.createObjectURL(file) : '';
+      } catch (err) {
+        headerLocalSource = '';
+      }
+      setHeaderUrl(resp.url, resp.source_url || '');
+      persistAssets({
+        action: 'set_header',
+        header_image_url: resp.url,
+        header_source_url: resp.source_url || ''
+      }).catch(function (err) {
+        alert(err.message || 'Header is in the preview. Click Save template to keep it.');
+      });
+    });
+  } catch (err) {
+    console.error('Email template dropzone failed', err);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTemplateForm);
+} else {
+  initTemplateForm();
+}
+</script>
+{% endblock %}

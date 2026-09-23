@@ -1,21 +1,25 @@
 {% load crispy_forms_tags %}
 {% load static %}
 
-<div x-data="emailComposer()" x-init="init()" class="container my-4">
+<style>
+  .comms-email-form { max-width: 640px; }
+  .comms-mode-toggle .btn { min-width: 7.25rem; }
+  .comms-manage-link { color: #6c757d; text-decoration: none; white-space: nowrap; }
+  .comms-manage-link:hover { color: #0d6efd; text-decoration: underline; }
+</style>
+<div x-data="emailComposer()" x-init="init()" class="comms-email-form py-3">
   {% if draft_id %}<input type="hidden" id="draft-id" value="{{ draft_id }}">{% endif %}
   <input type="hidden" id="uploaded_file_urls" value='{{ attachment_urls|default:"[]"|safe }}'>
 
-  <!-- Mode toggle -->
-  <fieldset class="mb-3">
-    <label class="me-3">
-      <input type="radio" name="mode" id="email_mode_template" value="template" x-model="mode">
-      Use Prebuilt Template
-    </label>
-    <label>
-      <input type="radio" name="mode" id="email_mode_text" value="text" x-model="mode">
-      Compose Message
-    </label>
-  </fieldset>
+  <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+    <div class="btn-group comms-mode-toggle" role="group" aria-label="Email mode">
+      <input type="radio" class="btn-check" name="mode" id="email_mode_template" value="template" autocomplete="off" x-model="mode">
+      <label class="btn btn-outline-secondary btn-sm" for="email_mode_template">Use template</label>
+      <input type="radio" class="btn-check" name="mode" id="email_mode_text" value="text" autocomplete="off" x-model="mode">
+      <label class="btn btn-outline-secondary btn-sm" for="email_mode_text">Write message</label>
+    </div>
+    <a href="{% url 'email_template_list' %}" class="small comms-manage-link">Manage templates</a>
+  </div>
 
   <!-- Compose section -->
   <div x-show="mode === 'text'" id="compose-email-section" class="mb-4">
@@ -66,23 +70,43 @@
     </div>
 
     <!-- Compose fields -->
-    <label>Subject</label>
-    <input type="text" x-model="form.subject" class="form-control mb-2">
+    <label>Subject <span class="text-danger">*</span></label>
+    <input type="text" x-model="form.subject" class="form-control mb-2" required
+           placeholder="Subject is required" maxlength="255">
     <label>Message</label>
     <textarea x-model="form.message" class="form-control" rows="6"></textarea>
+    <div class="mt-3" x-show="form.subject || form.message">
+      <div class="fw-semibold small mb-1">Preview</div>
+      <div class="small text-muted mb-1" x-text="form.subject || '(No subject)'"></div>
+      <div class="border rounded bg-white p-2 small"
+           style="min-height: 80px; max-height: 200px; overflow:auto; white-space: pre-wrap;"
+           x-text="form.message || ''"></div>
+      <div class="text-muted small mt-1">
+        Logged as Compose (one-off). Sent through SendGrid using the generic wrapper template.
+      </div>
+    </div>
   </div>
 
   <!-- Template section -->
   <div x-show="mode === 'template'" id="template-email-section" class="mb-4">
-    <label>Select Template</label>
-    <select x-model="form.templateId" class="form-select" id="template-select">
+    <div class="mb-2">
+      <label class="mb-0">Select template</label>
+    </div>
+    <select x-model="form.templateId" class="form-select" id="template-select" @change="onTemplateChange()">
     <option value="">-- Choose a template --</option>
     {% for value, label in email_form.fields.sendgrid_id.choices %}
       {% if value %}
         <option value="{{ value }}">{{ label }}</option>
       {% endif %}
     {% endfor %}
-  </select>
+    </select>
+    <div class="mt-3" x-show="form.templateId">
+      <label>Subject <span class="text-muted small">(override optional)</span></label>
+      <input type="text" x-model="form.subject" class="form-control mb-2" placeholder="Uses the template subject if left blank">
+      <div class="fw-semibold small mb-1">Preview</div>
+      <div class="small text-muted mb-1" x-text="previewSubject || 'Select a template to preview'"></div>
+      <div class="border rounded bg-white p-2" style="min-height: 140px; max-height: 280px; overflow:auto;" x-html="previewHtml"></div>
+    </div>
   </div>
 
   <!-- Group (EMAIL) -->
@@ -168,6 +192,9 @@ function emailComposer() {
     form: { subject: '', message: '', templateId: '', groupId: '' },
     templates: [],
     groups:    [],
+    previewSubject: '',
+    previewHtml: '',
+    templateMeta: JSON.parse('{{ email_templates_meta|default:"[]"|escapejs }}'),
 
     init() {
       const subj = "{{ draft.subject|default:''|escapejs }}";
@@ -184,6 +211,34 @@ function emailComposer() {
 
       // If editing a draft, default to compose mode
       this.mode = mode || (hasDraft ? 'text' : 'template');
+      if (this.form.templateId) this.onTemplateChange();
+    },
+
+    templateById(id) {
+      return (this.templateMeta || []).find(t => String(t.id) === String(id));
+    },
+
+    async onTemplateChange() {
+      if (!this.form.templateId) {
+        this.previewSubject = '';
+        this.previewHtml = '';
+        return;
+      }
+      const meta = this.templateById(this.form.templateId);
+      if (meta && meta.subject && !this.form.subject) {
+        this.form.subject = meta.subject;
+      }
+      try {
+        const res = await fetch(`/comms/templates/${this.form.templateId}/preview/`);
+        const data = await res.json();
+        this.previewSubject = data.subject || meta?.subject || '';
+        this.previewHtml = data.html || '<p class="text-muted">No in-app HTML to preview.</p>';
+        if (!this.form.subject && this.previewSubject) {
+          this.form.subject = this.previewSubject;
+        }
+      } catch (e) {
+        this.previewHtml = '<p class="text-muted">Preview unavailable.</p>';
+      }
     },
 
     // collect selected user IDs from the checkbox list
@@ -236,6 +291,16 @@ function emailComposer() {
     },
 
     submit() {
+      if (this.mode === 'text') {
+        if (!String(this.form.subject || '').trim()) {
+          alert('Subject is required.');
+          return;
+        }
+        if (!String(this.form.message || '').trim()) {
+          alert('Message is required.');
+          return;
+        }
+      }
       // fill hidden form
       document.getElementById('send-email_mode').value = this.mode;
       document.getElementById('send-subject').value    = this.form.subject;
