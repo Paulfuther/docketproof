@@ -41,6 +41,7 @@ from arl.msg.email_utils import (
     EMAIL_SOURCE_SENDGRID,
     get_generic_sendgrid_template_id,
     IN_APP_MERGE_FIELDS,
+    parse_app_template_id,
     prepare_email_image,
     prepare_header_image,
     prepare_header_source_image,
@@ -378,11 +379,15 @@ def communications(request):
         email_log_qs = email_log_qs.filter(event=log_status)
 
     if log_template:
-        email_log_qs = email_log_qs.filter(
+        template_q = (
             Q(sg_template_id__icontains=log_template)
             | Q(sg_template_name__icontains=log_template)
             | Q(source__icontains=log_template)
-        )   
+        )
+        app_pk = parse_app_template_id(log_template)
+        if app_pk:
+            template_q |= Q(app_template_id=app_pk)
+        email_log_qs = email_log_qs.filter(template_q) 
 
     email_timeline = (
         email_log_qs

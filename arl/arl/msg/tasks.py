@@ -38,8 +38,10 @@ from arl.msg.email_utils import (
     email_identity,
     extract_sendgrid_event_meta,
     get_generic_sendgrid_template_id,
+    logged_template_key,
     render_merge_fields,
     resolve_email_subject,
+    resolve_stored_template_name,
 )
 from arl.setup.models import TenantApiKeys
 from arl.user.models import SMSOptOut, EmployerSMSTask, NewHireInvite
@@ -237,7 +239,7 @@ def master_email_send_task(
             EmailLog.objects.create(
                 employer=employer,
                 sender_email=verified_sender or "",
-                template_id=(identity["sendgrid_id"] or "")[:100],
+                template_id=(identity.get("template_key") or identity["sendgrid_id"] or "")[:100],
                 template_name=identity["template_name"],
                 source=identity["source"],
                 subject=raw_subject,
@@ -981,11 +983,17 @@ def process_sendgrid_webhook(payload):
             sg_event_id = event_data.get("sg_event_id", "")
             sg_message_id = event_data.get("sg_message_id", "")
             meta = extract_sendgrid_event_meta(event_data)
-            sg_template_id = meta.get("sendgrid_id") or ""
-            sg_template_name = meta.get("template_name") or ""
             subject = meta.get("subject")
             event_source = meta.get("source") or ""
             app_template_id = meta.get("app_template_id")
+            sg_template_name = resolve_stored_template_name(
+                meta.get("template_name"), app_template_id
+            )
+            sg_template_id = logged_template_key(
+                event_source,
+                sendgrid_id=meta.get("sendgrid_id"),
+                app_template_id=app_template_id,
+            )
             event = event_data.get("event", "")
             timestamp = timezone.datetime.fromtimestamp(
                 event_data.get("timestamp", 0), tz=timezone.utc

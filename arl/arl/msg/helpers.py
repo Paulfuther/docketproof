@@ -173,7 +173,14 @@ def create_master_email(
             for key, value in custom_args.items():
                 if value is None:
                     continue
-                personalization.add_custom_arg(CustomArg(str(key), str(value)))
+                arg = CustomArg(str(key), str(value))
+                personalization.add_custom_arg(arg)
+                # Mail-level copy so Event Webhook still sees args when
+                # SendGrid drops personalization unique_args on html_content.
+                try:
+                    message.add_custom_arg(CustomArg(str(key), str(value)))
+                except Exception:
+                    pass
 
         message.add_personalization(personalization)
 

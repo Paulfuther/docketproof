@@ -113,6 +113,38 @@ def logged_sendgrid_id(source, sendgrid_id=None):
     return sid
 
 
+def logged_template_key(source, sendgrid_id=None, app_template_id=None):
+    """Id shown in Email Log: SendGrid id, else the in-app EmailTemplate pk."""
+    sid = logged_sendgrid_id(source, sendgrid_id)
+    if sid:
+        return sid
+    pk = parse_app_template_id(app_template_id)
+    if pk:
+        return str(pk)
+    return ""
+
+
+def resolve_stored_template_name(name=None, app_template_id=None):
+    """Fill a missing log name from EmailTemplate when we have the app pk."""
+    name = (name or "").strip()
+    if name:
+        return name
+    pk = parse_app_template_id(app_template_id)
+    if not pk:
+        return ""
+    try:
+        from arl.msg.models import EmailTemplate
+
+        found = (
+            EmailTemplate.objects.filter(pk=pk)
+            .values_list("name", flat=True)
+            .first()
+        )
+    except Exception:
+        return ""
+    return (found or "").strip()
+
+
 def parse_app_template_id(value):
     if value in (None, ""):
         return None
@@ -137,11 +169,15 @@ def email_identity(
         resolved_source, template_name=template_name, sendgrid_id=sendgrid_id
     )
     sid = logged_sendgrid_id(resolved_source, sendgrid_id=sendgrid_id)
+    pk = parse_app_template_id(app_template_id)
     return {
         "source": resolved_source,
         "template_name": name,
         "sendgrid_id": sid,
-        "app_template_id": parse_app_template_id(app_template_id),
+        "app_template_id": pk,
+        "template_key": logged_template_key(
+            resolved_source, sendgrid_id=sendgrid_id, app_template_id=pk
+        ),
     }
 
 

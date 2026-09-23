@@ -73,6 +73,24 @@ class EmailEvent(models.Model):
     def source_label(self):
         return email_source_label(self.source, sendgrid_id=self.sg_template_id)
 
+    @property
+    def display_template_name(self):
+        name = (self.sg_template_name or "").strip()
+        if name:
+            return name
+        from arl.msg.email_utils import resolve_stored_template_name
+
+        return resolve_stored_template_name(app_template_id=self.app_template_id)
+
+    @property
+    def display_template_id(self):
+        sid = (self.sg_template_id or "").strip()
+        if sid:
+            return sid
+        if self.app_template_id:
+            return str(self.app_template_id)
+        return ""
+
     class Meta:
         ordering = ["-timestamp"]
 

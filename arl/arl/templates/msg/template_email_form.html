@@ -1,21 +1,25 @@
 {% load crispy_forms_tags %}
 {% load static %}
 
-<div x-data="emailComposer()" x-init="init()" class="container my-4">
+<style>
+  .comms-email-form { max-width: 640px; }
+  .comms-mode-toggle .btn { min-width: 7.25rem; }
+  .comms-manage-link { color: #6c757d; text-decoration: none; white-space: nowrap; }
+  .comms-manage-link:hover { color: #0d6efd; text-decoration: underline; }
+</style>
+<div x-data="emailComposer()" x-init="init()" class="comms-email-form py-3">
   {% if draft_id %}<input type="hidden" id="draft-id" value="{{ draft_id }}">{% endif %}
   <input type="hidden" id="uploaded_file_urls" value='{{ attachment_urls|default:"[]"|safe }}'>
 
-  <!-- Mode toggle -->
-  <fieldset class="mb-3">
-    <label class="me-3">
-      <input type="radio" name="mode" id="email_mode_template" value="template" x-model="mode">
-      Use Prebuilt Template
-    </label>
-    <label>
-      <input type="radio" name="mode" id="email_mode_text" value="text" x-model="mode">
-      Compose Message
-    </label>
-  </fieldset>
+  <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+    <div class="btn-group comms-mode-toggle" role="group" aria-label="Email mode">
+      <input type="radio" class="btn-check" name="mode" id="email_mode_template" value="template" autocomplete="off" x-model="mode">
+      <label class="btn btn-outline-secondary btn-sm" for="email_mode_template">Use template</label>
+      <input type="radio" class="btn-check" name="mode" id="email_mode_text" value="text" autocomplete="off" x-model="mode">
+      <label class="btn btn-outline-secondary btn-sm" for="email_mode_text">Write message</label>
+    </div>
+    <a href="{% url 'email_template_list' %}" class="small comms-manage-link">Manage templates</a>
+  </div>
 
   <!-- Compose section -->
   <div x-show="mode === 'text'" id="compose-email-section" class="mb-4">
@@ -85,9 +89,8 @@
 
   <!-- Template section -->
   <div x-show="mode === 'template'" id="template-email-section" class="mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <label class="mb-0">Select Template</label>
-      <a href="{% url 'email_template_list' %}" class="small">Manage templates</a>
+    <div class="mb-2">
+      <label class="mb-0">Select template</label>
     </div>
     <select x-model="form.templateId" class="form-select" id="template-select" @change="onTemplateChange()">
     <option value="">-- Choose a template --</option>

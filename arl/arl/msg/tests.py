@@ -31,6 +31,8 @@ from arl.msg.email_utils import (
     IN_APP_MERGE_FIELDS,
     email_identity,
     extract_sendgrid_event_meta,
+    logged_template_key,
+    resolve_stored_template_name,
     extract_sendgrid_event_subject,
     in_app_merge_field_tags,
     list_body_image_urls,
@@ -198,6 +200,11 @@ class EmailUtilsTests(TestCase):
         self.assertEqual(identity["template_name"], "Welcome")
         self.assertEqual(identity["sendgrid_id"], "")
         self.assertEqual(identity["app_template_id"], 9)
+        self.assertEqual(identity["template_key"], "9")
+        self.assertEqual(
+            logged_template_key(EMAIL_SOURCE_IN_APP, sendgrid_id="", app_template_id=9),
+            "9",
+        )
 
     def test_prepare_email_image_caps_width_and_keeps_aspect(self):
         img = Image.new("RGB", (1200, 800), color=(200, 10, 10))
@@ -473,7 +480,7 @@ class EmailLogSubjectTests(TestCase):
         self.assertEqual(log.subject, "Hi {{name}}")
         self.assertEqual(log.source, EMAIL_SOURCE_IN_APP)
         self.assertEqual(log.template_name, "Welcome")
-        self.assertEqual(log.template_id, "")
+        self.assertEqual(log.template_id, "17")
 
     def test_webhook_stores_subject_from_unique_args(self):
         payload = [
@@ -540,9 +547,74 @@ class EmailLogSubjectTests(TestCase):
         event = EmailEvent.objects.get(sg_event_id="evt-in-app-1")
         self.assertEqual(event.subject, "Please read")
         self.assertEqual(event.sg_template_name, "Policy update")
-        self.assertEqual(event.sg_template_id, "")
+        self.assertEqual(event.sg_template_id, "99")
         self.assertEqual(event.source, EMAIL_SOURCE_IN_APP)
         self.assertEqual(event.app_template_id, 99)
+        self.assertEqual(event.display_template_name, "Policy update")
+        self.assertEqual(event.display_template_id, "99")
+
+    def test_webhook_in_app_looks_up_name_from_app_template_id(self):
+        template = EmailTemplate.objects.create(
+            name="Store huddle",
+            subject="Huddle",
+            html_body="<p>Hi</p>",
+        )
+        payload = [
+            {
+                "email": "pat@example.com",
+                "event": "delivered",
+                "sg_event_id": "evt-in-app-lookup",
+                "sg_message_id": "msg-in-app-lookup",
+                "timestamp": int(timezone.now().timestamp()),
+                "unique_args": {
+                    "subject": "Huddle",
+                    "source": EMAIL_SOURCE_IN_APP,
+                    "app_template_id": str(template.pk),
+                },
+            }
+        ]
+        process_sendgrid_webhook.run(payload)
+        event = EmailEvent.objects.get(sg_event_id="evt-in-app-lookup")
+        self.assertEqual(event.sg_template_name, "Store huddle")
+        self.assertEqual(event.sg_template_id, str(template.pk))
+        self.assertEqual(event.app_template_id, template.pk)
+        self.assertEqual(event.subject, "Huddle")
+        self.assertEqual(
+            resolve_stored_template_name(app_template_id=template.pk),
+            "Store huddle",
+        )
+
+    def test_email_event_display_falls_back_to_app_template(self):
+        template = EmailTemplate.objects.create(
+            name="Fallback name",
+            subject="Hi",
+            html_body="<p>Hi</p>",
+        )
+        event = EmailEvent.objects.create(
+            email="pat@example.com",
+            event="delivered",
+            ip="127.0.0.1",
+            sg_event_id="evt-display-1",
+            sg_message_id="msg-display-1",
+            sg_template_id="",
+            sg_template_name="",
+            source=EMAIL_SOURCE_IN_APP,
+            app_template_id=template.pk,
+            timestamp=timezone.now(),
+            url="",
+        )
+        self.assertEqual(event.display_template_name, "Fallback name")
+        self.assertEqual(event.display_template_id, str(template.pk))
+
+    def test_email_log_template_uses_display_fields(self):
+        html = (
+            Path(__file__).resolve().parent.parent
+            / "templates"
+            / "msg"
+            / "email_log.html"
+        ).read_text()
+        self.assertIn("display_template_name", html)
+        self.assertIn("display_template_id", html)
 
     def test_webhook_old_event_without_unique_args_is_not_compose(self):
         payload = [
@@ -791,8 +863,13 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("{% url 'email_template_list' %}", comms)
         self.assertEqual(comms.count('data-title="Manage templates"'), 2)
         self.assertIn("Manage templates", send_form)
-        self.assertIn("Use Prebuilt Template", send_form)
-        self.assertIn("Compose Message", send_form)
+        self.assertIn("Use template", send_form)
+        self.assertIn("Write message", send_form)
+        self.assertNotIn("Use Prebuilt Template", send_form)
+        self.assertNotIn("Compose Message", send_form)
+        self.assertIn("comms-mode-toggle", send_form)
+        self.assertIn("comms-manage-link", send_form)
+        self.assertEqual(send_form.count("Manage templates"), 1)
         self.assertIn("{% url 'email_template_list' %}", send_form)
 
     def test_preview_renders_merge_fields(self):
