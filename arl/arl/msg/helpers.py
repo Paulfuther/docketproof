@@ -13,14 +13,19 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Asm,
     Attachment,
+    ClickTracking,
+    Content,
     ContentId,
+    CustomArg,
     Disposition,
     FileContent,
     FileName,
     FileType,
     Mail,
+    OpenTracking,
     Personalization,
     To,
+    TrackingSettings,
 )
 from twilio.base.exceptions import TwilioException
 from twilio.rest import Client
@@ -80,7 +85,13 @@ def create_tobacco_email(to_email, name):
 # And the onbording of a new hire.
 # This will be the master function going forward.
 def create_master_email(
-    to_email, sendgrid_id, template_data, attachments=None, verified_sender=None
+    to_email,
+    sendgrid_id,
+    template_data,
+    attachments=None,
+    verified_sender=None,
+    custom_args=None,
+    html_content=None,
 ):
     try:
         unsubscribe_group_id = 24753
@@ -126,7 +137,21 @@ def create_master_email(
         )
 
         logger.info(f"📜 Email Template Data: {template_data}")
-        message.template_id = sendgrid_id
+        # In-app HTML is sent as content; SendGrid is transport only.
+        # Legacy dynamic templates still use template_id.
+        if html_content:
+            if template_data.get("subject"):
+                message.subject = template_data["subject"]
+            message.add_content(Content("text/html", html_content))
+            # Dynamic templates inherit account/template click tracking.
+            # Raw HTML does not, so enable it here so in-app audit/engagement
+            # events still reach the webhook.
+            tracking = TrackingSettings()
+            tracking.click_tracking = ClickTracking(enable=True, enable_text=False)
+            tracking.open_tracking = OpenTracking(enable=True)
+            message.tracking_settings = tracking
+        elif sendgrid_id:
+            message.template_id = sendgrid_id
         asm = Asm(
             group_id=unsubscribe_group_id,
         )
@@ -136,10 +161,26 @@ def create_master_email(
         personalization = Personalization()
         for email in to_email:
             personalization.add_to(To(email))
-        personalization.dynamic_template_data = template_data
+        if not html_content:
+            personalization.dynamic_template_data = template_data
 
-        if "subject" in template_data:
+        if template_data.get("subject"):
             personalization.subject = template_data["subject"]
+
+        # Unique args so Event Webhook payloads include the resolved subject
+        # (SendGrid does not always send a native `subject` field for templates).
+        if custom_args:
+            for key, value in custom_args.items():
+                if value is None:
+                    continue
+                arg = CustomArg(str(key), str(value))
+                personalization.add_custom_arg(arg)
+                # Mail-level copy so Event Webhook still sees args when
+                # SendGrid drops personalization unique_args on html_content.
+                try:
+                    message.add_custom_arg(CustomArg(str(key), str(value)))
+                except Exception:
+                    pass
 
         message.add_personalization(personalization)
 
@@ -1065,13 +1106,23 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
 
 
 def send_quick_email(user, recipients, subject, message, attachment_urls):
+    from arl.msg.email_utils import (
+        COMPOSE_TEMPLATE_NAME,
+        EMAIL_SOURCE_COMPOSE,
+        get_generic_sendgrid_template_id,
+        resolve_email_subject,
+    )
     from .tasks import master_email_send_task
 
     master_email_send_task.delay(
         recipients=recipients,
-        sendgrid_id="d-4ac0497efd864e29b4471754a9c836eb",  # Fallback SendGrid ID
+        sendgrid_id=get_generic_sendgrid_template_id(),
         employer_id=user.employer.id,
         body=message,
-        subject=subject,
+        subject=resolve_email_subject(
+            subject=subject, employer=getattr(user, "employer", None)
+        ),
         attachment_urls=attachment_urls,
+        template_name=COMPOSE_TEMPLATE_NAME,
+        source=EMAIL_SOURCE_COMPOSE,
     )

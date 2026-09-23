@@ -253,6 +253,131 @@ class StoreTargetForm(forms.ModelForm):
         self.fields["number"].label = "Store Number"
 
 
+class EmailTemplateForm(forms.ModelForm):
+    class Meta:
+        model = EmailTemplate
+        fields = [
+            "name",
+            "subject",
+            "header_image_url",
+            "header_source_url",
+            "header_display_width",
+            "header_space_below",
+            "html_body",
+            "include_in_report",
+        ]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Template name"}
+            ),
+            "subject": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. Welcome to {{company_name}}",
+                }
+            ),
+            "header_image_url": forms.HiddenInput(),
+            "header_source_url": forms.HiddenInput(),
+            "header_display_width": forms.Select(attrs={"class": "form-select"}),
+            "header_space_below": forms.Select(attrs={"class": "form-select"}),
+            "html_body": forms.Textarea(
+                attrs={
+                    "class": "form-control font-monospace",
+                    "rows": 10,
+                    "placeholder": "<p>Hello {{name}}</p>",
+                }
+            ),
+            "include_in_report": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+        }
+        labels = {
+            "include_in_report": "Include in compliance audit",
+            "header_display_width": "Header size",
+            "header_space_below": "Space under header",
+            "html_body": "HTML",
+        }
+        help_texts = {
+            "name": "Shown in the Communications template picker.",
+            "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
+            "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
+            "header_source_url": "Original photo used only to reframe the header. Not shown in the email.",
+            "header_display_width": "How wide the top picture looks.",
+            "header_space_below": "How much empty room sits between the top picture and your words.",
+            "html_body": "Raw email HTML. Most people can leave this closed.",
+            "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from arl.msg.email_utils import (
+            EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+            EMAIL_HEADER_SPACE_DEFAULT,
+        )
+
+        self.fields["header_display_width"].required = False
+        self.fields["header_display_width"].initial = EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+        self.fields["header_space_below"].required = False
+        self.fields["header_space_below"].initial = EMAIL_HEADER_SPACE_DEFAULT
+        for name in (
+            "name",
+            "subject",
+            "header_display_width",
+            "header_space_below",
+            "include_in_report",
+            "html_body",
+        ):
+            self.fields[name].help_text = ""
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError("Name is required.")
+        return name
+
+    def clean_subject(self):
+        subject = (self.cleaned_data.get("subject") or "").strip()
+        if not subject:
+            raise forms.ValidationError("Subject is required.")
+        return subject
+
+    def clean_html_body(self):
+        html_body = (self.cleaned_data.get("html_body") or "").strip()
+        if not html_body:
+            raise forms.ValidationError("HTML body is required.")
+        return html_body
+
+    def clean_header_image_url(self):
+        return (self.cleaned_data.get("header_image_url") or "").strip()
+
+    def clean_header_source_url(self):
+        return (self.cleaned_data.get("header_source_url") or "").strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        header = (cleaned.get("header_image_url") or "").strip()
+        source = (cleaned.get("header_source_url") or "").strip()
+        if not header:
+            cleaned["header_source_url"] = ""
+        elif not source and getattr(self.instance, "pk", None):
+            cleaned["header_source_url"] = (
+                getattr(self.instance, "header_source_url", None) or ""
+            ).strip()
+        return cleaned
+
+    def clean_header_display_width(self):
+        from arl.msg.email_utils import resolve_header_display_width
+
+        return resolve_header_display_width(
+            self.cleaned_data.get("header_display_width")
+        )
+
+    def clean_header_space_below(self):
+        from arl.msg.email_utils import resolve_header_space_below
+
+        return resolve_header_space_below(self.cleaned_data.get("header_space_below"))
+
+
 class EmailForm(forms.Form):
     MODE_CHOICES = [
         ("text", "Write Custom Message"),
@@ -271,7 +396,12 @@ class EmailForm(forms.Form):
         max_length=255,
         required=False,
         label="Email Subject",
-        widget=forms.TextInput(attrs={"placeholder": "Enter a subject..."}),
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "Enter a subject...",
+                "class": "form-control",
+            }
+        ),
     )
 
     message = forms.CharField(
@@ -325,6 +455,9 @@ class EmailForm(forms.Form):
                 )
                 .distinct()
                 .order_by("name")
+            )
+            self.fields["sendgrid_id"].label_from_instance = lambda t: (
+                t.name or f"Template {t.pk}"
             )
 
             self.fields["selected_group"].queryset = (
@@ -380,9 +513,11 @@ class EmailForm(forms.Form):
 
         # Validate mode-based inputs
         if mode == "text":
+            subject = (subject or "").strip()
+            cleaned_data["subject"] = subject
             if not subject or not message:
                 raise forms.ValidationError(
-                    "Subject and message are required for text mode."
+                    "Subject and message are required for compose (one-off) emails."
                 )
         elif mode == "template":
             if not sendgrid_id:
