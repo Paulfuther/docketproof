@@ -297,6 +297,19 @@ def resolve_email_subject(subject=None, template=None, employer=None):
     return "New Message from Our Company"
 
 
+# Keys actually filled by master_email_send_task / sample_preview_context.
+# Do not add store or CustomUser columns that the send path does not substitute.
+IN_APP_MERGE_FIELDS = [
+    {"group": "Person", "label": "Employee name", "tag": "name"},
+    {"group": "Company", "label": "Company name", "tag": "company_name"},
+    {"group": "Company", "label": "Company contact", "tag": "senior_contact_name"},
+]
+
+
+def in_app_merge_field_tags():
+    return [field["tag"] for field in IN_APP_MERGE_FIELDS]
+
+
 def sample_preview_context(user=None, employer=None):
     employer = employer or getattr(user, "employer", None)
     name = ""

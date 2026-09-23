@@ -40,6 +40,7 @@ from arl.msg.email_utils import (
     EMAIL_SOURCE_IN_APP,
     EMAIL_SOURCE_SENDGRID,
     get_generic_sendgrid_template_id,
+    IN_APP_MERGE_FIELDS,
     prepare_email_image,
     prepare_header_image,
     prepare_header_source_image,
@@ -1208,7 +1209,12 @@ def email_template_create(request):
     return render(
         request,
         "msg/email_template_form.html",
-        {"form": form, "template": None, "preview_context": sample_preview_context(request.user)},
+        {
+            "form": form,
+            "template": None,
+            "preview_context": sample_preview_context(request.user),
+            "merge_fields": IN_APP_MERGE_FIELDS,
+        },
     )
 
 
@@ -1238,6 +1244,7 @@ def email_template_edit(request, pk):
             "form": form,
             "template": template,
             "preview_context": sample_preview_context(request.user),
+            "merge_fields": IN_APP_MERGE_FIELDS,
         },
     )
 

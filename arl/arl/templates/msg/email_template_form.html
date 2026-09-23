@@ -20,7 +20,10 @@
     <div class="col-12 col-xl-11">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">{% if template %}{{ template.name }}{% else %}New email template{% endif %}</h3>
-        <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">All templates</a>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary" href="{% url 'comms' %}?tab=email">Back to Comms</a>
+          <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">All templates</a>
+        </div>
       </div>
 
       {% for message in messages %}
@@ -50,7 +53,30 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label" for="plain-message">Message</label>
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0" for="plain-message">Message</label>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                          id="insert-field-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                    Insert field
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="insert-field-btn">
+                    {% regroup merge_fields by group as field_groups %}
+                    {% for group in field_groups %}
+                      <li><h6 class="dropdown-header">{{ group.grouper }}</h6></li>
+                      {% for field in group.list %}
+                        <li>
+                          <button type="button" class="dropdown-item js-insert-field"
+                                  data-tag="{{ field.tag }}">{{ field.label }}</button>
+                        </li>
+                      {% endfor %}
+                    {% empty %}
+                      <li><span class="dropdown-item-text text-muted">No fields</span></li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              </div>
+              <p class="small text-muted mb-2">These fill in for each person when you send.</p>
               <textarea id="plain-message" class="form-control" rows="10"
                         placeholder="Write the email here…"></textarea>
             </div>
@@ -354,12 +380,16 @@ function bodyPlacement() {
   return (el && el.value) || 'full';
 }
 
-function insertAtCursor(textarea, text) {
+function mergeToken(tag) {
+  return "{" + "{" + tag + "}" + "}";
+}
+
+function insertAtCursor(textarea, text, asBlock) {
   const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
   const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : start;
   const before = textarea.value.slice(0, start);
   const after = textarea.value.slice(end);
-  const prefix = before && !before.endsWith('\n') ? '\n' : '';
+  const prefix = asBlock && before && !before.endsWith('\n') ? '\n' : '';
   const chunk = prefix + text;
   textarea.value = before + chunk + after;
   const pos = (before + chunk).length;
@@ -411,7 +441,7 @@ function proxyImageUrl(url) {
 function insertBodyImageFromUpload(resp) {
   const body = document.getElementById('id_html_body');
   if (!body || !resp || !resp.url) return;
-  insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()));
+  insertAtCursor(body, bodyImageMarkup(resp.url, bodyPlacement()), true);
   const panel = document.getElementById('add-picture-panel');
   if (panel) panel.style.display = 'none';
   renderBodyImageList();
@@ -475,6 +505,18 @@ function initTemplateForm() {
       renderBodyImageList();
     });
   }
+  document.querySelectorAll('.js-insert-field').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const tag = btn.getAttribute('data-tag');
+      if (!tag || !plainEl) return;
+      insertAtCursor(plainEl, mergeToken(tag));
+      plainEl.focus();
+      plainTouched = true;
+      syncPlainToHtml();
+      renderPreview();
+      renderBodyImageList();
+    });
+  });
   const formEl = document.getElementById('template-form');
   if (formEl) {
     formEl.addEventListener('submit', function () {

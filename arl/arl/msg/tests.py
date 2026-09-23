@@ -26,9 +26,11 @@ from arl.msg.email_utils import (
     EMAIL_SOURCE_IN_APP,
     EMAIL_SOURCE_SENDGRID,
     GENERIC_SENDGRID_TEMPLATE_ID,
+    IN_APP_MERGE_FIELDS,
     email_identity,
     extract_sendgrid_event_meta,
     extract_sendgrid_event_subject,
+    in_app_merge_field_tags,
     list_body_image_urls,
     prepare_email_image,
     prepare_header_image,
@@ -38,6 +40,7 @@ from arl.msg.email_utils import (
     remove_body_image,
     render_merge_fields,
     resolve_email_subject,
+    sample_preview_context,
     wrap_body_image,
     wrap_in_app_email_html,
 )
@@ -61,6 +64,29 @@ class EmailUtilsTests(TestCase):
         html = "<div>{{{body}}}</div>"
         rendered = render_merge_fields(html, {"body": "<strong>Hi</strong>"})
         self.assertEqual(rendered, "<div><strong>Hi</strong></div>")
+
+    def test_in_app_merge_fields_match_send_and_preview_context(self):
+        tags = in_app_merge_field_tags()
+        self.assertEqual(tags, ["name", "company_name", "senior_contact_name"])
+        preview = sample_preview_context()
+        for tag in tags:
+            self.assertIn(tag, preview)
+        self.assertEqual(
+            {(field["group"], field["label"], field["tag"]) for field in IN_APP_MERGE_FIELDS},
+            {
+                ("Person", "Employee name", "name"),
+                ("Company", "Company name", "company_name"),
+                ("Company", "Company contact", "senior_contact_name"),
+            },
+        )
+        # Store / CustomUser columns exist but are not substituted on send.
+        self.assertNotIn("store", tags)
+        self.assertNotIn("store_name", tags)
+        self.assertNotIn("email", tags)
+        self.assertNotIn("first_name", tags)
+        # Internal wrapper keys stay out of the picker.
+        self.assertNotIn("subject", tags)
+        self.assertNotIn("body", tags)
 
     def test_resolve_subject_prefers_user_input(self):
         template = EmailTemplate(name="Template Name", subject="Template Subject")
@@ -622,11 +648,21 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn('id="template-preview"', html)
         self.assertIn('id="insert-body-image-btn"', html)
         self.assertIn('id="plain-message"', html)
+        self.assertIn('id="insert-field-btn"', html)
+        self.assertIn("js-insert-field", html)
+        self.assertIn('data-tag="{{ field.tag }}"', html)
+        self.assertIn("Insert field", html)
+        self.assertIn("These fill in for each person when you send.", html)
+        self.assertIn("Back to Comms", html)
+        self.assertIn("{% url 'comms' %}?tab=email", html)
         self.assertIn("Advanced HTML", html)
         self.assertIn("No pictures yet.", html)
         self.assertIn("function renderPreview(", html)
         self.assertIn("function insertBodyImageFromUpload(", html)
         self.assertIn("function headerSpaceBelow(", html)
+        self.assertIn("function mergeToken(", html)
+        self.assertIn("insertAtCursor(plainEl, mergeToken(tag))", html)
+        self.assertIn("insertAtCursor(textarea, text, asBlock)", html)
         start = html.find("<script>\nfunction getCSRFToken")
         end = html.rfind("</script>")
         self.assertGreater(start, 0)
@@ -643,6 +679,17 @@ class InAppEmailTemplateViewTests(TestCase):
                 capture_output=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_template_list_links_back_to_comms(self):
+        path = (
+            Path(__file__).resolve().parent.parent
+            / "templates"
+            / "msg"
+            / "email_template_list.html"
+        )
+        html = path.read_text()
+        self.assertIn("Back to Comms", html)
+        self.assertIn("{% url 'comms' %}?tab=email", html)
 
     def test_preview_renders_merge_fields(self):
         template = EmailTemplate.objects.create(
