@@ -551,14 +551,11 @@ def in_app_email_document(inner_html):
         '<table role="presentation" data-dp-email-gutter="1" width="100%" '
         'border="0" cellpadding="0" cellspacing="0" style="width:100%;">'
         "<tr>"
-        f'<td width="{gutter}" style="width:{gutter}px;min-width:{gutter}px;'
-        'font-size:1px;line-height:1px;">&nbsp;</td>'
-        '<td align="center" valign="top" style="padding:16px 0;">'
+        f'<td align="left" valign="top" style="padding:16px {gutter}px;">'
         f"{inner_html or ''}"
-        "</td>"
-        f'<td width="{gutter}" style="width:{gutter}px;min-width:{gutter}px;'
-        'font-size:1px;line-height:1px;">&nbsp;</td>'
-        "</tr></table>"
+        # Leave the gutter table open. SendGrid injects ASM unsubscribe
+        # immediately before </body>; clients close the table around that
+        # footer so the same 24px cell padding reaches those links.
         "</body></html>"
     )
 

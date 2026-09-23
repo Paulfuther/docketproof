@@ -244,8 +244,11 @@ class EmailUtilsTests(TestCase):
         self.assertIn("width:100%", wrapped)
         self.assertIn('data-dp-email="1"', wrapped)
         self.assertIn('data-dp-email-gutter="1"', wrapped)
-        self.assertIn(f'width="{EMAIL_SIDE_GUTTER_PX}"', wrapped)
         self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", wrapped)
+        self.assertLess(
+            wrapped.index('data-dp-email-gutter="1"'),
+            wrapped.index("</body>"),
+        )
         self.assertIn('name="viewport"', wrapped)
         self.assertIn("width=device-width", wrapped)
         self.assertIn("<table", wrapped)
@@ -282,6 +285,18 @@ class EmailUtilsTests(TestCase):
         self.assertIn('data-dp-email-gutter="1"', body_only)
         self.assertIn(f"padding:16px {EMAIL_SIDE_GUTTER_PX}px", body_only)
         self.assertIn('name="viewport"', body_only)
+        injected = body_only.replace(
+            "</body>",
+            '<p>Unsubscribe From This List | Manage Email Preferences</p></body>',
+        )
+        self.assertLess(
+            injected.index('data-dp-email-gutter="1"'),
+            injected.index("Unsubscribe From This List"),
+        )
+        self.assertLess(
+            injected.index("Unsubscribe From This List"),
+            injected.index("</body>"),
+        )
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), body_only)
         self.assertEqual(wrap_in_app_email_html("", ""), "")
 
