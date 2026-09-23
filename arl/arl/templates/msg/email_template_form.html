@@ -3,8 +3,8 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 {% load crispy_forms_tags %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css?v=reframe2">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js?v=reframe2"></script>
 <style>
   .template-card { background: #fff; border: 1px solid #e7e7e7; border-radius: 8px; padding: 12px 14px; }
   .template-save-bar { position: sticky; bottom: 0; z-index: 20; background: #fff; padding: 10px 0 4px; border-top: 1px solid #eee; }
@@ -12,6 +12,15 @@
     .template-preview-col { position: sticky; top: 72px; }
   }
   .dz-header-image, .dz-template-image { min-height: 64px; cursor: pointer; }
+  #header-crop-wrap { padding: 18px; background: #111; overflow: visible; }
+  #header-crop-wrap .cropper-point {
+    width: 16px;
+    height: 16px;
+    opacity: 1;
+    background-color: #39f;
+  }
+  #header-crop-wrap .cropper-line { opacity: 0.75; }
+  #header-crop-wrap .cropper-view-box { outline: 2px solid #39f; }
 </style>
 
 <div class="container">
@@ -175,8 +184,8 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="small text-muted mb-2">Drag the edges to resize. Or keep the whole picture.</p>
-        <div class="bg-dark" style="max-height: 420px;">
+        <p class="small text-muted mb-2">Drag the blue corners and edges to crop. Or keep the whole picture.</p>
+        <div id="header-crop-wrap">
           <img id="header-crop-img" alt="Header crop" style="max-width:100%; display:block;">
         </div>
         <div class="mt-2 d-flex gap-2">
@@ -215,13 +224,16 @@ function headerMarkup(url) {
   if (!url) return '';
   const w = headerDisplayWidth();
   const space = headerSpaceBelow();
-  return '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="' + w + '" style="margin:0 auto;width:' + w + 'px;max-width:' + w + 'px;">'
+  return '<table role="presentation" data-dp-email="1" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;margin:0 auto;">'
+    + '<tr><td align="center" style="padding:12px 16px;">'
+    + '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 auto;width:100%;max-width:600px;">'
     + '<tr><td align="center" style="padding:0;">'
     + '<img src="' + url + '" alt="" width="' + w + '" '
-    + 'style="display:block;width:' + w + 'px;max-width:' + w + 'px;height:auto;border:0;outline:none;text-decoration:none;">'
+    + 'style="display:block;margin:0 auto;width:100%;max-width:' + w + 'px;height:auto;border:0;outline:none;text-decoration:none;">'
     + '</td></tr></table>'
-    + '<table role="presentation" data-dp-header-space="1" align="center" border="0" cellpadding="0" cellspacing="0" width="600">'
-    + '<tr><td height="' + space + '" style="height:' + space + 'px;line-height:' + space + 'px;font-size:1px;">&nbsp;</td></tr></table>';
+    + '<table role="presentation" data-dp-header-space="1" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;">'
+    + '<tr><td height="' + space + '" style="height:' + space + 'px;line-height:' + space + 'px;font-size:1px;">&nbsp;</td></tr></table>'
+    + '</td></tr></table>';
 }
 
 function bodyImageMarkup(url, placement) {
@@ -616,6 +628,51 @@ function initTemplateForm() {
     }
   }
 
+  function startCropperWhenReady() {
+    const img = document.getElementById('header-crop-img');
+    if (!img) return;
+    if (!window.Cropper) {
+      alert('Cropper failed to load. Refresh the page and try again.');
+      return;
+    }
+    destroyCropper();
+    const boot = function () {
+      if (headerCropper) return;
+      headerCropper = new Cropper(img, {
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.8,
+        background: true,
+        modal: true,
+        guides: true,
+        highlight: true,
+        center: true,
+        movable: true,
+        zoomable: true,
+        scalable: false,
+        rotatable: false,
+        responsive: true,
+        restore: false,
+        checkCrossOrigin: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        ready: function () {
+          const box = headerCropper.getContainerData();
+          if (!box || !box.width || !box.height) return;
+          headerCropper.setCropBoxData({
+            left: box.width * 0.1,
+            top: box.height * 0.1,
+            width: box.width * 0.8,
+            height: box.height * 0.8
+          });
+        }
+      });
+    };
+    if (img.complete && img.naturalWidth) boot();
+    else img.onload = boot;
+  }
+
   function openCropper() {
     const sourceInput = document.getElementById('id_header_source_url');
     const headerInput = document.getElementById('id_header_image_url');
@@ -627,33 +684,18 @@ function initTemplateForm() {
     const img = document.getElementById('header-crop-img');
     if (!img) return;
     destroyCropper();
-    img.onload = function () {
-      if (!window.Cropper) {
-        alert('Cropper failed to load. Refresh the page and try again.');
-        return;
-      }
-      headerCropper = new Cropper(img, {
-        viewMode: 1,
-        dragMode: 'crop',
-        autoCropArea: 1,
-        background: false,
-        movable: true,
-        zoomable: true,
-        scalable: false,
-        rotatable: false,
-        responsive: true,
-        cropBoxMovable: true,
-        cropBoxResizable: true,
-        toggleDragModeOnDblclick: false
-      });
-    };
+    img.onload = null;
     img.src = headerLocalSource ? raw : proxyImageUrl(raw);
     if (cropModal) cropModal.show();
+    else startCropperWhenReady();
   }
 
   const reframeBtn = document.getElementById('reframe-header');
   if (reframeBtn) reframeBtn.addEventListener('click', openCropper);
-  if (cropModalEl) cropModalEl.addEventListener('hidden.bs.modal', destroyCropper);
+  if (cropModalEl) {
+    cropModalEl.addEventListener('shown.bs.modal', startCropperWhenReady);
+    cropModalEl.addEventListener('hidden.bs.modal', destroyCropper);
+  }
   const zoomIn = document.getElementById('header-zoom-in');
   if (zoomIn) zoomIn.addEventListener('click', function () {
     if (headerCropper) headerCropper.zoom(0.1);

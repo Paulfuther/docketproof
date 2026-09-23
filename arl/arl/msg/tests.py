@@ -237,11 +237,15 @@ class EmailUtilsTests(TestCase):
         self.assertIn("https://cdn.example/header.jpg", wrapped)
         self.assertLess(wrapped.index("<img"), wrapped.index("<p>Hello</p>"))
         self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', wrapped)
-        self.assertIn(f"width:{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}px", wrapped)
-        self.assertNotIn("width:100%", wrapped)
+        self.assertIn(f"max-width:{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}px", wrapped)
+        self.assertIn("width:100%", wrapped)
+        self.assertIn('data-dp-email="1"', wrapped)
+        self.assertIn('name="viewport"', wrapped)
+        self.assertIn("width=device-width", wrapped)
         self.assertIn("<table", wrapped)
         self.assertIn('data-dp-header-space="1"', wrapped)
         self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', wrapped)
+        self.assertNotIn('width="600"', wrapped)
         self.assertLess(
             wrapped.index("https://cdn.example/header.jpg"),
             wrapped.index("data-dp-header-space"),
@@ -253,6 +257,7 @@ class EmailUtilsTests(TestCase):
             header_display_width=440,
         )
         self.assertIn('width="440"', large)
+        self.assertIn("max-width:440px", large)
         tight = wrap_in_app_email_html(
             "<p>Hello</p>",
             "https://cdn.example/header.jpg",
@@ -265,8 +270,12 @@ class EmailUtilsTests(TestCase):
             header_space_below=EMAIL_HEADER_SPACE_ROOMY,
         )
         self.assertIn(f'height="{EMAIL_HEADER_SPACE_ROOMY}"', roomy)
-        self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", ""), "<p>Hello</p>")
-        self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), "<p>Hello</p>")
+        body_only = wrap_in_app_email_html("<p>Hello</p>", "")
+        self.assertIn("<p>Hello</p>", body_only)
+        self.assertIn('data-dp-email="1"', body_only)
+        self.assertIn('name="viewport"', body_only)
+        self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), body_only)
+        self.assertEqual(wrap_in_app_email_html("", ""), "")
 
     def test_prepare_header_image_auto_crops_banner(self):
         img = Image.new("RGB", (1200, 800), color=(200, 10, 10))
@@ -683,6 +692,12 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("Use full image", html)
         self.assertIn("id=\"header-use-full\"", html)
         self.assertIn("cropBoxResizable: true", html)
+        self.assertIn("cropBoxMovable: true", html)
+        self.assertIn("autoCropArea: 0.8", html)
+        self.assertIn("shown.bs.modal", html)
+        self.assertIn("function startCropperWhenReady(", html)
+        self.assertIn("id=\"header-crop-wrap\"", html)
+        self.assertIn("cropper.min.js?v=reframe2", html)
         self.assertNotIn("aspectRatio: 600 / 180", html)
         self.assertIn("maxWidth: 600", html)
         start = html.find("<script>\nfunction getCSRFToken")
@@ -789,7 +804,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(data["header_image_url"], "https://cdn.example/header.jpg")
         self.assertEqual(data["header_display_width"], EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT)
         self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', data["html"])
-        self.assertNotIn("width:100%", data["html"])
+        self.assertIn("width:100%", data["html"])
+        self.assertIn('name="viewport"', data["html"])
         self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', data["html"])
         self.assertEqual(data["header_space_below"], EMAIL_HEADER_SPACE_DEFAULT)
 
@@ -1105,5 +1121,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("https://cdn.example/banner.jpg", kwargs["html_body"])
         self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
         self.assertIn('width="180"', kwargs["html_body"])
-        self.assertNotIn("width:100%", kwargs["html_body"])
+        self.assertIn("width:100%", kwargs["html_body"])
+        self.assertIn("max-width:180px", kwargs["html_body"])
+        self.assertIn('name="viewport"', kwargs["html_body"])
+        self.assertNotIn('width="600"', kwargs["html_body"])
 

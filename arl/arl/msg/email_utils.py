@@ -24,7 +24,8 @@ EMAIL_HEADER_DISPLAY_WIDTH_CHOICES = [
     (280, "Medium (280px)"),
     (360, "Large (360px)"),
     (440, "Wide (440px)"),
-    (520, "Full (520px)"),
+    (520, "Extra wide (520px)"),
+    (600, "Full"),
 ]
 EMAIL_HEADER_SPACE_TIGHT = 8
 EMAIL_HEADER_SPACE_NORMAL = 24
@@ -489,10 +490,33 @@ def header_spacer_html(space=None):
     height = resolve_header_space_below(space)
     return (
         f'<table role="presentation" data-dp-header-space="1" align="center" '
-        f'border="0" cellpadding="0" cellspacing="0" width="{EMAIL_IMAGE_MAX_WIDTH}">'
+        f'border="0" cellpadding="0" cellspacing="0" width="100%" '
+        f'style="width:100%;max-width:{EMAIL_IMAGE_MAX_WIDTH}px;">'
         f'<tr><td height="{height}" '
         f'style="height:{height}px;line-height:{height}px;font-size:1px;">'
         "&nbsp;</td></tr></table>\n"
+    )
+
+
+def in_app_email_document(inner_html):
+    """Full HTML document so iPhone Mail gets a device-width viewport.
+
+    Fragments without this meta are laid out at a wide desktop canvas, which
+    parks the 600px column on the left and leaves a white gap on the right.
+    SendGrid still appends the ASM unsubscribe footer after this content.
+    """
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en">'
+        "<head>"
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta http-equiv="X-UA-Compatible" content="IE=edge">'
+        "<title></title>"
+        "</head>"
+        '<body style="margin:0;padding:0;width:100%;background:#ffffff;">'
+        f"{inner_html or ''}"
+        "</body></html>"
     )
 
 
@@ -502,29 +526,42 @@ def wrap_in_app_email_html(
     header_display_width=None,
     header_space_below=None,
 ):
-    """Prepend an optional header image above in-app template HTML.
+    """Wrap in-app HTML in a centered, mobile-fluid column.
 
-    Uses a fixed pixel width (not width:100%) plus HTML width attributes so
-    Outlook and other clients do not stretch the header into a giant banner.
-    Space under the header is a spacer row Outlook will honor.
+    Header uses HTML width for Outlook and width:100% + max-width for phones
+    so it sits in the available column without stretching past the chosen size.
+    A 600px-only spacer is avoided: that forced a desktop canvas and left a
+    right-hand gap on iPhone. ASM unsubscribe is not part of this markup.
     """
     body = html_body or ""
     url = (header_image_url or "").strip()
-    if not url:
+    if not url and not str(body).strip():
         return body
-    safe_url = escape(url)
-    width = resolve_header_display_width(header_display_width)
-    header = (
-        f'<table role="presentation" align="center" border="0" cellpadding="0" '
-        f'cellspacing="0" width="{width}" '
-        f'style="margin:0 auto;width:{width}px;max-width:{width}px;">'
-        '<tr><td align="center" style="padding:0;">'
-        f'<img src="{safe_url}" alt="" width="{width}" '
-        f'style="display:block;width:{width}px;max-width:{width}px;height:auto;'
-        'border:0;outline:none;text-decoration:none;">'
-        "</td></tr></table>\n"
+    parts = []
+    if url:
+        safe_url = escape(url)
+        width = resolve_header_display_width(header_display_width)
+        parts.append(
+            f'<table role="presentation" align="center" border="0" cellpadding="0" '
+            f'cellspacing="0" width="100%" '
+            f'style="margin:0 auto;width:100%;max-width:{EMAIL_IMAGE_MAX_WIDTH}px;">'
+            '<tr><td align="center" style="padding:0;">'
+            f'<img src="{safe_url}" alt="" width="{width}" '
+            f'style="display:block;margin:0 auto;width:100%;max-width:{width}px;'
+            "height:auto;border:0;outline:none;text-decoration:none;\">"
+            "</td></tr></table>\n"
+        )
+        parts.append(header_spacer_html(header_space_below))
+    parts.append(body)
+    column = (
+        '<table role="presentation" data-dp-email="1" align="center" border="0" '
+        'cellpadding="0" cellspacing="0" width="100%" '
+        f'style="width:100%;max-width:{EMAIL_IMAGE_MAX_WIDTH}px;margin:0 auto;">'
+        '<tr><td align="left" style="padding:12px 16px;">'
+        f"{''.join(parts)}"
+        "</td></tr></table>"
     )
-    return header + header_spacer_html(header_space_below) + body
+    return in_app_email_document(column)
 
 
 def resolve_body_image_placement(placement=None):
