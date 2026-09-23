@@ -1336,7 +1336,6 @@ def upload_attachment(request):
                             buffer, ext, _ctype = prepare_header_image(
                                 uploaded_file,
                                 filename=original_name,
-                                crop=request.POST.get("header_crop") == "1",
                             )
                         else:
                             buffer, ext, _ctype = prepare_email_image(

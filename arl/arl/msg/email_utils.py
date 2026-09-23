@@ -410,14 +410,14 @@ def _resize_email_image(image, max_width, max_height=None, crop=False):
     return image
 
 
-def prepare_header_image(file_obj, filename="", crop=False):
-    """Resize a header image: max 600×180, optional center-crop to that banner."""
+def prepare_header_image(file_obj, filename=""):
+    """Fit any upload into a 600×180 email-header banner (center-crop)."""
     return prepare_email_image(
         file_obj,
         filename=filename,
         max_width=EMAIL_HEADER_MAX_WIDTH,
         max_height=EMAIL_HEADER_MAX_HEIGHT,
-        crop=bool(crop),
+        crop=True,
     )
 
 

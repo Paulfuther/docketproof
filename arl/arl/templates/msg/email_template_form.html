@@ -43,17 +43,10 @@
             <div class="mb-3">
               <label class="form-label">Header image (optional)</label>
               <p class="small text-muted mb-2">
-                Shown centered at the size you pick — not stretched across the email.
-                Uploads are fitted to 600×180px. Check <strong>Crop to banner</strong>
-                before dropping a tall photo to trim it.
+                Drop any photo — it is cropped automatically to a 600×180 header banner.
+                Use <strong>Header size</strong> to pick how wide it appears in the email.
               </p>
               {{ form.header_display_width|as_crispy_field }}
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="header-crop" value="1">
-                <label class="form-check-label" for="header-crop">
-                  Crop to banner (600×180) on the next upload
-                </label>
-              </div>
               <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
                 <img id="header-preview-img"
                      src="{{ form.header_image_url.value|default:'' }}"
@@ -204,9 +197,6 @@ document.addEventListener('DOMContentLoaded', function () {
             formData.append('email_fit', '1');
             if (selector === '.dz-header-image') {
               formData.append('email_header', '1');
-              if (document.getElementById('header-crop')?.checked) {
-                formData.append('header_crop', '1');
-              }
             }
           });
           this.on('success', function (file, resp) {

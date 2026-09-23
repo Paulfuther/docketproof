@@ -209,27 +209,31 @@ class EmailUtilsTests(TestCase):
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", ""), "<p>Hello</p>")
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), "<p>Hello</p>")
 
-    def test_prepare_header_image_caps_height(self):
+    def test_prepare_header_image_auto_crops_banner(self):
         img = Image.new("RGB", (1200, 800), color=(200, 10, 10))
         buf = BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
         out, ext, _ctype = prepare_header_image(buf, filename="tall.png")
         result = Image.open(out)
-        self.assertLessEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
-        self.assertLessEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
-        self.assertEqual(ext, "jpg")
-
-    def test_prepare_header_image_crops_banner(self):
-        img = Image.new("RGB", (1200, 800), color=(10, 200, 10))
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        out, ext, _ctype = prepare_header_image(buf, filename="crop.png", crop=True)
-        result = Image.open(out)
         self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
         self.assertEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
         self.assertEqual(ext, "jpg")
+
+    def test_prepare_header_image_auto_crops_square(self):
+        img = Image.new("RGB", (800, 800), color=(10, 10, 200))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, _ext, _ctype = prepare_header_image(buf, filename="square.png")
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
+        self.assertEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
+        self.assertAlmostEqual(
+            result.width / float(result.height),
+            EMAIL_HEADER_MAX_WIDTH / float(EMAIL_HEADER_MAX_HEIGHT),
+            places=2,
+        )
 
 
 class EmailLogSubjectTests(TestCase):
