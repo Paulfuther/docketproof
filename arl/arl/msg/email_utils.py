@@ -437,15 +437,17 @@ def _resize_email_image(image, max_width, max_height=None, crop=False):
 
 
 def prepare_header_image(file_obj, filename="", crop=True):
-    """Fit a header into a 600×180 banner. Default is center-crop (auto-fit).
+    """Prepare a header image for email.
 
-    Pass ``crop=False`` when the file is already framed (cropper apply).
+    Default ``crop=True`` auto-fits a 600×180 banner (first upload).
+    Pass ``crop=False`` for a cropper apply or “use full image”: keep the
+    natural aspect and only cap width so logos are not letterboxed.
     """
     return prepare_email_image(
         file_obj,
         filename=filename,
         max_width=EMAIL_HEADER_MAX_WIDTH,
-        max_height=EMAIL_HEADER_MAX_HEIGHT,
+        max_height=EMAIL_HEADER_MAX_HEIGHT if crop else None,
         crop=bool(crop),
     )
 

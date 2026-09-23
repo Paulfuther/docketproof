@@ -95,6 +95,7 @@
                      style="height:auto;display:block;">
                 <div class="mt-2 d-flex flex-wrap gap-2">
                   <button type="button" class="btn btn-sm btn-outline-secondary" id="reframe-header">Reframe</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="header-use-full-card">Use full image</button>
                   <button type="button" class="btn btn-sm btn-outline-danger" id="clear-header">Remove</button>
                 </div>
               </div>
@@ -174,7 +175,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="small text-muted mb-2">Drag to pick the part you want.</p>
+        <p class="small text-muted mb-2">Drag the edges to resize. Or keep the whole picture.</p>
         <div class="bg-dark" style="max-height: 420px;">
           <img id="header-crop-img" alt="Header crop" style="max-width:100%; display:block;">
         </div>
@@ -185,6 +186,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-primary" id="header-use-full">Use full image</button>
         <button type="button" class="btn btn-primary" id="header-crop-apply">Apply crop</button>
       </div>
     </div>
@@ -635,16 +637,18 @@ function initTemplateForm() {
         return;
       }
       headerCropper = new Cropper(img, {
-        aspectRatio: 600 / 180,
         viewMode: 1,
-        dragMode: 'move',
+        dragMode: 'crop',
         autoCropArea: 1,
         background: false,
         movable: true,
         zoomable: true,
         scalable: false,
         rotatable: false,
-        responsive: true
+        responsive: true,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false
       });
     };
     img.src = headerLocalSource ? raw : proxyImageUrl(raw);
@@ -662,13 +666,61 @@ function initTemplateForm() {
   if (zoomOut) zoomOut.addEventListener('click', function () {
     if (headerCropper) headerCropper.zoom(-0.1);
   });
+  function headerSourceRaw() {
+    const sourceInput = document.getElementById('id_header_source_url');
+    const headerInput = document.getElementById('id_header_image_url');
+    return headerLocalSource || (sourceInput && sourceInput.value) || (headerInput && headerInput.value);
+  }
+
+  function persistHeaderFromUpload(data) {
+    const source = (document.getElementById('id_header_source_url') || {}).value || '';
+    setHeaderUrl(data.url, source);
+    return persistAssets({
+      action: 'set_header',
+      header_image_url: data.url,
+      header_source_url: source
+    });
+  }
+
+  function useFullHeader() {
+    const raw = headerSourceRaw();
+    if (!raw) {
+      alert('Upload a header image first.');
+      return;
+    }
+    const url = headerLocalSource ? raw : proxyImageUrl(raw);
+    fetch(url).then(function (resp) {
+      if (!resp.ok) throw new Error('Could not load the original picture.');
+      return resp.blob();
+    }).then(function (blob) {
+      const file = new File([blob], 'header-full.jpg', { type: blob.type || 'image/jpeg' });
+      return uploadEmailImage(file, {
+        email_header: '1',
+        header_ready: '1',
+        source_url: (document.getElementById('id_header_source_url') || {}).value || ''
+      }, function (data) {
+        persistHeaderFromUpload(data).then(function () {
+          if (cropModal) cropModal.hide();
+        }).catch(function (err) {
+          alert(err.message || 'Could not save the full header.');
+        });
+      });
+    }).catch(function (err) {
+      alert(err.message || 'Could not use the full image.');
+    });
+  }
+
+  ['header-use-full', 'header-use-full-card'].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', useFullHeader);
+  });
   const applyCrop = document.getElementById('header-crop-apply');
   if (applyCrop) {
     applyCrop.addEventListener('click', function () {
       if (!headerCropper) return;
       const canvas = headerCropper.getCroppedCanvas({
-        width: 600,
-        height: 180,
+        maxWidth: 600,
+        maxHeight: 2000,
         imageSmoothingEnabled: true,
         imageSmoothingQuality: 'high'
       });
@@ -686,13 +738,7 @@ function initTemplateForm() {
           header_ready: '1',
           source_url: (document.getElementById('id_header_source_url') || {}).value || ''
         }, function (data) {
-          const source = (document.getElementById('id_header_source_url') || {}).value || '';
-          setHeaderUrl(data.url, source);
-          persistAssets({
-            action: 'set_header',
-            header_image_url: data.url,
-            header_source_url: source
-          }).then(function () {
+          persistHeaderFromUpload(data).then(function () {
             if (cropModal) cropModal.hide();
           }).catch(function (err) {
             alert(err.message || 'Could not save the cropped header.');

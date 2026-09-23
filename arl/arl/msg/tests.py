@@ -316,6 +316,18 @@ class EmailUtilsTests(TestCase):
         self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
         self.assertEqual(result.height, EMAIL_HEADER_MAX_HEIGHT)
 
+    def test_prepare_header_image_full_keeps_natural_aspect(self):
+        img = Image.new("RGB", (1200, 600), color=(10, 200, 10))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        out, ext, _ctype = prepare_header_image(buf, filename="logo.png", crop=False)
+        result = Image.open(out)
+        self.assertEqual(result.width, EMAIL_HEADER_MAX_WIDTH)
+        self.assertEqual(result.height, 300)
+        self.assertGreater(result.height, EMAIL_HEADER_MAX_HEIGHT)
+        self.assertEqual(ext, "jpg")
+
     def test_wrap_body_image_placements(self):
         full = wrap_body_image("https://cdn.example/pic.jpg", "full")
         self.assertIn('data-dp-body-image="1"', full)
@@ -666,6 +678,11 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("function rememberPlainPos(", html)
         self.assertIn("function restorePlainPos(", html)
         self.assertIn("lastPlainPos == null ? plainEl.value.length", html)
+        self.assertIn("Use full image", html)
+        self.assertIn("id=\"header-use-full\"", html)
+        self.assertIn("cropBoxResizable: true", html)
+        self.assertNotIn("aspectRatio: 600 / 180", html)
+        self.assertIn("maxWidth: 600", html)
         start = html.find("<script>\nfunction getCSRFToken")
         end = html.rfind("</script>")
         self.assertGreater(start, 0)
