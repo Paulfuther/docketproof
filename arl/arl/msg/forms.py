@@ -262,6 +262,7 @@ class EmailTemplateForm(forms.ModelForm):
             "header_image_url",
             "header_source_url",
             "header_display_width",
+            "header_space_below",
             "html_body",
             "include_in_report",
         ]
@@ -278,11 +279,12 @@ class EmailTemplateForm(forms.ModelForm):
             "header_image_url": forms.HiddenInput(),
             "header_source_url": forms.HiddenInput(),
             "header_display_width": forms.Select(attrs={"class": "form-select"}),
+            "header_space_below": forms.Select(attrs={"class": "form-select"}),
             "html_body": forms.Textarea(
                 attrs={
                     "class": "form-control font-monospace",
-                    "rows": 16,
-                    "placeholder": "<h1>Hello {{name}}</h1>\n<p>A message from {{company_name}}.</p>",
+                    "rows": 10,
+                    "placeholder": "<p>Hello {{name}}</p>",
                 }
             ),
             "include_in_report": forms.CheckboxInput(
@@ -292,23 +294,31 @@ class EmailTemplateForm(forms.ModelForm):
         labels = {
             "include_in_report": "Include in compliance audit",
             "header_display_width": "Header size",
+            "header_space_below": "Space under header",
+            "html_body": "HTML",
         }
         help_texts = {
             "name": "Shown in the Communications template picker.",
             "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
             "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
             "header_source_url": "Original photo used only to reframe the header. Not shown in the email.",
-            "header_display_width": "How wide the header looks in the email. It is not stretched to the full column.",
-            "html_body": "HTML is stored in DocketProof and sent through SendGrid. Use public image URLs.",
+            "header_display_width": "How wide the top picture looks.",
+            "header_space_below": "How much empty room sits between the top picture and your words.",
+            "html_body": "Raw email HTML. Most people can leave this closed.",
             "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from arl.msg.email_utils import EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+        from arl.msg.email_utils import (
+            EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+            EMAIL_HEADER_SPACE_DEFAULT,
+        )
 
         self.fields["header_display_width"].required = False
         self.fields["header_display_width"].initial = EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+        self.fields["header_space_below"].required = False
+        self.fields["header_space_below"].initial = EMAIL_HEADER_SPACE_DEFAULT
 
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip()
@@ -340,6 +350,11 @@ class EmailTemplateForm(forms.ModelForm):
         return resolve_header_display_width(
             self.cleaned_data.get("header_display_width")
         )
+
+    def clean_header_space_below(self):
+        from arl.msg.email_utils import resolve_header_space_below
+
+        return resolve_header_space_below(self.cleaned_data.get("header_space_below"))
 
 
 class EmailForm(forms.Form):

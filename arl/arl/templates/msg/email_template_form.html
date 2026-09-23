@@ -20,9 +20,9 @@
       {% endfor %}
 
       <p class="text-muted">
-        Merge fields:
-        {% verbatim %}<code>{{name}}</code>, <code>{{company_name}}</code>, <code>{{senior_contact_name}}</code>.{% endverbatim %}
-        Use unescaped HTML with triple braces when needed.
+        Write the email in plain words. Pictures go in the list below — you do not need to look at any code.
+        To fill in a name automatically you can type
+        {% verbatim %}<code>{{name}}</code>, <code>{{company_name}}</code>, or <code>{{senior_contact_name}}</code>.{% endverbatim %}
       </p>
 
       <form method="post" id="template-form"
@@ -53,6 +53,7 @@
                 Use <strong>Header size</strong> to pick how wide it appears in the email.
               </p>
               {{ form.header_display_width|as_crispy_field }}
+              {{ form.header_space_below|as_crispy_field }}
               <div id="header-preview-wrap" class="mb-2" {% if not form.header_image_url.value %}style="display:none;"{% endif %}>
                 <img id="header-preview-img"
                      src="{{ form.header_image_url.value|default:'' }}"
@@ -74,17 +75,20 @@
               </div>
             </div>
 
-            {{ form.html_body|as_crispy_field }}
+            <div class="mb-3">
+              <label class="form-label" for="plain-message">Message</label>
+              <p class="small text-muted mb-2">
+                Type the words people will read. Add or remove pictures below. You do not need to see any HTML.
+              </p>
+              <textarea id="plain-message" class="form-control" rows="8"
+                        placeholder="Write the email here…"></textarea>
+            </div>
 
             <div class="mb-3">
-              <label class="form-label">Insert image into the email</label>
+              <label class="form-label">Pictures in this email</label>
               <p class="small text-muted mb-2">
-                Uploads are resized to a max width of 600px and inserted into the HTML body
-                (the same field above). This is how a picture at the bottom of the email is added.
-                Choose placement, then drop a file. Remove a picture here without deleting the template.
-              </p>
-              <p class="small text-muted mb-2">
-                Left/right sit beside text in many clients. Outlook often stacks them above the text.
+                Pick Full width, Left, or Right, then add a photo. Remove it from the list if you change your mind.
+                Left/right sit beside the words in many inboxes. Outlook often puts them above the words.
               </p>
               <div class="d-flex flex-wrap gap-3 mb-2">
                 <div class="form-check">
@@ -108,10 +112,18 @@
               </div>
               <div class="dz-template-image border rounded p-3 text-muted"
                    data-upload-url="{% url 'upload_attachment' %}">
-                Or drop an image here. It is stored on Linode and inserted as a public URL.
+                Or drop a photo here.
               </div>
               <div id="body-images-list" class="mt-2"></div>
             </div>
+
+            <details class="mb-3" id="advanced-html">
+              <summary class="mb-2">Advanced HTML (optional)</summary>
+              <p class="small text-muted mb-2">
+                This is the real email. Most people never need to open it.
+              </p>
+              {{ form.html_body|as_crispy_field }}
+            </details>
 
             <div class="d-flex gap-2">
               <button type="submit" class="btn btn-primary">Save template</button>
@@ -169,14 +181,23 @@ function headerDisplayWidth() {
   return n > 0 ? n : 280;
 }
 
+function headerSpaceBelow() {
+  const el = document.getElementById('id_header_space_below');
+  const n = parseInt(el && el.value, 10);
+  return n > 0 ? n : 24;
+}
+
 function headerMarkup(url) {
   if (!url) return '';
   const w = headerDisplayWidth();
-  return '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="' + w + '" style="margin:0 auto 16px auto;width:' + w + 'px;max-width:' + w + 'px;">'
+  const space = headerSpaceBelow();
+  return '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="' + w + '" style="margin:0 auto;width:' + w + 'px;max-width:' + w + 'px;">'
     + '<tr><td align="center" style="padding:0;">'
     + '<img src="' + url + '" alt="" width="' + w + '" '
     + 'style="display:block;width:' + w + 'px;max-width:' + w + 'px;height:auto;border:0;outline:none;text-decoration:none;">'
-    + '</td></tr></table>';
+    + '</td></tr></table>'
+    + '<table role="presentation" data-dp-header-space="1" align="center" border="0" cellpadding="0" cellspacing="0" width="600">'
+    + '<tr><td height="' + space + '" style="height:' + space + 'px;line-height:' + space + 'px;font-size:1px;">&nbsp;</td></tr></table>';
 }
 
 function bodyImageMarkup(url, placement) {
@@ -220,6 +241,60 @@ function stripBodyImage(html, url) {
     html = html.replace(re, "");
   });
   return html;
+}
+
+function extractBodyImageHtml(html) {
+  const blocks = [];
+  const re = /<table\b[^>]*\bdata-dp-body-image\b[^>]*>[\s\S]*?<\/table>\s*|<p\b[^>]*>\s*<img\b[^>]*>\s*<\/p>\s*/gi;
+  let match;
+  while ((match = re.exec(html || ""))) {
+    blocks.push(match[0]);
+  }
+  return blocks.join("");
+}
+
+function htmlToMessageText(html) {
+  let text = html || "";
+  listBodyImageUrls(text).forEach(function (url) {
+    text = stripBodyImage(text, url);
+  });
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/p>/gi, "\n\n");
+  text = text.replace(/<\/div>/gi, "\n");
+  text = text.replace(/<[^>]+>/g, "");
+  const box = document.createElement("textarea");
+  box.innerHTML = text;
+  text = box.value;
+  return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function messageTextToHtml(text) {
+  text = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!text) return "";
+  return text.split(/\n\s*\n/).map(function (part) {
+    return "<p>" + escapeHtml(part).replace(/\n/g, "<br>") + "</p>";
+  }).join("\n") + "\n";
+}
+
+function syncPlainToHtml() {
+  const body = document.getElementById("id_html_body");
+  const plain = document.getElementById("plain-message");
+  if (!body || !plain) return;
+  body.value = messageTextToHtml(plain.value) + extractBodyImageHtml(body.value);
+}
+
+function fillPlainFromHtml() {
+  const body = document.getElementById("id_html_body");
+  const plain = document.getElementById("plain-message");
+  if (!body || !plain) return;
+  plain.value = htmlToMessageText(body.value);
 }
 
 function renderPreview() {
@@ -366,6 +441,7 @@ function initTemplateForm() {
   let headerLocalSource = '';
   let headerCropper = null;
   let bodyDropzone = null;
+  let plainTouched = false;
   const cropModalEl = document.getElementById('header-crop-modal');
   let cropModal = null;
   try {
@@ -375,6 +451,7 @@ function initTemplateForm() {
   }
 
   try {
+    fillPlainFromHtml();
     renderPreview();
     renderBodyImageList();
     syncHeaderThumb();
@@ -382,12 +459,31 @@ function initTemplateForm() {
     console.error('Email template preview failed', err);
   }
 
+  const plainEl = document.getElementById('plain-message');
+  if (plainEl) {
+    plainEl.addEventListener('input', function () {
+      plainTouched = true;
+      syncPlainToHtml();
+      renderPreview();
+      renderBodyImageList();
+    });
+  }
+  const formEl = document.getElementById('template-form');
+  if (formEl) {
+    formEl.addEventListener('submit', function () {
+      if (plainTouched) syncPlainToHtml();
+    });
+  }
+
   ['id_subject', 'id_html_body'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', function () {
+        if (id === 'id_html_body') {
+          if (!plainTouched) fillPlainFromHtml();
+          renderBodyImageList();
+        }
         renderPreview();
-        if (id === 'id_html_body') renderBodyImageList();
       });
     }
   });
@@ -396,6 +492,18 @@ function initTemplateForm() {
     widthEl.addEventListener('change', function () {
       syncHeaderThumb();
       renderPreview();
+    });
+  }
+  const spaceEl = document.getElementById('id_header_space_below');
+  if (spaceEl) {
+    spaceEl.addEventListener('change', function () {
+      renderPreview();
+      persistAssets({
+        action: 'set_header_space',
+        header_space_below: headerSpaceBelow()
+      }).catch(function () {
+        /* New templates persist on Save. */
+      });
     });
   }
   const refreshBtn = document.getElementById('refresh-preview');

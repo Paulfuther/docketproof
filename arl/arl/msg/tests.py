@@ -15,6 +15,9 @@ from arl.msg.email_utils import (
     COMPOSE_TEMPLATE_NAME,
     EMAIL_BODY_IMAGE_FLOAT_WIDTH,
     EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+    EMAIL_HEADER_SPACE_DEFAULT,
+    EMAIL_HEADER_SPACE_ROOMY,
+    EMAIL_HEADER_SPACE_TIGHT,
     EMAIL_HEADER_MAX_HEIGHT,
     EMAIL_HEADER_MAX_WIDTH,
     EMAIL_HEADER_SOURCE_MAX_WIDTH,
@@ -30,6 +33,8 @@ from arl.msg.email_utils import (
     prepare_email_image,
     prepare_header_image,
     prepare_header_source_image,
+    html_to_message_text,
+    message_text_to_html,
     remove_body_image,
     render_merge_fields,
     resolve_email_subject,
@@ -209,12 +214,31 @@ class EmailUtilsTests(TestCase):
         self.assertIn(f"width:{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}px", wrapped)
         self.assertNotIn("width:100%", wrapped)
         self.assertIn("<table", wrapped)
+        self.assertIn('data-dp-header-space="1"', wrapped)
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', wrapped)
+        self.assertLess(
+            wrapped.index("https://cdn.example/header.jpg"),
+            wrapped.index("data-dp-header-space"),
+        )
+        self.assertLess(wrapped.index("data-dp-header-space"), wrapped.index("<p>Hello</p>"))
         large = wrap_in_app_email_html(
             "<p>Hello</p>",
             "https://cdn.example/header.jpg",
             header_display_width=440,
         )
         self.assertIn('width="440"', large)
+        tight = wrap_in_app_email_html(
+            "<p>Hello</p>",
+            "https://cdn.example/header.jpg",
+            header_space_below=EMAIL_HEADER_SPACE_TIGHT,
+        )
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_TIGHT}"', tight)
+        roomy = wrap_in_app_email_html(
+            "<p>Hello</p>",
+            "https://cdn.example/header.jpg",
+            header_space_below=EMAIL_HEADER_SPACE_ROOMY,
+        )
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_ROOMY}"', roomy)
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", ""), "<p>Hello</p>")
         self.assertEqual(wrap_in_app_email_html("<p>Hello</p>", None), "<p>Hello</p>")
 
@@ -291,6 +315,13 @@ class EmailUtilsTests(TestCase):
         self.assertIn("<p>Bye</p>", cleaned)
         legacy = f'<p style="text-align:center;"><img src="{url}" alt=""></p>'
         self.assertNotIn(url, remove_body_image(legacy, url))
+
+    def test_html_to_message_text_hides_pictures(self):
+        url = "https://cdn.example/pic.jpg"
+        html = "<p>Hello {{name}}</p>" + wrap_body_image(url, "full")
+        self.assertEqual(html_to_message_text(html), "Hello {{name}}")
+        self.assertIn("<p>Line one<br>Line two</p>", message_text_to_html("Line one\nLine two"))
+        self.assertIn("<p>A</p>", message_text_to_html("A\n\nB"))
 
 
 class EmailLogSubjectTests(TestCase):
@@ -590,8 +621,11 @@ class InAppEmailTemplateViewTests(TestCase):
         html = path.read_text()
         self.assertIn('id="template-preview"', html)
         self.assertIn('id="insert-body-image-btn"', html)
+        self.assertIn('id="plain-message"', html)
+        self.assertIn("Advanced HTML", html)
         self.assertIn("function renderPreview(", html)
         self.assertIn("function insertBodyImageFromUpload(", html)
+        self.assertIn("function headerSpaceBelow(", html)
         start = html.find("<script>\nfunction getCSRFToken")
         end = html.rfind("</script>")
         self.assertGreater(start, 0)
@@ -686,6 +720,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(data["header_display_width"], EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT)
         self.assertIn(f'width="{EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT}"', data["html"])
         self.assertNotIn("width:100%", data["html"])
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_DEFAULT}"', data["html"])
+        self.assertEqual(data["header_space_below"], EMAIL_HEADER_SPACE_DEFAULT)
 
     def test_save_and_clear_header_image_url(self):
         response = self.client.post(
@@ -840,6 +876,41 @@ class InAppEmailTemplateViewTests(TestCase):
             reverse("email_template_preview", args=[template.pk])
         )
         self.assertIn('width="180"', response.json()["html"])
+
+    def test_save_header_space_below(self):
+        response = self.client.post(
+            reverse("email_template_create"),
+            {
+                "name": "Roomy header",
+                "subject": "Hello",
+                "html_body": "<p>Body</p>",
+                "header_image_url": "https://cdn.example/header.jpg",
+                "header_space_below": str(EMAIL_HEADER_SPACE_ROOMY),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        template = EmailTemplate.objects.get(name="Roomy header")
+        self.assertEqual(template.header_space_below, EMAIL_HEADER_SPACE_ROOMY)
+        preview = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        ).json()
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_ROOMY}"', preview["html"])
+        self.assertEqual(preview["header_space_below"], EMAIL_HEADER_SPACE_ROOMY)
+
+        response = self.client.post(
+            reverse("email_template_assets", args=[template.pk]),
+            data=json.dumps(
+                {
+                    "action": "set_header_space",
+                    "header_space_below": EMAIL_HEADER_SPACE_TIGHT,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        template.refresh_from_db()
+        self.assertEqual(template.header_space_below, EMAIL_HEADER_SPACE_TIGHT)
+        self.assertIn(f'height="{EMAIL_HEADER_SPACE_TIGHT}"', response.json()["html"])
 
     def test_include_in_report_persists_and_defaults_off(self):
         response = self.client.post(

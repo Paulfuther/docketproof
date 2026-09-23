@@ -9,6 +9,8 @@ from arl.user.models import CustomUser, Employer
 from arl.msg.email_utils import (
     EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
     EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+    EMAIL_HEADER_SPACE_CHOICES,
+    EMAIL_HEADER_SPACE_DEFAULT,
     EMAIL_SOURCE_CHOICES,
     email_source_label,
 )
@@ -168,6 +170,11 @@ class EmailTemplate(models.Model):
         default=EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
         choices=EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
         help_text="How wide the header appears in the email, in pixels. Not stretched to the full column.",
+    )
+    header_space_below = models.PositiveSmallIntegerField(
+        default=EMAIL_HEADER_SPACE_DEFAULT,
+        choices=EMAIL_HEADER_SPACE_CHOICES,
+        help_text="Space between the header picture and the message. Outlook uses a spacer row.",
     )
     include_in_report = models.BooleanField(
         default=False,

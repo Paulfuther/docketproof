@@ -44,6 +44,7 @@ from arl.msg.email_utils import (
     prepare_header_image,
     prepare_header_source_image,
     remove_body_image,
+    resolve_header_space_below,
     render_merge_fields,
     resolve_email_subject,
     sample_preview_context,
@@ -556,6 +557,9 @@ def communications(request):
                             html_body,
                             sendgrid_template.header_image_url,
                             header_display_width=sendgrid_template.header_display_width,
+                            header_space_below=getattr(
+                                sendgrid_template, "header_space_below", None
+                            ),
                         )
                     # In-app HTML is sent as content (SendGrid = transport).
                     # Legacy templates still use their SendGrid dynamic template id.
@@ -1284,6 +1288,7 @@ def email_template_preview(request, pk):
             html,
             template.header_image_url,
             header_display_width=template.header_display_width,
+            header_space_below=getattr(template, "header_space_below", None),
         )
     else:
         html = (
@@ -1301,6 +1306,7 @@ def email_template_preview(request, pk):
             "header_image_url": template.header_image_url or "",
             "header_source_url": template.header_source_url or "",
             "header_display_width": template.header_display_width,
+            "header_space_below": getattr(template, "header_space_below", None),
         }
     )
 
@@ -1351,6 +1357,11 @@ def email_template_assets(request, pk):
             return JsonResponse({"error": "html_body is required"}, status=400)
         template.html_body = html
         template.save(update_fields=["html_body", "updated_at"])
+    elif action == "set_header_space":
+        template.header_space_below = resolve_header_space_below(
+            payload.get("header_space_below")
+        )
+        template.save(update_fields=["header_space_below", "updated_at"])
     else:
         return JsonResponse({"error": "Unknown action"}, status=400)
 
@@ -1360,6 +1371,7 @@ def email_template_assets(request, pk):
             preview_html,
             template.header_image_url,
             header_display_width=template.header_display_width,
+            header_space_below=getattr(template, "header_space_below", None),
         )
     return JsonResponse(
         {

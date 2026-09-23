@@ -2,6 +2,7 @@
 
 import json
 import re
+from html import unescape
 from io import BytesIO
 
 from django.utils.html import escape
@@ -24,6 +25,15 @@ EMAIL_HEADER_DISPLAY_WIDTH_CHOICES = [
     (360, "Large (360px)"),
     (440, "Wide (440px)"),
     (520, "Full (520px)"),
+]
+EMAIL_HEADER_SPACE_TIGHT = 8
+EMAIL_HEADER_SPACE_NORMAL = 24
+EMAIL_HEADER_SPACE_ROOMY = 48
+EMAIL_HEADER_SPACE_DEFAULT = EMAIL_HEADER_SPACE_NORMAL
+EMAIL_HEADER_SPACE_CHOICES = [
+    (EMAIL_HEADER_SPACE_TIGHT, "Tight"),
+    (EMAIL_HEADER_SPACE_NORMAL, "Normal"),
+    (EMAIL_HEADER_SPACE_ROOMY, "Roomy"),
 ]
 EMAIL_HEADER_SOURCE_MAX_WIDTH = 1200
 EMAIL_JPEG_QUALITY = 80
@@ -448,13 +458,40 @@ def resolve_header_display_width(width=None):
     return max(120, min(EMAIL_HEADER_MAX_WIDTH, value))
 
 
+def resolve_header_space_below(space=None):
+    allowed = {choice[0] for choice in EMAIL_HEADER_SPACE_CHOICES}
+    try:
+        value = int(space)
+    except (TypeError, ValueError):
+        return EMAIL_HEADER_SPACE_DEFAULT
+    if value in allowed:
+        return value
+    return EMAIL_HEADER_SPACE_DEFAULT
+
+
+def header_spacer_html(space=None):
+    """Outlook-safe gap under the header (td height + &nbsp;, not CSS margin)."""
+    height = resolve_header_space_below(space)
+    return (
+        f'<table role="presentation" data-dp-header-space="1" align="center" '
+        f'border="0" cellpadding="0" cellspacing="0" width="{EMAIL_IMAGE_MAX_WIDTH}">'
+        f'<tr><td height="{height}" '
+        f'style="height:{height}px;line-height:{height}px;font-size:1px;">'
+        "&nbsp;</td></tr></table>\n"
+    )
+
+
 def wrap_in_app_email_html(
-    html_body, header_image_url=None, header_display_width=None
+    html_body,
+    header_image_url=None,
+    header_display_width=None,
+    header_space_below=None,
 ):
     """Prepend an optional header image above in-app template HTML.
 
     Uses a fixed pixel width (not width:100%) plus HTML width attributes so
     Outlook and other clients do not stretch the header into a giant banner.
+    Space under the header is a spacer row Outlook will honor.
     """
     body = html_body or ""
     url = (header_image_url or "").strip()
@@ -465,14 +502,14 @@ def wrap_in_app_email_html(
     header = (
         f'<table role="presentation" align="center" border="0" cellpadding="0" '
         f'cellspacing="0" width="{width}" '
-        f'style="margin:0 auto 16px auto;width:{width}px;max-width:{width}px;">'
+        f'style="margin:0 auto;width:{width}px;max-width:{width}px;">'
         '<tr><td align="center" style="padding:0;">'
         f'<img src="{safe_url}" alt="" width="{width}" '
         f'style="display:block;width:{width}px;max-width:{width}px;height:auto;'
         'border:0;outline:none;text-decoration:none;">'
         "</td></tr></table>\n"
     )
-    return header + body
+    return header + header_spacer_html(header_space_below) + body
 
 
 def resolve_body_image_placement(placement=None):
@@ -545,3 +582,40 @@ def remove_body_image(html, url):
     for pattern in patterns:
         html = re.sub(pattern, "", html, flags=re.I)
     return html
+
+
+_BODY_IMAGE_BLOCK_RE = re.compile(
+    r"<table\b[^>]*\bdata-dp-body-image\b[^>]*>[\s\S]*?</table>\s*"
+    r"|<p\b[^>]*>\s*<img\b[^>]*>\s*</p>\s*",
+    flags=re.I,
+)
+
+
+def extract_body_image_html(html):
+    return "".join(_BODY_IMAGE_BLOCK_RE.findall(html or ""))
+
+
+def html_to_message_text(html):
+    """Plain words from html_body, ignoring inserted pictures."""
+    text = html or ""
+    for url in list_body_image_urls(text):
+        text = remove_body_image(text, url)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p\s*>", "\n\n", text)
+    text = re.sub(r"(?i)</div\s*>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = unescape(text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def message_text_to_html(text):
+    """Turn a friendly message into simple paragraph HTML."""
+    text = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    blocks = []
+    for part in re.split(r"\n\s*\n", text):
+        lines = [escape(line) for line in part.split("\n")]
+        blocks.append("<p>" + "<br>".join(lines) + "</p>")
+    return "\n".join(blocks) + "\n"
