@@ -501,7 +501,8 @@ function initTemplateForm() {
   const plainEl = document.getElementById('plain-message');
   let lastPlainPos = null;
   function rememberPlainPos() {
-    if (plainEl && typeof plainEl.selectionStart === 'number') {
+    if (!plainEl || document.activeElement !== plainEl) return;
+    if (typeof plainEl.selectionStart === 'number') {
       lastPlainPos = plainEl.selectionStart;
     }
   }
@@ -512,7 +513,7 @@ function initTemplateForm() {
     plainEl.selectionStart = plainEl.selectionEnd = pos;
   }
   if (plainEl) {
-    ['keyup', 'click', 'select', 'input'].forEach(function (evt) {
+    ['keyup', 'mouseup', 'click', 'select', 'input'].forEach(function (evt) {
       plainEl.addEventListener(evt, rememberPlainPos);
     });
     plainEl.addEventListener('input', function () {
@@ -522,12 +523,7 @@ function initTemplateForm() {
       renderBodyImageList();
     });
   }
-  const insertFieldBtn = document.getElementById('insert-field-btn');
-  if (insertFieldBtn) {
-    insertFieldBtn.addEventListener('mousedown', rememberPlainPos);
-  }
   document.querySelectorAll('.js-insert-field').forEach(function (btn) {
-    btn.addEventListener('mousedown', rememberPlainPos);
     btn.addEventListener('click', function () {
       const tag = btn.getAttribute('data-tag');
       if (!tag || !plainEl) return;

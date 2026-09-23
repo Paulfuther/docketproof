@@ -678,6 +678,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("function rememberPlainPos(", html)
         self.assertIn("function restorePlainPos(", html)
         self.assertIn("lastPlainPos == null ? plainEl.value.length", html)
+        self.assertIn("document.activeElement !== plainEl", html)
+        self.assertNotIn("insertFieldBtn.addEventListener('mousedown'", html)
         self.assertIn("Use full image", html)
         self.assertIn("id=\"header-use-full\"", html)
         self.assertIn("cropBoxResizable: true", html)
