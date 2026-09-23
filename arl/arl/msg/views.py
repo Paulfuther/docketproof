@@ -1,8 +1,11 @@
 import json
 import logging
+import re
 import urllib.parse
+import urllib.request
 import uuid
 from io import BytesIO
+from pathlib import Path
 
 from celery.result import AsyncResult
 from django.conf import settings
@@ -31,6 +34,25 @@ from waffle.decorators import waffle_flag
 from arl.bucket.helpers import conn, upload_to_linode_object_storage
 from arl.dsign.forms import NameEmailForm
 from arl.dsign.tasks import create_docusign_envelope_task
+from arl.msg.email_utils import (
+    COMPOSE_TEMPLATE_NAME,
+    EMAIL_SOURCE_COMPOSE,
+    EMAIL_SOURCE_IN_APP,
+    EMAIL_SOURCE_SENDGRID,
+    get_generic_sendgrid_template_id,
+    IN_APP_MERGE_FIELDS,
+    parse_app_template_id,
+    prepare_email_image,
+    prepare_header_image,
+    prepare_header_source_image,
+    remove_body_image,
+    resolve_header_space_below,
+    render_merge_fields,
+    resolve_email_subject,
+    sample_preview_context,
+    sendgrid_id_for_template,
+    wrap_in_app_email_html,
+)
 from arl.msg.helpers import (client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
                              is_member_of_comms_group,
@@ -50,11 +72,11 @@ from arl.msg.tasks import (master_email_send_task,
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
 
-from .forms import (CampaignSetupForm, EmailForm, EmployeeSearchForm,
+from .forms import (CampaignSetupForm, EmailForm, EmailTemplateForm, EmployeeSearchForm,
                     GroupSelectForm, SendGridFilterForm, SMSForm,
                     SMSLogFilterForm, StoreTargetForm, TemplateFilterForm,
                     TemplateWhatsAppForm)
-from .models import (ComplianceFile, DraftEmail, EmailEvent, ShortenedSMSLog,
+from .models import (ComplianceFile, DraftEmail, EmailEvent, EmailTemplate, ShortenedSMSLog,
                      ShortenedSMSMessage)
 from .tasks import (fetch_twilio_sms_task, fetch_twilio_summary,
                     filter_sendgrid_events, generate_email_event_summary,
@@ -349,6 +371,7 @@ def communications(request):
             | Q(sg_message_id__icontains=log_q)
             | Q(sg_event_id__icontains=log_q)
             | Q(sg_template_name__icontains=log_q)
+            | Q(source__icontains=log_q)
             | Q(username__icontains=log_q)
         )
 
@@ -356,10 +379,15 @@ def communications(request):
         email_log_qs = email_log_qs.filter(event=log_status)
 
     if log_template:
-        email_log_qs = email_log_qs.filter(
+        template_q = (
             Q(sg_template_id__icontains=log_template)
             | Q(sg_template_name__icontains=log_template)
-        )   
+            | Q(source__icontains=log_template)
+        )
+        app_pk = parse_app_template_id(log_template)
+        if app_pk:
+            template_q |= Q(app_template_id=app_pk)
+        email_log_qs = email_log_qs.filter(template_q) 
 
     email_timeline = (
         email_log_qs
@@ -495,17 +523,22 @@ def communications(request):
 
                 if mode == "text":
                     print("going to send")
-                    subject = email_form.cleaned_data["subject"]
+                    subject = resolve_email_subject(
+                        subject=email_form.cleaned_data.get("subject"),
+                        employer=user.employer,
+                    )
                     raw_message = email_form.cleaned_data["message"]
                     message = render_message_to_sendgrid(raw_message)
                     print(message)
                     res = master_email_send_task.delay(
                         recipients=recipients,  # ensure JSON-serializable!
-                        sendgrid_id="d-4ac0497efd864e29b4471754a9c836eb",
+                        sendgrid_id=get_generic_sendgrid_template_id(),
                         employer_id=user.employer.id,  # ensure int
                         body=message,  # str
                         subject=subject,  # str
                         attachment_urls=attachment_urls,  # ensure list[str]
+                        template_name=COMPOSE_TEMPLATE_NAME,
+                        source=EMAIL_SOURCE_COMPOSE,
                     )
                     print("queued master_email_send_task:", res.id)
 
@@ -519,10 +552,42 @@ def communications(request):
                         getattr(sendgrid_template, "sendgrid_id", sendgrid_template),
                     )
 
+                    subject = resolve_email_subject(
+                        subject=email_form.cleaned_data.get("subject"),
+                        template=sendgrid_template,
+                        employer=user.employer,
+                    )
+                    html_body = (sendgrid_template.html_body or "").strip() or None
+                    if html_body:
+                        html_body = wrap_in_app_email_html(
+                            html_body,
+                            sendgrid_template.header_image_url,
+                            header_display_width=sendgrid_template.header_display_width,
+                            header_space_below=getattr(
+                                sendgrid_template, "header_space_below", None
+                            ),
+                        )
+                    # In-app HTML is sent as content (SendGrid = transport).
+                    # Legacy templates still use their SendGrid dynamic template id.
+                    send_id = (
+                        ""
+                        if html_body
+                        else sendgrid_id_for_template(sendgrid_template)
+                    )
+                    source = (
+                        EMAIL_SOURCE_IN_APP if html_body else EMAIL_SOURCE_SENDGRID
+                    )
+
                     master_email_send_task.delay(
                         recipients=recipients,
-                        sendgrid_id=sendgrid_template.sendgrid_id,
+                        sendgrid_id=send_id,
                         employer_id=user.employer.id,
+                        subject=subject,
+                        html_body=html_body,
+                        body=html_body,
+                        template_name=sendgrid_template.name,
+                        source=source,
+                        app_template_id=sendgrid_template.pk,
                         attachment_urls=attachment_urls,
                     )
 
@@ -668,6 +733,17 @@ def communications(request):
             "can_send_docusign": is_member_of_docusign_group(user),
             "can_view_email_logs": is_member_of_email_logs_group(user),
             "can_view_sms_logs": is_member_of_sms_logs_group(user),
+            "email_templates_meta": json.dumps(
+                [
+                    {
+                        "id": str(t.pk),
+                        "name": t.name or "",
+                        "subject": t.resolved_subject(),
+                        "is_in_app": t.is_in_app,
+                    }
+                    for t in email_form.fields["sendgrid_id"].queryset
+                ]
+            ),
             # "can_send_whatsapp": is_member_of_whatsapp_group(user),
             "selected_ids": selected_ids,
             "draft_id": draft_id,
@@ -919,10 +995,15 @@ def sendgrid_webhook_view(request):
     if form.is_valid() and form.cleaned_data.get("template_id"):
         date_from = form.cleaned_data["date_from"]
         date_to = form.cleaned_data["date_to"]
-        template_id = form.cleaned_data["template_id"].sendgrid_id
+        template = form.cleaned_data["template_id"]
 
         # Trigger the Celery task and get the result
-        task = filter_sendgrid_events.delay(date_from, date_to, template_id)
+        task = filter_sendgrid_events.delay(
+            date_from=date_from,
+            date_to=date_to,
+            template_id=template.sendgrid_id,
+            app_template_id=template.pk,
+        )
         events = task.get()  # Wait for the task to complete and get the result
 
     return render(
@@ -944,13 +1025,17 @@ def email_event_summary_view(request):
         employer_id = (
             request.user.employer.id if hasattr(request.user, "employer") else None
         )
-        template_id = form.cleaned_data["template_id"].sendgrid_id
+        template = form.cleaned_data["template_id"]
         start_date = form.cleaned_data.get("date_from")
         end_date = form.cleaned_data.get("date_to")
         # print(start_date, end_date, employer_id)
         # Call the Celery task
         result = generate_email_event_summary.delay(
-            template_id, start_date, end_date, employer_id
+            template.sendgrid_id,
+            start_date,
+            end_date,
+            employer_id,
+            app_template_id=template.pk,
         )
         summary_table = result.get(timeout=10)  # Wait for task completion
 
@@ -1073,6 +1158,314 @@ def search_users_view(request):
     )
 
 
+def _visible_email_templates(employer):
+    return (
+        EmailTemplate.objects.filter(
+            Q(employers=employer) | Q(employers__isnull=True)
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+def _template_for_employer(pk, employer, require_owned=False):
+    qs = _visible_email_templates(employer)
+    template = get_object_or_404(qs, pk=pk)
+    if require_owned and not template.employers.filter(pk=employer.pk).exists():
+        return None
+    return template
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_list(request):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    templates = _visible_email_templates(employer)
+    owned_template_ids = list(
+        EmailTemplate.objects.filter(employers=employer).values_list("pk", flat=True)
+    )
+    return render(
+        request,
+        "msg/email_template_list.html",
+        {
+            "templates": templates,
+            "employer": employer,
+            "owned_template_ids": owned_template_ids,
+        },
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_create(request):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    form = EmailTemplateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        template = form.save()
+        template.employers.add(employer)
+        messages.success(request, "Email template saved.")
+        return redirect("email_template_edit", pk=template.pk)
+    return render(
+        request,
+        "msg/email_template_form.html",
+        {
+            "form": form,
+            "template": None,
+            "preview_context": sample_preview_context(request.user),
+            "merge_fields": IN_APP_MERGE_FIELDS,
+        },
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_edit(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        messages.error(request, "Your account is not linked to an employer.")
+        return redirect("comms")
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        messages.error(
+            request,
+            "You can preview shared templates but only edit templates owned by your employer.",
+        )
+        return redirect("email_template_list")
+    form = EmailTemplateForm(request.POST or None, instance=template)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Email template updated.")
+        return redirect("email_template_edit", pk=template.pk)
+    return render(
+        request,
+        "msg/email_template_form.html",
+        {
+            "form": form,
+            "template": template,
+            "preview_context": sample_preview_context(request.user),
+            "merge_fields": IN_APP_MERGE_FIELDS,
+        },
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_delete(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return redirect("comms")
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        messages.error(request, "You can only delete templates owned by your employer.")
+        return redirect("email_template_list")
+    if request.method == "POST":
+        name = template.name
+        template.delete()
+        messages.success(request, f'Template "{name}" deleted.')
+        return redirect("email_template_list")
+    return render(
+        request,
+        "msg/email_template_confirm_delete.html",
+        {"template": template},
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+def email_template_preview(request, pk):
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return JsonResponse({"error": "No employer"}, status=400)
+    template = get_object_or_404(_visible_email_templates(employer), pk=pk)
+    context = sample_preview_context(request.user, employer)
+    if request.method == "POST":
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            context.update({k: v for k, v in payload.items() if isinstance(v, str)})
+    raw_subject = resolve_email_subject(template=template, employer=employer)
+    subject = render_merge_fields(raw_subject, context)
+    context = {**context, "subject": subject}
+    if template.is_in_app:
+        html = render_merge_fields(template.html_body, context)
+        html = wrap_in_app_email_html(
+            html,
+            template.header_image_url,
+            header_display_width=template.header_display_width,
+            header_space_below=getattr(template, "header_space_below", None),
+        )
+    else:
+        html = (
+            "<p><em>This template is a legacy SendGrid dynamic template "
+            f"({escape(template.sendgrid_id or 'no id')}). "
+            "Author HTML here to preview and send from DocketProof.</em></p>"
+        )
+    return JsonResponse(
+        {
+            "name": template.name or "",
+            "subject": subject,
+            "html": html,
+            "is_in_app": template.is_in_app,
+            "sendgrid_id": template.sendgrid_id or "",
+            "header_image_url": template.header_image_url or "",
+            "header_source_url": template.header_source_url or "",
+            "header_display_width": template.header_display_width,
+            "header_space_below": getattr(template, "header_space_below", None),
+        }
+    )
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+@require_POST
+def email_template_assets(request, pk):
+    """Persist header/body image changes without a full template save."""
+    employer = getattr(request.user, "employer", None)
+    if not employer:
+        return JsonResponse({"error": "No employer"}, status=400)
+    template = _template_for_employer(pk, employer, require_owned=True)
+    if template is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    action = (payload.get("action") or "").strip()
+    if action == "clear_header":
+        template.header_image_url = ""
+        template.header_source_url = ""
+        template.save(
+            update_fields=["header_image_url", "header_source_url", "updated_at"]
+        )
+    elif action == "set_header":
+        template.header_image_url = (payload.get("header_image_url") or "").strip()
+        if "header_source_url" in payload:
+            template.header_source_url = (
+                payload.get("header_source_url") or ""
+            ).strip()
+        template.save(
+            update_fields=["header_image_url", "header_source_url", "updated_at"]
+        )
+    elif action == "remove_body_image":
+        html = payload.get("html_body")
+        if not isinstance(html, str):
+            html = template.html_body
+        template.html_body = remove_body_image(html, payload.get("url"))
+        template.save(update_fields=["html_body", "updated_at"])
+    elif action == "set_html_body":
+        html = payload.get("html_body")
+        if not isinstance(html, str):
+            return JsonResponse({"error": "html_body is required"}, status=400)
+        template.html_body = html
+        template.save(update_fields=["html_body", "updated_at"])
+    elif action == "set_header_space":
+        template.header_space_below = resolve_header_space_below(
+            payload.get("header_space_below")
+        )
+        template.save(update_fields=["header_space_below", "updated_at"])
+    else:
+        return JsonResponse({"error": "Unknown action"}, status=400)
+
+    preview_html = template.html_body or ""
+    if template.is_in_app:
+        preview_html = wrap_in_app_email_html(
+            preview_html,
+            template.header_image_url,
+            header_display_width=template.header_display_width,
+            header_space_below=getattr(template, "header_space_below", None),
+        )
+    return JsonResponse(
+        {
+            "ok": True,
+            "header_image_url": template.header_image_url or "",
+            "header_source_url": template.header_source_url or "",
+            "html_body": template.html_body or "",
+            "html": preview_html,
+        }
+    )
+
+
+def _allowed_email_image_host(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if host.endswith(".linodeobjects.com"):
+        return True
+    region = (getattr(settings, "LINODE_REGION", "") or "").lower()
+    bucket = (getattr(settings, "LINODE_BUCKET_NAME", "") or "").lower()
+    if region and host.endswith(region):
+        return True
+    if bucket and host.startswith(f"{bucket}."):
+        return True
+    for extra in (
+        getattr(settings, "LINODE_URL", ""),
+        getattr(settings, "LINODE_ENDPOINT", ""),
+    ):
+        try:
+            extra_host = (urllib.parse.urlparse(extra).hostname or "").lower()
+        except Exception:
+            extra_host = ""
+        if extra_host and host == extra_host:
+            return True
+    return False
+
+
+def _employer_owns_header_url(user, url):
+    """Allow the cropper proxy to reload a header already saved on a template."""
+    employer = getattr(user, "employer", None)
+    if not employer or not url:
+        return False
+    return EmailTemplate.objects.filter(employers=employer).filter(
+        Q(header_image_url=url) | Q(header_source_url=url)
+    ).exists()
+
+
+@login_required
+@user_passes_test(is_member_of_email_group)
+@require_GET
+def email_template_image_proxy(request):
+    """Same-origin fetch so the header cropper can export a canvas."""
+    url = (request.GET.get("url") or "").strip()
+    if not (
+        _allowed_email_image_host(url)
+        or _employer_owns_header_url(request.user, url)
+    ):
+        return HttpResponse("Invalid image URL", status=400)
+    try:
+        request_url = urllib.request.Request(
+            url,
+            headers={"User-Agent": "DocketProof-email-header/1.0"},
+        )
+        with urllib.request.urlopen(request_url, timeout=15) as incoming:
+            content_type = incoming.headers.get("Content-Type", "image/jpeg")
+            data = incoming.read(8 * 1024 * 1024)
+    except Exception:
+        logger.exception("Header source proxy failed")
+        return HttpResponse("Could not load image", status=502)
+    if not content_type.startswith("image/"):
+        content_type = "image/jpeg"
+    response = HttpResponse(data, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=300"
+    return response
+
+
 # View for weekly compliance notes
 def latest_compliance_file(request):
     file = ComplianceFile.objects.filter(is_active=True).first()
@@ -1092,30 +1485,82 @@ def compliance_file_view(request):
 def upload_attachment(request):
     if request.method == "POST" and request.FILES.get("file"):
         uploaded_file = request.FILES["file"]
-        unique_name = f"email_attachments/{uuid.uuid4()}_{uploaded_file.name}"
+        folder = (request.POST.get("folder") or "email_attachments").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", folder):
+            folder = "email_attachments"
+        email_fit = folder == "email_templates" or request.POST.get("email_fit") == "1"
+        original_name = uploaded_file.name or "file"
+        unique_name = f"{folder}/{uuid.uuid4()}_{original_name}"
+        source_url = ""
+
+        def _publish_linode(buffer, object_name):
+            upload_to_linode_object_storage(buffer, object_name)
+            bucket = conn.get_bucket(settings.LINODE_BUCKET_NAME)
+            key = bucket.get_key(object_name)
+            key.set_acl("public-read")
+            return (
+                f"https://{settings.LINODE_BUCKET_NAME}."
+                f"{settings.LINODE_REGION}/{object_name}"
+            )
 
         try:
             # ✅ Resize if it's an image
             if uploaded_file.content_type.startswith("image/"):
                 try:
-                    image = Image.open(uploaded_file)
+                    if email_fit:
+                        if request.POST.get("email_header") == "1":
+                            raw = uploaded_file.read()
+                            already_framed = request.POST.get("header_ready") == "1"
+                            buffer, ext, _ctype = prepare_header_image(
+                                BytesIO(raw),
+                                filename=original_name,
+                                crop=not already_framed,
+                            )
+                            if not already_framed:
+                                source_buf, source_ext, _src_ctype = (
+                                    prepare_header_source_image(
+                                        BytesIO(raw), filename=original_name
+                                    )
+                                )
+                                source_stem = Path(original_name).stem or "image"
+                                source_name = (
+                                    f"{folder}/{uuid.uuid4()}_"
+                                    f"{source_stem}_source.{source_ext}"
+                                )
+                                source_url = _publish_linode(source_buf, source_name)
+                            else:
+                                source_url = (
+                                    request.POST.get("source_url") or ""
+                                ).strip()
+                        else:
+                            buffer, ext, _ctype = prepare_email_image(
+                                uploaded_file, filename=original_name
+                            )
+                        stem = Path(original_name).stem or "image"
+                        unique_name = f"{folder}/{uuid.uuid4()}_{stem}.{ext}"
+                    else:
+                        image = Image.open(uploaded_file)
 
-                    # Choose resampling method safely
-                    try:
-                        resample_filter = Image.Resampling.LANCZOS  # Pillow ≥ 10
-                    except AttributeError:
-                        resample_filter = Image.LANCZOS  # Older versions
+                        # Choose resampling method safely
+                        try:
+                            resample_filter = Image.Resampling.LANCZOS  # Pillow ≥ 10
+                        except AttributeError:
+                            resample_filter = Image.LANCZOS  # Older versions
 
-                    thumbnail_size = (1500, 1500)
-                    image.thumbnail(thumbnail_size, resample=resample_filter)
+                        thumbnail_size = (1500, 1500)
+                        image.thumbnail(thumbnail_size, resample=resample_filter)
 
-                    buffer = BytesIO()
-                    image_format = image.format or "JPEG"
-                    image.save(buffer, format=image_format)
-                    buffer.seek(0)
+                        buffer = BytesIO()
+                        image_format = image.format or "JPEG"
+                        image.save(buffer, format=image_format)
+                        buffer.seek(0)
 
                     # Upload resized image
-                    upload_to_linode_object_storage(buffer, unique_name)
+                    url = _publish_linode(buffer, unique_name)
+                    payload = {"success": True, "url": url}
+                    if source_url:
+                        payload["source_url"] = source_url
+                    return JsonResponse(payload)
 
                 except Exception as e:
                     return JsonResponse(
