@@ -33,7 +33,12 @@ class QuizForm(forms.ModelForm):
 class QuestionForm(forms.ModelForm):
     class Meta:
         model = Question
-        fields = ["text"]
+        fields = [
+            "text",
+            "follow_up_on_yes",
+            "follow_up_on_no",
+            "responsibility_assignable",
+        ]
 
 
 class AnswerForm(forms.ModelForm):

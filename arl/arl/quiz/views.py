@@ -120,24 +120,51 @@ def take_quiz(request, quiz_id):
 
         return render(request, "flags/feature_not_available.html", status=403)
     quiz = get_object_or_404(Quiz, pk=quiz_id)
-    questions = quiz.questions.all()
+    questions = list(quiz.questions.prefetch_related("answers"))
 
     if request.method == "POST":
-        score = 0
-        total_questions = questions.count()
-
+        has_errors = False
         for question in questions:
-            selected_answer = request.POST.get(f"question_{question.id}")
-            correct_answer = question.answers.filter(is_correct=True).first()
+            selected = (request.POST.get(f"question_{question.id}") or "").strip()
+            follow_up = request.POST.get(f"follow_up_{question.id}") or ""
+            responsibility = request.POST.get(f"responsibility_{question.id}") or ""
+            question.posted_answer = selected.lower()
+            question.posted_follow_up = follow_up.strip()
+            question.posted_responsibility = responsibility.strip().upper()
+            question.form_errors = question.submission_errors(
+                question.posted_answer,
+                question.posted_follow_up,
+                question.posted_responsibility,
+            )
+            if question.form_errors:
+                has_errors = True
 
-            # Assuming correct_answer.text is either "yes" or "no"
-            if correct_answer and selected_answer == correct_answer.text.lower():
-                score += 1
+        if has_errors:
+            return render(
+                request,
+                "quiz/take_quiz.html",
+                {
+                    "quiz": quiz,
+                    "questions": questions,
+                    "form_error": (
+                        "Complete the follow-up items marked on this quiz."
+                    ),
+                },
+            )
 
+        score = sum(
+            1 for question in questions if question.selected_is_correct(
+                question.posted_answer
+            )
+        )
         return render(
             request,
             "quiz/quiz_result.html",
-            {"quiz": quiz, "score": score, "total_questions": total_questions},
+            {
+                "quiz": quiz,
+                "score": score,
+                "total_questions": len(questions),
+            },
         )
 
     return render(

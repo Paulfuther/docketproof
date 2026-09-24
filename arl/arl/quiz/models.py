@@ -21,12 +21,102 @@ class Quiz(models.Model):
 
 
 class Question(models.Model):
+    """Yes/No quiz item.
+
+    Correctness lives on Answer.is_correct. Follow-up is separate: a No can
+    be the right answer and still need no note and no L/S.
+    """
+
+    ANSWER_YES = "Y"
+    ANSWER_NO = "N"
+    RESPONSIBILITY_L = "L"
+    RESPONSIBILITY_S = "S"
+
     quiz = models.ForeignKey(Quiz, related_name="questions", on_delete=models.CASCADE)
     text = models.CharField(max_length=255)
+    follow_up_on_yes = models.BooleanField(
+        "Follow-up needed when answer is Yes",
+        default=False,
+        help_text=(
+            "Check when Yes needs a follow-up. "
+            "Leave off when Yes needs nothing else."
+        ),
+    )
+    follow_up_on_no = models.BooleanField(
+        "Follow-up needed when answer is No",
+        default=False,
+        help_text=(
+            "Check only when No needs a follow-up. "
+            "Leave off when No is an acceptable answer."
+        ),
+    )
+    responsibility_assignable = models.BooleanField(
+        "Require L or S when that follow-up applies",
+        default=False,
+        help_text=(
+            "L/S is required only for an answer that needs a follow-up. "
+            "Yes does not require L unless follow-up on Yes is checked."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.text
+
+    def normalize_answer(self, answer):
+        value = (answer or "").strip().lower()
+        if value in ("y", "yes"):
+            return self.ANSWER_YES
+        if value in ("n", "no"):
+            return self.ANSWER_NO
+        return ""
+
+    def follow_up_answers(self):
+        codes = []
+        if self.follow_up_on_yes:
+            codes.append(self.ANSWER_YES)
+        if self.follow_up_on_no:
+            codes.append(self.ANSWER_NO)
+        return codes
+
+    @property
+    def follow_up_codes(self):
+        return ",".join(self.follow_up_answers())
+
+    def needs_follow_up(self, answer):
+        code = self.normalize_answer(answer)
+        return bool(code and code in self.follow_up_answers())
+
+    def needs_responsibility(self, answer):
+        """L/S is required only when this answer needs a follow-up."""
+        if not self.responsibility_assignable:
+            return False
+        return self.needs_follow_up(answer)
+
+    def submission_errors(self, answer, follow_up="", responsibility=""):
+        errors = []
+        if not self.normalize_answer(answer):
+            errors.append("Choose Yes or No.")
+            return errors
+        if self.needs_follow_up(answer) and not (follow_up or "").strip():
+            errors.append("This answer requires a follow-up.")
+        if self.needs_responsibility(answer):
+            resp = (responsibility or "").strip().upper()
+            if resp not in (self.RESPONSIBILITY_L, self.RESPONSIBILITY_S):
+                errors.append("Choose L or S responsibility.")
+        return errors
+
+    def selected_is_correct(self, selected_answer):
+        correct_answer = self.answers.filter(is_correct=True).first()
+        if not correct_answer or selected_answer is None:
+            return False
+        if selected_answer == correct_answer.text.lower():
+            return True
+        selected_code = self.normalize_answer(selected_answer)
+        return bool(
+            selected_code
+            and selected_code == self.normalize_answer(correct_answer.text)
+        )
 
 
 class Answer(models.Model):
