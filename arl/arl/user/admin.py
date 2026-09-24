@@ -457,6 +457,12 @@ class QuestionInline(admin.StackedInline):
     model = Question
     extra = 1  # Allow adding one extra question by default
     # Do not attempt to nest inlines here; just show questions.
+    fields = (
+        "text",
+        "follow_up_on_yes",
+        "follow_up_on_no",
+        "responsibility_assignable",
+    )
 
 
 class QuizAdmin(admin.ModelAdmin):
@@ -487,7 +493,26 @@ class QuizAdmin(admin.ModelAdmin):
 
 class QuestionAdmin(admin.ModelAdmin):
     inlines = [AnswerInline]  # Include AnswerInline in the QuestionAdmin
-    list_display = ("text", "quiz", "display_answers")
+    list_display = (
+        "text",
+        "quiz",
+        "follow_up_on_yes",
+        "follow_up_on_no",
+        "responsibility_assignable",
+        "display_answers",
+    )
+    list_filter = (
+        "follow_up_on_yes",
+        "follow_up_on_no",
+        "responsibility_assignable",
+    )
+    fields = (
+        "quiz",
+        "text",
+        "follow_up_on_yes",
+        "follow_up_on_no",
+        "responsibility_assignable",
+    )
     # Display the question text, quiz, and answers
 
     def display_answers(self, obj):

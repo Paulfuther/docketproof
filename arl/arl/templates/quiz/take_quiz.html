@@ -21,19 +21,50 @@
             <legend>{{ quiz.title }}</legend>
             <p>{{ quiz.description }}</p>
 
-            <form method="post">
+            <form method="post" id="take-quiz-form">
                 {% csrf_token %}
+                {% if form_error %}
+                    <div class="alert alert-danger" role="alert">{{ form_error }}</div>
+                {% endif %}
                 {% for question in questions %}
-                    <div class="question">
+                    <div class="question mb-4"
+                         data-follow-up-on="{{ question.follow_up_codes }}"
+                         data-responsibility="{% if question.responsibility_assignable %}1{% else %}0{% endif %}">
                         <legend>{{ question.text }}</legend>
-                        <label>
-                            <input type="radio" name="question_{{ question.id }}" value="yes" required>
+                        {% if question.form_errors %}
+                            <div class="text-danger mb-2" role="alert">
+                                {% for message in question.form_errors %}
+                                    <div>{{ message }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <label class="me-3">
+                            <input type="radio" name="question_{{ question.id }}" value="yes" required
+                                   {% if question.posted_answer == "yes" %}checked{% endif %}>
                             Yes
                         </label>
                         <label>
-                            <input type="radio" name="question_{{ question.id }}" value="no" required>
+                            <input type="radio" name="question_{{ question.id }}" value="no" required
+                                   {% if question.posted_answer == "no" %}checked{% endif %}>
                             No
                         </label>
+                        <div class="follow-up-wrap mt-2 d-none" data-role="follow-up">
+                            <label for="follow_up_{{ question.id }}">Follow-up</label>
+                            <textarea class="form-control" name="follow_up_{{ question.id }}" id="follow_up_{{ question.id }}" rows="2">{{ question.posted_follow_up }}</textarea>
+                        </div>
+                        <div class="resp-wrap mt-2 d-none" data-role="responsibility">
+                            <div>Responsibility</div>
+                            <label class="me-3">
+                                <input type="radio" name="responsibility_{{ question.id }}" value="L"
+                                       {% if question.posted_responsibility == "L" %}checked{% endif %}>
+                                L
+                            </label>
+                            <label>
+                                <input type="radio" name="responsibility_{{ question.id }}" value="S"
+                                       {% if question.posted_responsibility == "S" %}checked{% endif %}>
+                                S
+                            </label>
+                        </div>
                     </div>
                 {% endfor %}
                 <div class="submit-button">
@@ -44,5 +75,59 @@
     </div>
 </div>
 
+<script>
+(function () {
+    function selectedCode(card) {
+        var chosen = card.querySelector('input[name^="question_"]:checked');
+        if (!chosen) {
+            return "";
+        }
+        if (chosen.value === "yes") {
+            return "Y";
+        }
+        if (chosen.value === "no") {
+            return "N";
+        }
+        return "";
+    }
+
+    function syncCard(card) {
+        var codes = (card.getAttribute("data-follow-up-on") || "")
+            .split(",")
+            .filter(Boolean);
+        var code = selectedCode(card);
+        var needsFollowUp = codes.indexOf(code) !== -1;
+        var needsResponsibility = needsFollowUp && card.getAttribute("data-responsibility") === "1";
+        var followWrap = card.querySelector('[data-role="follow-up"]');
+        var respWrap = card.querySelector('[data-role="responsibility"]');
+        var note = followWrap.querySelector("textarea");
+
+        followWrap.classList.toggle("d-none", !needsFollowUp);
+        note.required = needsFollowUp;
+        if (!needsFollowUp) {
+            note.value = "";
+        }
+
+        respWrap.classList.toggle("d-none", !needsResponsibility);
+        var radios = respWrap.querySelectorAll('input[type="radio"]');
+        for (var i = 0; i < radios.length; i++) {
+            radios[i].required = needsResponsibility;
+            if (!needsResponsibility) {
+                radios[i].checked = false;
+            }
+        }
+    }
+
+    var cards = document.querySelectorAll("#take-quiz-form .question");
+    for (var i = 0; i < cards.length; i++) {
+        syncCard(cards[i]);
+        cards[i].addEventListener("change", function (event) {
+            if (event.target && event.target.name && event.target.name.indexOf("question_") === 0) {
+                syncCard(event.currentTarget);
+            }
+        });
+    }
+})();
+</script>
 
 {% endblock %}
