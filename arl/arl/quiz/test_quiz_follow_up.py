@@ -140,6 +140,19 @@ class TakeQuizFollowUpTests(TestCase):
         data.update(extra)
         return self.client.post(reverse("take_quiz", args=[self.quiz.id]), data)
 
+    def test_take_page_marks_follow_up_polarity(self):
+        response = self.client.get(reverse("take_quiz", args=[self.quiz.id]))
+        self.assertContains(
+            response,
+            'data-follow-up-on="Y"',
+        )
+        self.assertContains(response, 'data-follow-up-on="N"')
+        self.assertContains(response, 'data-responsibility="1"')
+        self.assertContains(response, "d-none")
+        self.assertContains(response, 'value="L"')
+        self.assertContains(response, 'value="S"')
+        self.assertNotContains(response, "This answer requires a follow-up.")
+
     def test_no_correct_and_yes_do_not_require_follow_up_or_l(self):
         response = self._post()
         self.assertEqual(response.status_code, 200)
