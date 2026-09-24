@@ -212,6 +212,7 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
         "groups",
         "sin_expiration_date",
         "work_permit_expiration_date",
+        "work_permit_extension_requested",
         SINFirstDigitFilter,
     )
     ordering = ("-id",)
@@ -379,10 +380,18 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
         (
             "Work Permit Extension",
             {
+                "description": (
+                    "Check “Extension letter on file” when a government "
+                    "extension or authorization letter is on file and the "
+                    "employee is still legal to work. That letter has no "
+                    "expiry date. These employees are left out of the nightly "
+                    "90/60/30 work-permit reminder. The date is when the "
+                    "extension was submitted to IRCC, not a new expiry."
+                ),
                 "fields": (
                     "work_permit_extension_requested",
                     "work_permit_extension_date",
-                )
+                ),
             },
         )
     )

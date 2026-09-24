@@ -13,4 +13,5 @@ app = Celery('arl')
 
 app.config_from_object(settings, namespace='CELERY')
 app.conf.broker_url = settings.BROKER_URL
-app.autodiscover_tasks(['arl'])
+# Worker startup imports arl/tasks.py plus the user app (work-permit digest).
+app.autodiscover_tasks(["arl", "arl.user"])

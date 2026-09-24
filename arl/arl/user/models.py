@@ -99,13 +99,30 @@ class CustomUser(AbstractUser):
         ],
         null=True,
     )
-    # Work Permit Extension Tracking
-    work_permit_extension_requested = models.BooleanField(default=False)
+    # Work Permit Extension Tracking.
+    # Checked when a government extension / authorization letter is on file.
+    # That letter has no expiry. The employee stays legal to work, including
+    # when the work permit itself is expired or inside the 90/60/30 reminder
+    # windows. The nightly work-permit digest skips these people.
+    work_permit_extension_requested = models.BooleanField(
+        default=False,
+        verbose_name="Extension letter on file",
+        help_text=(
+            "Check when a government extension or work-authorization letter "
+            "is on file and the employee is still legal to work. The letter "
+            "has no expiry date. Checked employees are left out of the "
+            "nightly 90/60/30 work-permit reminder."
+        ),
+    )
 
     work_permit_extension_date = models.DateField(
         null=True,
         blank=True,
-        help_text="Date extension was submitted to IRCC"
+        verbose_name="Extension submitted",
+        help_text=(
+            "Date the extension was submitted to IRCC. This is not an expiry. "
+            "Required when an extension letter is on file."
+        ),
     )
 
     # NEW encrypted fields

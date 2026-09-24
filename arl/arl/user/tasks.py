@@ -289,3 +289,17 @@ def send_new_hire_invite_task(
     except Exception as e:
         print(f"🚨 Error in new hire invite task: {e}")
         return False
+
+
+@app.task(name="work_permit_expiry_digest")
+def work_permit_expiry_digest(dry_run=False, force=False):
+    """Nightly 90/60/30 work-permit digest for the immigration_email group.
+
+    One email per employer per day listing everyone currently in those
+    windows. Employees with an extension letter on file are excluded.
+    dry_run=True builds the digest and does not send.
+    force=True sends again even if today's digest already went out.
+    """
+    from arl.user.work_permit_reminders import send_work_permit_expiry_digest
+
+    return send_work_permit_expiry_digest(dry_run=dry_run, force=force)
