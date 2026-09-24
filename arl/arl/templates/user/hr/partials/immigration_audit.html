@@ -281,9 +281,9 @@
 .immigration-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .immigration-employee {
@@ -303,7 +303,10 @@
 }
 
 .immigration-summary {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
 }
 
 .immigration-details {
@@ -319,7 +322,16 @@
   gap: 0.75rem;
 }
 
+.immigration-detail-row > .imm-pill {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(18rem, 62%);
+  margin-left: auto;
+}
+
 .immigration-detail-label {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 0.82rem;
   color: #6c757d;
   font-weight: 700;
@@ -371,25 +383,36 @@
 
 .imm-pill,
 .imm-btn {
-  width: 150px;
-  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
   border-radius: 999px;
   font-weight: 700;
-  white-space: nowrap;
 }
 
 .imm-pill {
+  width: auto;
+  min-height: 28px;
+  height: auto;
+  padding: 0.2rem 0.75rem;
   font-size: 0.72rem;
+  line-height: 1.25;
   border: 1px solid transparent;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .imm-btn {
-  font-size: 0.65rem;
-  padding: 0;
+  width: auto;
+  min-width: 4.25rem;
+  height: 28px;
+  padding: 0 0.85rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .imm-pill.is-success {
@@ -428,7 +451,13 @@
   }
 
   .immigration-summary {
-    flex-shrink: 0;
+    flex: 1 1 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+
+  .immigration-summary .imm-pill {
+    max-width: 100%;
   }
 
   .immigration-employee {
@@ -436,7 +465,11 @@
   }
 
   .immigration-detail-row {
-    align-items: center;
+    align-items: flex-start;
+  }
+
+  .immigration-detail-row > .imm-pill {
+    max-width: min(18rem, 58%);
   }
 
   .immigration-detail-label {
@@ -447,18 +480,15 @@
     font-size: 0.88rem;
   }
 
-  .imm-pill,
-  .imm-btn {
-    width: 130px;
-    height: 26px;
-  }
-
   .imm-pill {
+    min-height: 26px;
     font-size: 0.68rem;
   }
 
   .imm-btn {
-    font-size: 0.56rem;
+    height: 26px;
+    min-width: 3.75rem;
+    font-size: 0.7rem;
   }
 
   .immigration-history-item {
@@ -466,11 +496,12 @@
   }
 
   .imm-history-text {
-    max-width: calc(100% - 145px);
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .immigration-history-item .imm-btn {
-    flex: 0 0 130px;
+    flex: 0 0 auto;
     margin-left: auto;
   }
 }
