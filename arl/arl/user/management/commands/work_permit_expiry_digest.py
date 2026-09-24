@@ -1,93 +1,59 @@
-"""Paul — work permit 90/60/30 reminder.
+"""Paul — work permit milestone reminders.
 
-How to set the role
-    Django Admin → Groups. The group name is exactly ``immigration_email``.
-    This command creates that group if it is missing.
-    On each person who should get the email: active user, same employer as
-    the employees, add the ``immigration_email`` group.
-    People in other groups (HR, new_hire_data_email, and so on) are not
-    copied unless they are also in ``immigration_email``.
-
-How to mark the bypass
-    Django Admin → Users → the employee.
-    Check “Extension letter on file” (work_permit_extension_requested).
-    Set “Extension submitted” to the date it was filed with IRCC.
-    That date is not an expiry. The government letter has no expiry date.
-    Save. They drop out of this digest. The HR immigration audit shows
-    Extension Pending / Extension Filed and “left out of the 90/60/30 reminder”.
-
-How to dry-run or send locally
+Dry-run (prints the list, does not send)
     python manage.py work_permit_expiry_digest --dry-run
+
+Send whatever that list shows
     python manage.py work_permit_expiry_digest
-    python manage.py work_permit_expiry_digest --force
-    python manage.py work_permit_expiry_digest --schedule
 
-``--schedule`` adds a django-celery-beat job at 2:15am America/New_York.
-Beat has to use the database scheduler:
+The list is one line per employee who would get a notice tonight:
+milestone (90, 60, or 30), name, employer, permit expiry, days left.
 
-    celery -A arl beat -S django
+Rule
+    One email at 90 days (or the first night they are seen with
+    61–90 days left), then nothing until 60 (31–60 days left),
+    then nothing until 30 (0–30 days left). A missed night does not
+    send every following night. Already expired is not listed.
+    Extension letter on file (work_permit_extension_requested) is skipped.
 
-Or call the task directly:
+Turn the nightly job on or off
+    Django Admin → Periodic Tasks → Add (django-celery-beat).
+    Task name: work_permit_milestone_reminders
+    Crontab example: minute 15, hour 2, every day, timezone America/New_York.
+    Uncheck Enabled to stop it. Check Enabled to start it again.
+    Beat has to be running with the database scheduler:
+        celery -A arl beat -S django
 
-    celery -A arl call work_permit_expiry_digest
-    celery -A arl call work_permit_expiry_digest --kwargs '{"dry_run": true}'
+Who receives a real send
+    Active users in the Django group immigration_email, same employer
+    as the employee. The dry-run prints those addresses as "Would email".
 
-What the windows mean
-    Days remaining = permit expiry minus today's date in Django TIME_ZONE
-    (America/New_York in production settings). Same subtraction the
-    immigration audit uses.
-    30: expires in 0–30 days. 60: 31–60. 90: 61–90. One bucket each.
-    Already expired is not in this mailer.
-    One digest per employer per day. A later run the same day does not
-    send again unless you pass --force. Empty nights send nothing.
+Send one milestone again
+    Django Admin → Work permit milestone notices → delete that row.
+    The next run will include it.
 """
-
-import json
 
 from django.core.management.base import BaseCommand
 
 from arl.user.work_permit_reminders import (
-    ensure_work_permit_digest_schedule,
-    send_work_permit_expiry_digest,
+    format_milestone_report,
+    send_work_permit_milestone_reminders,
 )
 
 
 class Command(BaseCommand):
     help = (
-        "Email the immigration_email group a digest of work permits "
-        "expiring in 90, 60, and 30 days. See the module docstring."
+        "List or send one-time 90, 60, and 30 day work-permit reminders. "
+        "Use --dry-run to print tonight's list without sending."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Print who would be emailed. Do not send.",
-        )
-        parser.add_argument(
-            "--force",
-            action="store_true",
-            help="Send even if this employer already got today's digest.",
-        )
-        parser.add_argument(
-            "--schedule",
-            action="store_true",
-            help=(
-                "Create the nightly django-celery-beat entry "
-                "(2:15am America/New_York) and do not send "
-                "unless --dry-run or --force is also set."
-            ),
+            help="Print who would get a 90, 60, or 30 day notice tonight. Do not send.",
         )
 
     def handle(self, *args, **options):
-        if options["schedule"]:
-            scheduled = ensure_work_permit_digest_schedule()
-            self.stdout.write(json.dumps({"schedule": scheduled}, indent=2))
-            if not options["dry_run"] and not options["force"]:
-                return
-
-        result = send_work_permit_expiry_digest(
-            dry_run=options["dry_run"],
-            force=options["force"],
-        )
-        self.stdout.write(json.dumps(result, indent=2, default=str))
+        result = send_work_permit_milestone_reminders(dry_run=options["dry_run"])
+        self.stdout.write(format_milestone_report(result))

@@ -1,28 +1,39 @@
-"""Nightly digest of work permits coming due in 90, 60, and 30 days.
+"""One work-permit reminder at 90 days, then 60, then 30.
 
-Window rule (same day-count the immigration audit uses: expiry minus today):
+Days remaining = permit expiration date minus today in Django TIME_ZONE
+(America/New_York in production settings). Same subtraction the
+immigration audit uses.
 
-- 30-day bucket: expires in 0 to 30 days (today counts)
-- 60-day bucket: expires in 31 to 60 days
-- 90-day bucket: expires in 61 to 90 days
+Milestone bands (one send each, per employee and permit date):
 
-Buckets do not overlap. A person sits in one bucket and moves
-90 -> 60 -> 30 as the date gets closer. Already-expired permits
-(days remaining below 0) are not in this mailer.
+- 90-day notice when 61–90 days remain, if that notice was not sent yet
+- 60-day notice when 31–60 days remain, if that notice was not sent yet
+- 30-day notice when 0–30 days remain (today counts), if not sent yet
 
-Bypass: ``work_permit_extension_requested`` (extension letter on file).
-That government letter has no expiry. Those employees stay legal and
-are left out, including when the permit date is inside a window or
-already past.
+A missed night still sends once the first time the employee is seen
+inside that band. It does not email them again on later nights in the
+same band. If the whole 90-day band is missed, the next run sends the
+60-day notice only (not a late 90-day email, and not both). Same for a
+missed 60-day band: the 30-day notice is the next one. Already-expired
+permits (days remaining below 0) are not in this mailer.
 
-Delivery: one digest per employer per local calendar day, emailed to
-each active user in the ``immigration_email`` Django group for that
-employer. A successful send is recorded on EmailLog so a second run
-the same day does not send again. ``force=True`` sends anyway.
-An empty digest sends nothing.
+Records live on WorkPermitMilestoneNotice (user + permit date +
+milestone). A new permit date starts the sequence over. Delete a row
+in admin to allow that milestone to send again.
+
+Bypass: work_permit_extension_requested (extension letter on file).
+
+When anything is actually due, one email per employer goes to each
+active user in the immigration_email group for that employer. The
+message lists only tonight's milestones, not everyone still inside a
+window. Empty nights send nothing.
+
+The Celery task name is work_permit_milestone_reminders. Turn it on
+or off in Django Admin → Periodic Tasks (django-celery-beat). The
+management command is for a dry-run list and a manual send.
 """
 
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import Group
@@ -32,33 +43,26 @@ from django.utils.html import escape
 from arl.msg.email_utils import EMAIL_SOURCE_IN_APP, wrap_in_app_email_html
 from arl.msg.models import EmailLog
 from arl.setup.models import TenantApiKeys
-from arl.user.models import CustomUser
+from arl.user.models import CustomUser, WorkPermitMilestoneNotice
 
 IMMIGRATION_EMAIL_GROUP = "immigration_email"
-DIGEST_TEMPLATE_NAME = "Work permit expiry digest"
-
-# (bucket label, inclusive min days, inclusive max days)
-PERMIT_WINDOWS = (
-    (30, 0, 30),
-    (60, 31, 60),
-    (90, 61, 90),
-)
-BUCKET_ORDER = (30, 60, 90)
-BUCKET_HEADINGS = {
-    30: "30 days — expires within 30 days (including today)",
-    60: "60 days — expires in 31 to 60 days",
-    90: "90 days — expires in 61 to 90 days",
-}
+REMINDER_TEMPLATE_NAME = "Work permit milestone reminder"
+TASK_NAME = "work_permit_milestone_reminders"
+MILESTONES = (90, 60, 30)
 
 
-def permit_bucket(days_left):
-    """Return 30, 60, 90, or None when the permit is outside this mailer."""
-    if days_left is None:
+def due_milestone(days_left):
+    """Return 90, 60, or 30 for the band days_left is in, else None.
+
+    91 or more, or already expired (below 0), is outside this mailer.
+    """
+    if days_left is None or days_left < 0 or days_left > 90:
         return None
-    for bucket, low, high in PERMIT_WINDOWS:
-        if low <= days_left <= high:
-            return bucket
-    return None
+    if days_left > 60:
+        return 90
+    if days_left > 30:
+        return 60
+    return 30
 
 
 def _today(today=None):
@@ -76,24 +80,7 @@ def _store_label(user):
     return "—"
 
 
-def employee_row(user, today):
-    expiry = user.work_permit_expiration_date
-    days_left = (expiry - today).days if expiry else None
-    return {
-        "id": user.pk,
-        "name": _display_name(user),
-        "email": user.email or "",
-        "store": _store_label(user),
-        "expiry": expiry.isoformat() if expiry else "",
-        "days_left": days_left,
-        "bucket": permit_bucket(days_left),
-    }
-
-
-def due_employees(today=None):
-    """Active employees with a permit date inside 0–90 days, not bypassed."""
-    today = _today(today)
-    latest = today + timedelta(days=90)
+def _candidate_queryset(today):
     return (
         CustomUser.objects.filter(
             is_active=True,
@@ -101,36 +88,57 @@ def due_employees(today=None):
             work_permit_expiration_date__isnull=False,
             work_permit_extension_requested=False,
             work_permit_expiration_date__gte=today,
-            work_permit_expiration_date__lte=latest,
+            work_permit_expiration_date__lte=today + timedelta(days=90),
         )
         .select_related("employer", "store")
-        .order_by(
-            "employer_id",
-            "work_permit_expiration_date",
-            "last_name",
-            "first_name",
-            "id",
-        )
+        .order_by("employer_id", "last_name", "first_name", "id")
     )
 
 
-def bucket_employees(today=None):
-    """Map employer id -> {30/60/90: [row, ...], 'employer': Employer}."""
+def pending_milestones(today=None):
+    """Employees who should get exactly one milestone notice tonight."""
     today = _today(today)
-    grouped = {}
-    for user in due_employees(today):
-        row = employee_row(user, today)
-        if row["bucket"] is None:
+    users = list(_candidate_queryset(today))
+    if not users:
+        return []
+
+    sent = set(
+        WorkPermitMilestoneNotice.objects.filter(
+            user_id__in=[user.pk for user in users],
+        ).values_list("user_id", "permit_expiration_date", "milestone")
+    )
+    rows = []
+    for user in users:
+        expiry = user.work_permit_expiration_date
+        days_left = (expiry - today).days
+        milestone = due_milestone(days_left)
+        if milestone is None:
             continue
-        entry = grouped.setdefault(
-            user.employer_id,
+        if (user.pk, expiry, milestone) in sent:
+            continue
+        rows.append(
             {
+                "user_id": user.pk,
+                "name": _display_name(user),
+                "email": user.email or "",
+                "employer_id": user.employer_id,
+                "employer_name": user.employer.name,
                 "employer": user.employer,
-                "buckets": {30: [], 60: [], 90: []},
-            },
+                "store": _store_label(user),
+                "expiry": expiry,
+                "days_left": days_left,
+                "milestone": milestone,
+            }
         )
-        entry["buckets"][row["bucket"]].append(row)
-    return grouped
+    rows.sort(
+        key=lambda row: (
+            -row["milestone"],
+            row["employer_name"].lower(),
+            row["name"].lower(),
+            row["user_id"],
+        )
+    )
+    return rows
 
 
 def immigration_email_recipients(employer_id):
@@ -148,19 +156,35 @@ def immigration_email_recipients(employer_id):
     )
 
 
-def render_digest_html(employer_name, buckets, today):
+def _public_candidate(row):
+    return {
+        "user_id": row["user_id"],
+        "name": row["name"],
+        "email": row["email"],
+        "employer_id": row["employer_id"],
+        "employer_name": row["employer_name"],
+        "store": row["store"],
+        "expiry": row["expiry"].isoformat(),
+        "days_left": row["days_left"],
+        "milestone": row["milestone"],
+    }
+
+
+def render_reminder_html(employer_name, rows, today):
     parts = [
         (
-            f"<p>Work permits coming due for <strong>{escape(employer_name)}</strong> "
+            f"<p>Work permit reminders for <strong>{escape(employer_name)}</strong> "
             f"as of {escape(today.strftime('%B %d, %Y'))}.</p>"
         ),
         (
-            "<p>Most urgent first. Employees with an extension letter on file "
-            "(still legal to work; the letter has no expiry) are not listed.</p>"
+            "<p>Each person is listed once, for the milestone they reached. "
+            "They are not listed again until the next milestone "
+            "(90, then 60, then 30). Employees with an extension letter "
+            "on file are not included.</p>"
         ),
     ]
-    for bucket in BUCKET_ORDER:
-        people = buckets.get(bucket) or []
+    for milestone in MILESTONES:
+        people = [row for row in rows if row["milestone"] == milestone]
         if not people:
             continue
         items = []
@@ -170,40 +194,24 @@ def render_digest_html(employer_name, buckets, today):
                 "<li>"
                 f"{escape(person['name'])} — {escape(email)} — "
                 f"Store {escape(person['store'])} — "
-                f"expires {escape(person['expiry'])} "
-                f"({person['days_left']} days)"
+                f"expires {escape(person['expiry'].isoformat())} "
+                f"({person['days_left']} days left)"
                 "</li>"
             )
-        heading = BUCKET_HEADINGS[bucket]
         parts.append(
-            f"<h2>{escape(heading)} ({len(people)})</h2><ul>{''.join(items)}</ul>"
+            f"<h2>{milestone}-day reminder ({len(people)})</h2>"
+            f"<ul>{''.join(items)}</ul>"
         )
     return wrap_in_app_email_html("".join(parts))
 
 
-def digest_subject(employer_name, buckets):
-    counts = ", ".join(
-        f"{bucket}: {len(buckets.get(bucket) or [])}" for bucket in BUCKET_ORDER
-    )
-    return f"Work permits coming due ({counts}) — {employer_name}"
-
-
-def _local_day_bounds(today):
-    start = datetime.combine(today, time.min)
-    if timezone.is_aware(timezone.now()):
-        start = timezone.make_aware(start, timezone.get_current_timezone())
-    return start, start + timedelta(days=1)
-
-
-def already_sent_today(employer_id, today):
-    start, end = _local_day_bounds(today)
-    return EmailLog.objects.filter(
-        employer_id=employer_id,
-        template_name=DIGEST_TEMPLATE_NAME,
-        status="SUCCESS",
-        sent_at__gte=start,
-        sent_at__lt=end,
-    ).exists()
+def reminder_subject(employer_name, rows):
+    bits = []
+    for milestone in MILESTONES:
+        count = sum(1 for row in rows if row["milestone"] == milestone)
+        if count:
+            bits.append(f"{milestone}-day: {count}")
+    return f"Work permit reminders ({', '.join(bits)}) — {employer_name}"
 
 
 def _verified_sender(employer):
@@ -213,51 +221,35 @@ def _verified_sender(employer):
     return getattr(settings, "MAIL_DEFAULT_SENDER", None) or ""
 
 
-def _counts(buckets):
-    return {str(bucket): len(buckets.get(bucket) or []) for bucket in BUCKET_ORDER}
+def _group_by_employer(rows):
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row["employer_id"], []).append(row)
+    return grouped
 
 
-def _flat_employees(buckets):
-    rows = []
-    for bucket in BUCKET_ORDER:
-        rows.extend(buckets.get(bucket) or [])
-    return rows
-
-
-def send_work_permit_expiry_digest(today=None, dry_run=False, force=False):
-    """Build and send one digest per employer. Returns a JSON-safe summary."""
+def send_work_permit_milestone_reminders(today=None, dry_run=False):
+    """Send tonight's milestone notices. dry_run does not email or record."""
     today = _today(today)
     Group.objects.get_or_create(name=IMMIGRATION_EMAIL_GROUP)
-    grouped = bucket_employees(today)
+    rows = pending_milestones(today)
+    grouped = _group_by_employer(rows)
     employers = []
 
-    for employer_id, entry in grouped.items():
-        employer = entry["employer"]
-        buckets = entry["buckets"]
+    for employer_id, employer_rows in grouped.items():
+        employer = employer_rows[0]["employer"]
         recipients = immigration_email_recipients(employer_id)
         recipient_emails = [user.email for user in recipients]
         summary = {
             "employer_id": employer_id,
             "employer_name": employer.name,
-            "counts": _counts(buckets),
-            "employees": _flat_employees(buckets),
             "recipients": recipient_emails,
+            "milestones": [row["milestone"] for row in employer_rows],
         }
-
-        if already_sent_today(employer_id, today) and not force:
-            summary["status"] = "skipped_already_sent"
-            employers.append(summary)
-            continue
-
         if not recipient_emails:
             summary["status"] = "skipped_no_recipients"
             employers.append(summary)
             continue
-
-        subject = digest_subject(employer.name, buckets)
-        html = render_digest_html(employer.name, buckets, today)
-        summary["subject"] = subject
-
         if dry_run:
             summary["status"] = "dry_run"
             employers.append(summary)
@@ -265,6 +257,8 @@ def send_work_permit_expiry_digest(today=None, dry_run=False, force=False):
 
         from arl.msg.helpers import create_master_email
 
+        subject = reminder_subject(employer.name, employer_rows)
+        html = render_reminder_html(employer.name, employer_rows, today)
         sender = _verified_sender(employer)
         any_success = False
         failed = []
@@ -277,7 +271,7 @@ def send_work_permit_expiry_digest(today=None, dry_run=False, force=False):
                 html_content=html,
                 custom_args={
                     "subject": subject,
-                    "template_name": DIGEST_TEMPLATE_NAME,
+                    "template_name": REMINDER_TEMPLATE_NAME,
                     "source": EMAIL_SOURCE_IN_APP,
                 },
             )
@@ -286,11 +280,24 @@ def send_work_permit_expiry_digest(today=None, dry_run=False, force=False):
             else:
                 failed.append(email)
 
+        if any_success:
+            WorkPermitMilestoneNotice.objects.bulk_create(
+                [
+                    WorkPermitMilestoneNotice(
+                        user_id=row["user_id"],
+                        employer_id=employer_id,
+                        permit_expiration_date=row["expiry"],
+                        milestone=row["milestone"],
+                    )
+                    for row in employer_rows
+                ],
+                ignore_conflicts=True,
+            )
         EmailLog.objects.create(
             employer=employer,
             sender_email=sender or "no-reply@example.com",
             template_id="",
-            template_name=DIGEST_TEMPLATE_NAME,
+            template_name=REMINDER_TEMPLATE_NAME,
             source=EMAIL_SOURCE_IN_APP,
             subject=subject[:255],
             status="SUCCESS" if any_success else "FAILED",
@@ -303,44 +310,46 @@ def send_work_permit_expiry_digest(today=None, dry_run=False, force=False):
     return {
         "today": today.isoformat(),
         "dry_run": bool(dry_run),
-        "force": bool(force),
+        "task": TASK_NAME,
+        "candidates": [_public_candidate(row) for row in rows],
         "employers": employers,
     }
 
 
-def ensure_work_permit_digest_schedule():
-    """Create the django-celery-beat crontab for 2:15am America/New_York.
+def format_milestone_report(result):
+    """Plain-text list for the management command."""
+    lines = []
+    if result["dry_run"]:
+        lines.append(f"Dry run for {result['today']}. No email sent.")
+    else:
+        lines.append(f"Work permit milestones for {result['today']}.")
+    candidates = result["candidates"]
+    if not candidates:
+        lines.append("No milestone emails tonight.")
+        return "\n".join(lines) + "\n"
 
-    Beat must be started with the database scheduler
-    (``celery -A arl beat -S django``). This does not send email.
-    """
-    from django_celery_beat.models import CrontabSchedule, PeriodicTask
-
-    schedule, _created_schedule = CrontabSchedule.objects.get_or_create(
-        minute="15",
-        hour="2",
-        day_of_week="*",
-        day_of_month="*",
-        month_of_year="*",
-        timezone="America/New_York",
-    )
-    task, created = PeriodicTask.objects.update_or_create(
-        name="Work permit expiry digest (90/60/30)",
-        defaults={
-            "crontab": schedule,
-            "task": "work_permit_expiry_digest",
-            "enabled": True,
-            "description": (
-                "Nightly digest of work permits expiring in the 90, 60, "
-                "and 30 day windows. Emails active users in the "
-                "immigration_email group for each employer."
-            ),
-        },
-    )
-    return {
-        "created": created,
-        "name": task.name,
-        "task": task.task,
-        "enabled": task.enabled,
-        "crontab": "15 2 * * * America/New_York",
-    }
+    lines.append("")
+    for row in candidates:
+        lines.append(
+            f"{row['milestone']:>2}-day reminder  |  {row['name']}  |  "
+            f"{row['employer_name']}  |  expires {row['expiry']}  |  "
+            f"{row['days_left']} days left  |  store {row['store']}"
+        )
+    lines.append("")
+    for employer in result["employers"]:
+        status = employer["status"]
+        name = employer["employer_name"]
+        who = ", ".join(employer["recipients"])
+        if status == "skipped_no_recipients":
+            lines.append(
+                f"{name}: no one in the immigration_email group. Nothing sent."
+            )
+        elif status == "dry_run":
+            lines.append(f"Would email {name}: {who}")
+        elif status == "sent":
+            lines.append(f"Emailed {name}: {who}")
+        else:
+            lines.append(f"Failed to email {name}: {who or '(no address)'}")
+    lines.append("")
+    lines.append(f"{len(candidates)} milestone(s).")
+    return "\n".join(lines) + "\n"
