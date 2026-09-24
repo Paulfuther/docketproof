@@ -124,12 +124,19 @@ class ChecklistTemplateItem(models.Model):
     allow_photo = models.BooleanField(default=True)
     responsibility_assignable = models.BooleanField(
         default=True,
-        help_text="Show L/S responsibility when the answer is Y or N.",
+        help_text=(
+            "Show L/S for this item. L/S is required only when the answer "
+            "is listed in create_action_on. Yes does not require L/S unless Y is listed."
+        ),
     )
     create_action_on = models.JSONField(
         default=default_create_action_on,
         blank=True,
-        help_text='Answer codes that open a 6.4 action plan, e.g. ["N"].',
+        help_text=(
+            "Answers that require a follow-up. "
+            '["N"] when No is the problem, ["Y"] when Yes is the problem, '
+            "[] when neither needs a follow-up."
+        ),
     )
     action_plan_form = models.CharField(max_length=80, blank=True)
     order = models.PositiveIntegerField(default=0)
@@ -331,11 +338,10 @@ class ChecklistItem(models.Model):
         return bool(answer and answer in self.create_action_answers())
 
     def needs_responsibility(self, result=None):
-        value = self.result if result is None else result
-        return (
-            self.responsibility_assignable
-            and value in (self.RESULT_YES, self.RESULT_NO)
-        )
+        """L/S is required only when this answer opens an action plan."""
+        if not self.responsibility_assignable:
+            return False
+        return self.creates_action(result)
 
     def get_action_item(self):
         try:
@@ -367,7 +373,7 @@ class ChecklistItem(models.Model):
             action = action if action is not None else self.get_action_item()
             if action is None or not action.is_ready_for_submit():
                 errors.append(
-                    "N requires an action plan (action required, who, and when)."
+                    "This answer requires an action plan (action required, who, and when)."
                 )
         return errors
 

@@ -85,10 +85,30 @@ class ChecklistModelTests(TestCase):
         self.assertFalse(self.item.needs_responsibility())
         self.assertEqual(self.item.submit_errors(), [])
 
-    def test_yes_requires_responsibility_but_not_action(self):
+    def test_yes_does_not_require_responsibility_or_action(self):
         self.item.result = ChecklistItem.RESULT_YES
-        self.item.responsibility = ChecklistItem.RESPONSIBILITY_L
+        self.item.responsibility = ""
         self.assertFalse(self.item.creates_action())
+        self.assertFalse(self.item.needs_responsibility())
+        self.assertEqual(self.item.submit_errors(), [])
+
+    def test_action_on_yes_requires_follow_up_but_no_does_not(self):
+        template_item = self.item.template_item
+        template_item.create_action_on = ["Y"]
+        template_item.save(update_fields=["create_action_on"])
+        self.item.refresh_from_db()
+
+        self.item.result = ChecklistItem.RESULT_YES
+        self.assertTrue(self.item.creates_action())
+        self.assertTrue(self.item.needs_responsibility())
+        yes_errors = self.item.submit_errors()
+        self.assertTrue(any("L or S" in message for message in yes_errors))
+        self.assertTrue(any("action plan" in message for message in yes_errors))
+
+        self.item.result = ChecklistItem.RESULT_NO
+        self.item.responsibility = ""
+        self.assertFalse(self.item.creates_action())
+        self.assertFalse(self.item.needs_responsibility())
         self.assertEqual(self.item.submit_errors(), [])
 
     def test_complete_action_item_allows_submit(self):
@@ -170,7 +190,7 @@ class ChecklistFormTests(TestCase):
         self.assertIn("is-invalid", form["action_required"].as_widget())
         self.assertIn("is-invalid", form["who"].as_widget())
 
-    def test_submit_requires_responsibility_on_field(self):
+    def test_yes_submit_allows_blank_responsibility(self):
         form = self._form(
             {
                 "result": "yes",
@@ -180,12 +200,71 @@ class ChecklistFormTests(TestCase):
             },
             validate_submit=True,
         )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_n_submit_requires_responsibility_when_action_on_n(self):
+        form = self._form(
+            {
+                "result": "no",
+                "responsibility": "",
+                "comment": "",
+                "order": 1,
+                "action_required": "Replace dead panic button",
+                "who": "Facilities",
+                "target_date": "2026-04-15",
+            },
+            validate_submit=True,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn("responsibility", form.errors)
         self.assertTrue(
             any("L or S" in str(message) for message in form.errors["responsibility"])
         )
         self.assertNotIn("action_required", form.errors)
+
+    def test_n_without_action_is_valid_when_create_action_on_excludes_n(self):
+        self.template_item.create_action_on = []
+        self.template_item.save(update_fields=["create_action_on"])
+        self.item.refresh_from_db()
+        form = self._form(
+            {
+                "result": "no",
+                "responsibility": "",
+                "comment": "",
+                "order": 1,
+            },
+            validate_submit=True,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_create_action_on_yes_requires_action_for_y_not_n(self):
+        self.template_item.create_action_on = ["Y"]
+        self.template_item.save(update_fields=["create_action_on"])
+        self.item.refresh_from_db()
+        yes_form = self._form(
+            {
+                "result": "yes",
+                "responsibility": "L",
+                "comment": "",
+                "order": 1,
+            },
+            validate_submit=True,
+        )
+        self.assertFalse(yes_form.is_valid())
+        self.assertIn("action_required", yes_form.errors)
+        self.assertIn("who", yes_form.errors)
+        self.assertIn("target_date", yes_form.errors)
+
+        no_form = self._form(
+            {
+                "result": "no",
+                "responsibility": "",
+                "comment": "",
+                "order": 1,
+            },
+            validate_submit=True,
+        )
+        self.assertTrue(no_form.is_valid(), no_form.errors)
 
     def test_na_submit_does_not_require_ls_or_action(self):
         form = self._form(
@@ -229,13 +308,12 @@ class ChecklistFormTests(TestCase):
         )
         self.assertFalse(formset.is_valid())
         summary = formset.item_error_summaries()
-        self.assertEqual(summary["count"], 2)
-        self.assertEqual(summary["need_ls"], 2)
+        self.assertEqual(summary["count"], 1)
+        self.assertEqual(summary["need_ls"], 1)
         self.assertEqual(summary["need_action"], 1)
         self.assertEqual(summary["rows"][0]["pk"], self.item.pk)
         self.assertIn("responsibility", summary["rows"][0]["kinds"])
         self.assertIn("action", summary["rows"][0]["kinds"])
-        self.assertEqual(summary["rows"][1]["kinds"], {"responsibility"})
 
     def test_unbound_formset_has_empty_error_summary(self):
         formset = ChecklistItemFormSet(instance=self.checklist)
@@ -440,6 +518,12 @@ class ChecklistEditTemplateTests(SimpleTestCase):
         self.assertIn("function checklistFormData", text)
         self.assertIn("data-action=\"submit\"", text)
         self.assertIn("id=\"checklist-form-action\"", text)
+        self.assertIn("fd.delete('action')", text)
+        self.assertIn("data.ok", text)
+        self.assertIn("creates.includes(answerCode)", text)
+        self.assertNotIn("answer === YES || answer === NO", text)
+        self.assertNotIn("(required for Y/N)", text)
+        self.assertIn("function clearAction", text)
 
 
 @override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
@@ -494,7 +578,7 @@ class ChecklistMobileSubmitTests(TestCase):
         self.pdf_patch.start()
         self.addCleanup(self.pdf_patch.stop)
 
-    def _post_data(self, include_action_fields=True, responsibility="L"):
+    def _post_data(self, include_action_fields=True, responsibility="L", result="yes"):
         items = list(self.checklist.items.order_by("id"))
         data = {
             "title": self.checklist.title,
@@ -509,7 +593,7 @@ class ChecklistMobileSubmitTests(TestCase):
         for i, item in enumerate(items):
             data[f"items-{i}-id"] = str(item.pk)
             data[f"items-{i}-order"] = str(item.order)
-            data[f"items-{i}-result"] = "yes"
+            data[f"items-{i}-result"] = result
             data[f"items-{i}-responsibility"] = responsibility
             data[f"items-{i}-comment"] = ""
             if include_action_fields:
@@ -545,17 +629,174 @@ class ChecklistMobileSubmitTests(TestCase):
         self.assertNotEqual(resp.status_code, 400)
         self.assertEqual(resp.status_code, 302)
 
-    def test_missing_ls_on_submit_is_validation_200_not_400(self):
+    def test_all_yes_blank_responsibility_submits(self):
+        resp = self.client.post(self.url, self._post_data(responsibility=""))
+        self.assertNotEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 302)
+        self.checklist.refresh_from_db()
+        self.assertEqual(self.checklist.status, "submitted")
+
+    def test_no_without_responsibility_is_validation_200_not_400(self):
         resp = self.client.post(
-            self.url, self._post_data(responsibility="")
+            self.url, self._post_data(responsibility="", result="no")
         )
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Please fix the errors below")
+        self.checklist.refresh_from_db()
+        self.assertEqual(self.checklist.status, "draft")
 
     @override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=50)
     def test_too_many_fields_is_http_400_suspicious_operation(self):
         resp = self.client.post(self.url, self._post_data())
         self.assertEqual(resp.status_code, 400)
         self.assertNotEqual(resp.status_code, 500)
+
+
+@override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
+class ChecklistAutosaveTests(TestCase):
+    def setUp(self):
+        employer = Employer.objects.create(name="Petro Test")
+        self.user = CustomUser.objects.create_user(
+            username="autosave-inspector",
+            email="autosave@example.com",
+            password="pass12345",
+            phone_number="+15196707470",
+            employer=employer,
+        )
+        self.store = Store.objects.create(
+            number=14,
+            employer=employer,
+            address="14 Main St",
+            city="London",
+            province="ON",
+        )
+        template = ChecklistTemplate.objects.create(name="Workplace Inspection")
+        self.template_item = ChecklistTemplateItem.objects.create(
+            template=template,
+            text="Are panic buttons working?",
+            response_type=ChecklistTemplateItem.RESPONSE_YES_NO_NA,
+            responsibility_assignable=True,
+            create_action_on=["N"],
+            order=1,
+        )
+        self.checklist = Checklist.objects.create(
+            title="Store 14 inspection",
+            created_by=self.user,
+            store=self.store,
+            status="draft",
+            notes="",
+        )
+        self.item = ChecklistItem.objects.create(
+            checklist=self.checklist,
+            template_item=self.template_item,
+            text=self.template_item.text,
+            order=1,
+        )
+        self.client.force_login(self.user)
+        self.url = reverse("checklist_edit", kwargs={"slug": self.checklist.slug})
+
+    def _payload(self, **overrides):
+        data = {
+            "title": self.checklist.title,
+            "notes": "Night shift note: closer is slow.",
+            "store": str(self.store.pk),
+            "action": "submit",
+            "items-TOTAL_FORMS": "1",
+            "items-INITIAL_FORMS": "1",
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+            "items-0-id": str(self.item.pk),
+            "items-0-order": "1",
+            "items-0-result": "no",
+            "items-0-responsibility": "S",
+            "items-0-comment": "Hinge photo later",
+            "items-0-action_item": "Are panic buttons working?",
+            "items-0-action_required": "Replace the dead panic button",
+            "items-0-who": "Facilities",
+            "items-0-target_date": "2026-05-01",
+            "items-0-action_note": "Waiting on parts",
+        }
+        data.update(overrides)
+        return data
+
+    def test_autosave_persists_notes_responsibility_and_action_fields(self):
+        resp = self.client.post(
+            self.url + "?autosave=1",
+            self._payload(),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertIn("saved_at", payload)
+
+        self.checklist.refresh_from_db()
+        item = ChecklistItem.objects.get(pk=self.item.pk)
+        self.assertEqual(self.checklist.status, "draft")
+        self.assertEqual(self.checklist.notes, "Night shift note: closer is slow.")
+        self.assertEqual(item.result, ChecklistItem.RESULT_NO)
+        self.assertEqual(item.responsibility, ChecklistItem.RESPONSIBILITY_S)
+        self.assertEqual(item.comment, "Hinge photo later")
+        action = ChecklistActionItem.objects.get(checklist_item=item)
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_required, "Replace the dead panic button")
+        self.assertEqual(action.who, "Facilities")
+        self.assertEqual(action.target_date, date(2026, 5, 1))
+        self.assertEqual(action.note, "Waiting on parts")
+
+    def test_autosave_keeps_partial_action_plan(self):
+        resp = self.client.post(
+            self.url + "?autosave=1",
+            self._payload(
+                **{
+                    "items-0-action_required": "Order a replacement",
+                    "items-0-who": "",
+                    "items-0-target_date": "",
+                    "items-0-action_note": "",
+                }
+            ),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
+        self.checklist.refresh_from_db()
+        self.assertEqual(self.checklist.status, "draft")
+        self.assertEqual(self.checklist.notes, "Night shift note: closer is slow.")
+        action = ChecklistActionItem.objects.get(checklist_item_id=self.item.pk)
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_required, "Order a replacement")
+        self.assertEqual(action.who, "")
+        self.assertIsNone(action.target_date)
+
+    def test_autosave_clears_action_when_answer_is_not_a_trigger(self):
+        ChecklistActionItem.objects.create(
+            checklist=self.checklist,
+            checklist_item=self.item,
+            action_item=self.item.text,
+            action_required="Old plan",
+            who="Someone",
+            target_date=date(2026, 4, 1),
+        )
+        resp = self.client.post(
+            self.url + "?autosave=1",
+            self._payload(
+                **{
+                    "items-0-result": "yes",
+                    "items-0-responsibility": "",
+                    "items-0-action_required": "",
+                    "items-0-who": "",
+                    "items-0-target_date": "",
+                    "items-0-action_note": "",
+                }
+            ),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(resp.status_code, 200)
+        item = ChecklistItem.objects.get(pk=self.item.pk)
+        self.assertEqual(item.result, ChecklistItem.RESULT_YES)
+        self.assertEqual(item.responsibility, "")
+        self.assertFalse(
+            ChecklistActionItem.objects.filter(checklist_item=item).exists()
+        )
 
 
