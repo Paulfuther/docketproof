@@ -5,6 +5,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
 from .checklist_import import ChecklistImportError, ChecklistTemplateImportForm
+from .forms import ChecklistTemplateItemAdminForm, split_create_action_on
 from .models import (
     Checklist,
     ChecklistActionItem,
@@ -16,7 +17,9 @@ from .models import (
 
 class ChecklistTemplateItemInline(admin.TabularInline):
     model = ChecklistTemplateItem
+    form = ChecklistTemplateItemAdminForm
     extra = 0
+    show_change_link = True
     fields = (
         "order",
         "item_code",
@@ -24,11 +27,90 @@ class ChecklistTemplateItemInline(admin.TabularInline):
         "text",
         "response_type",
         "required",
+        "follow_up_on_yes",
+        "follow_up_on_no",
         "responsibility_assignable",
-        "create_action_on",
         "requires_photo",
         "allow_photo",
     )
+
+
+@admin.register(ChecklistTemplateItem)
+class ChecklistTemplateItemAdmin(admin.ModelAdmin):
+    form = ChecklistTemplateItemAdminForm
+    list_display = (
+        "text",
+        "template",
+        "response_type",
+        "follow_up_when",
+        "responsibility_assignable",
+        "order",
+    )
+    list_filter = ("response_type", "responsibility_assignable")
+    search_fields = ("text", "item_code", "section", "template__name")
+
+    def get_fieldsets(self, request, obj=None):
+        follow_up_fields = [
+            "follow_up_on_yes",
+            "follow_up_on_no",
+            "responsibility_assignable",
+        ]
+        stored = ["N"] if obj is None else obj.create_action_on
+        _, _, extra = split_create_action_on(stored)
+        if extra is None or extra:
+            follow_up_fields.append("create_action_on_raw")
+        return (
+            (
+                None,
+                {
+                    "fields": (
+                        "template",
+                        "order",
+                        "item_code",
+                        "section",
+                        "text",
+                        "response_type",
+                        "required",
+                    )
+                },
+            ),
+            (
+                "Follow-up",
+                {
+                    "description": (
+                        "Check the answer that needs a follow-up. "
+                        "Require L or S applies only to that answer. "
+                        "Yes does not require L unless Follow-up when Yes "
+                        "and Require L or S are both checked."
+                    ),
+                    "fields": follow_up_fields,
+                },
+            ),
+            (
+                "Photos",
+                {
+                    "fields": (
+                        "requires_photo",
+                        "allow_photo",
+                        "action_plan_form",
+                    )
+                },
+            ),
+        )
+
+    @admin.display(description="Follow-up when")
+    def follow_up_when(self, obj):
+        yes, no, extra = split_create_action_on(obj.create_action_on)
+        parts = []
+        if yes:
+            parts.append("Yes")
+        if no:
+            parts.append("No")
+        if extra:
+            parts.extend(str(code) for code in extra)
+        if extra is None:
+            return "Advanced"
+        return ", ".join(parts) if parts else "—"
 
 
 @admin.register(ChecklistTemplate)
