@@ -132,6 +132,34 @@ class ChecklistTemplateItemAdminFormTests(TestCase):
         self.assertFalse(form["follow_up_on_yes"].value())
         self.assertTrue(form["responsibility_assignable"].value())
 
+    def test_unchecking_follow_up_when_no_is_detected_and_clears_n(self):
+        form = ChecklistTemplateItemAdminForm(
+            data=self._data(yes=False, no=False, responsibility=True),
+            instance=self.item,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertIn("follow_up_on_no", form.changed_data)
+        saved = form.save()
+        saved.refresh_from_db()
+        self.assertEqual(saved.create_action_on, [])
+        self.assertNotIn("N", saved.create_action_on)
+        self.assertTrue(saved.responsibility_assignable)
+        reloaded = ChecklistTemplateItemAdminForm(instance=saved)
+        self.assertFalse(reloaded["follow_up_on_no"].value())
+        self.assertFalse(reloaded["follow_up_on_yes"].value())
+
+    def test_unchecking_require_l_persists(self):
+        form = ChecklistTemplateItemAdminForm(
+            data=self._data(yes=False, no=True, responsibility=False),
+            instance=self.item,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertIn("responsibility_assignable", form.changed_data)
+        saved = form.save()
+        saved.refresh_from_db()
+        self.assertEqual(saved.create_action_on, ["N"])
+        self.assertFalse(saved.responsibility_assignable)
+
     def test_save_writes_each_create_action_on_list(self):
         expectations = (
             (False, False, []),
@@ -356,6 +384,87 @@ class ChecklistTemplateItemAdminViewTests(TestCase):
         self.assertTrue(self.on_no.responsibility_assignable)
         self.assertEqual(self.neither.create_action_on, [])
         self.assertFalse(self.neither.responsibility_assignable)
+
+    def test_unchecking_follow_up_when_no_persists_on_the_template_inline(self):
+        """Paul's repro: ["N"] item, uncheck Follow-up when No, save, reopen."""
+        url = reverse("admin:quiz_checklisttemplate_change", args=[self.template.pk])
+        response = self.client.post(url, self._template_post(follow_up_on_no=False))
+        self._assert_saved(response)
+        self.on_no.refresh_from_db()
+        self.assertEqual(self.on_no.create_action_on, [])
+        self.assertNotIn("N", self.on_no.create_action_on)
+        self.assertTrue(self.on_no.responsibility_assignable)
+
+        reopened = self.client.get(url)
+        self.assertEqual(reopened.status_code, 200)
+        html = reopened.content.decode()
+        self.assertIs(False, _checkbox_checked(html, "items-1-follow_up_on_no"))
+        self.assertIs(False, _checkbox_checked(html, "items-1-follow_up_on_yes"))
+        self.assertIs(
+            True, _checkbox_checked(html, "items-1-responsibility_assignable")
+        )
+
+    def test_unchecking_require_l_persists_on_the_template_inline(self):
+        url = reverse("admin:quiz_checklisttemplate_change", args=[self.template.pk])
+        response = self.client.post(
+            url,
+            self._template_post(follow_up_on_no=True, responsibility=False),
+        )
+        self._assert_saved(response)
+        self.on_no.refresh_from_db()
+        self.assertEqual(self.on_no.create_action_on, ["N"])
+        self.assertFalse(self.on_no.responsibility_assignable)
+
+        reopened = self.client.get(url)
+        html = reopened.content.decode()
+        self.assertIs(True, _checkbox_checked(html, "items-1-follow_up_on_no"))
+        self.assertIs(
+            False, _checkbox_checked(html, "items-1-responsibility_assignable")
+        )
+
+    def _template_post(self, *, follow_up_on_no=False, responsibility=True):
+        data = {
+            "name": self.template.name,
+            "description": "",
+            "document_id": self.template.document_id,
+            "parent_sop": "",
+            "purpose": "",
+            "instructions": "",
+            "created_by": str(self.user.pk),
+            "is_active": "on",
+            "items-TOTAL_FORMS": "2",
+            "items-INITIAL_FORMS": "2",
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+            "items-0-id": str(self.neither.pk),
+            "items-0-order": "1",
+            "items-0-item_code": "SS-001",
+            "items-0-section": "Site header",
+            "items-0-text": self.neither.text,
+            "items-0-response_type": ChecklistTemplateItem.RESPONSE_TEXT,
+            "items-0-required": "on",
+            "items-0-allow_photo": "on",
+            "items-1-id": str(self.on_no.pk),
+            "items-1-order": "2",
+            "items-1-item_code": "WI-005",
+            "items-1-section": "Worker Training and Safety",
+            "items-1-text": self.on_no.text,
+            "items-1-response_type": ChecklistTemplateItem.RESPONSE_YES_NO_NA,
+            "items-1-required": "on",
+            "items-1-allow_photo": "on",
+            "_save": "Save",
+        }
+        if follow_up_on_no:
+            data["items-1-follow_up_on_no"] = "on"
+        if responsibility:
+            data["items-1-responsibility_assignable"] = "on"
+        return data
+
+    def _assert_saved(self, response):
+        if response.status_code != 302:
+            html = response.content.decode()
+            errors = re.findall(r'<ul class="errorlist[^"]*">.*?</ul>', html, re.S)
+            self.fail("Admin save did not redirect. Errors:\n" + "\n".join(errors[:12]))
 
     def test_item_admin_shows_advanced_json_for_codes_other_than_y_or_n(self):
         self.on_no.create_action_on = ["N", "CUSTOM"]

@@ -224,9 +224,14 @@ class ChecklistTemplateItemAdminForm(forms.ModelForm):
         yes, no, extra = split_create_action_on(stored)
         self._extra_codes = extra
         self._opaque_create_action_on = extra is None
-        if not self.is_bound:
-            self.fields["follow_up_on_yes"].initial = yes
-            self.fields["follow_up_on_no"].initial = no
+        # Always, including a bound POST. Inline formsets only call save()
+        # when has_changed() is true. An unchecked box is missing from POST,
+        # so without this initial Django treats "was on, now off" as unchanged
+        # and leaves the old create_action_on list in the database.
+        self.initial["follow_up_on_yes"] = yes
+        self.initial["follow_up_on_no"] = no
+        self.fields["follow_up_on_yes"].initial = yes
+        self.fields["follow_up_on_no"].initial = no
         if extra is None:
             self.fields["create_action_on_raw"].initial = json.dumps(stored)
             self.fields["create_action_on_raw"].help_text = (
