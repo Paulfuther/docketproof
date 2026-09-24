@@ -59,6 +59,16 @@
       <code>text</code> or <code>title</code>. Item order uses <code>order</code>
       or the list index.
     </p>
+    <p>
+      This importer does not read follow-up polarity (new Yes/No items default
+      to an action plan on No). Set it on each template item:
+      <code>create_action_on</code> is <code>["N"]</code> when No needs a follow-up,
+      <code>["Y"]</code> when Yes is the problem, and <code>[]</code> when neither
+      does. L/S is required only for those answers, and only when
+      <code>responsibility_assignable</code> is checked. Yes does not require L/S
+      unless <code>Y</code> is listed. The
+      <code>import_checklist_template</code> command does read both fields from JSON.
+    </p>
   </div>
 </div>
 {% endblock %}

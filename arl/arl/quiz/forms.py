@@ -1,3 +1,4 @@
+import json
 import random
 import string
 
@@ -122,6 +123,184 @@ class ChecklistTemplateForm(forms.ModelForm):
         ]
 
 
+FOLLOW_UP_YES = "Y"
+FOLLOW_UP_NO = "N"
+
+
+def split_create_action_on(value):
+    """Map stored create_action_on JSON onto the admin checkboxes.
+
+    Returns (follow_up_on_yes, follow_up_on_no, extra_codes).
+    extra_codes is None when the stored value is not a list and must be
+    kept as-is unless the advanced editor replaces it.
+    """
+    if not isinstance(value, list):
+        return False, False, None
+    follow_up_on_yes = False
+    follow_up_on_no = False
+    extra = []
+    for code in value:
+        if code == FOLLOW_UP_YES:
+            follow_up_on_yes = True
+        elif code == FOLLOW_UP_NO:
+            follow_up_on_no = True
+        elif code not in extra:
+            extra.append(code)
+    return follow_up_on_yes, follow_up_on_no, extra
+
+
+def build_create_action_on(follow_up_on_yes, follow_up_on_no, extra=None):
+    """Write the checkbox state back to the create_action_on list."""
+    codes = []
+    if follow_up_on_yes:
+        codes.append(FOLLOW_UP_YES)
+    if follow_up_on_no:
+        codes.append(FOLLOW_UP_NO)
+    for code in extra or []:
+        if code in (FOLLOW_UP_YES, FOLLOW_UP_NO) or code in codes:
+            continue
+        codes.append(code)
+    return codes
+
+
+class ChecklistTemplateItemAdminForm(forms.ModelForm):
+    """Admin checkboxes for follow-up polarity.
+
+    create_action_on stays a JSON list. These boxes are the normal way to
+    edit it: Follow-up when Yes / No, plus the existing L/S flag.
+    """
+
+    follow_up_on_yes = forms.BooleanField(
+        label="Follow-up when Yes",
+        required=False,
+        help_text=(
+            "Check when Yes needs a follow-up. "
+            "Leave off when Yes needs nothing else."
+        ),
+    )
+    follow_up_on_no = forms.BooleanField(
+        label="Follow-up when No",
+        required=False,
+        help_text=(
+            "Check only when No needs a follow-up. "
+            "Leave off when No is an acceptable answer."
+        ),
+    )
+    create_action_on_raw = forms.CharField(
+        label="Create action on (advanced)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2, "cols": 24}),
+        help_text=(
+            "Other answer codes, as a JSON list. "
+            "Y and N are set by the checkboxes above."
+        ),
+    )
+
+    class Meta:
+        model = ChecklistTemplateItem
+        fields = (
+            "template",
+            "item_code",
+            "section",
+            "text",
+            "response_type",
+            "required",
+            "requires_photo",
+            "allow_photo",
+            "responsibility_assignable",
+            "action_plan_form",
+            "order",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        responsibility = self.fields["responsibility_assignable"]
+        responsibility.label = "Require L or S when that follow-up applies"
+        responsibility.help_text = (
+            "L/S is required only for an answer that needs a follow-up. "
+            "Yes does not require L unless follow-up on Yes is checked."
+        )
+        stored = self.instance.create_action_on
+        yes, no, extra = split_create_action_on(stored)
+        self._extra_codes = extra
+        self._opaque_create_action_on = extra is None
+        # Always, including a bound POST. Inline formsets only call save()
+        # when has_changed() is true. An unchecked box is missing from POST,
+        # so without this initial Django treats "was on, now off" as unchanged
+        # and leaves the old create_action_on list in the database.
+        self.initial["follow_up_on_yes"] = yes
+        self.initial["follow_up_on_no"] = no
+        self.fields["follow_up_on_yes"].initial = yes
+        self.fields["follow_up_on_no"].initial = no
+        if extra is None:
+            self.fields["create_action_on_raw"].initial = json.dumps(stored)
+            self.fields["create_action_on_raw"].help_text = (
+                "This value is not a Y/N list. Edit the JSON list here, "
+                'for example ["N"]. Y and N still follow the checkboxes.'
+            )
+        elif extra:
+            self.fields["create_action_on_raw"].initial = json.dumps(extra)
+        else:
+            self.fields.pop("create_action_on_raw", None)
+
+    @property
+    def shows_advanced_create_action_on(self):
+        return "create_action_on_raw" in self.fields
+
+    def clean(self):
+        cleaned = super().clean()
+        if self._opaque_create_action_on and not self._raw_was_submitted():
+            cleaned["create_action_on"] = self.instance.create_action_on
+            return cleaned
+
+        extra = [] if self._extra_codes is None else list(self._extra_codes)
+        if self._raw_was_submitted():
+            raw_text = (cleaned.get("create_action_on_raw") or "").strip()
+            if raw_text:
+                try:
+                    parsed = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    self.add_error(
+                        "create_action_on_raw",
+                        'Enter a JSON list of answer codes, for example ["N"].',
+                    )
+                    return cleaned
+                if not isinstance(parsed, list):
+                    self.add_error(
+                        "create_action_on_raw",
+                        'Create action on must be a JSON list, for example ["N"].',
+                    )
+                    return cleaned
+                extra = [
+                    code for code in parsed if code not in (FOLLOW_UP_YES, FOLLOW_UP_NO)
+                ]
+            else:
+                extra = []
+
+        cleaned["create_action_on"] = build_create_action_on(
+            cleaned.get("follow_up_on_yes"),
+            cleaned.get("follow_up_on_no"),
+            extra,
+        )
+        return cleaned
+
+    def _raw_was_submitted(self):
+        return (
+            "create_action_on_raw" in self.fields
+            and self.add_prefix("create_action_on_raw") in self.data
+        )
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.create_action_on = self.cleaned_data.get("create_action_on")
+        if instance.create_action_on is None:
+            instance.create_action_on = []
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
 class ChecklistTemplateItemForm(forms.ModelForm):
     class Meta:
         model = ChecklistTemplateItem
@@ -148,7 +327,7 @@ class ChecklistTemplateItemForm(forms.ModelForm):
             "create_action_on": forms.TextInput(
                 attrs={
                     "class": "form-control",
-                    "placeholder": '["N"]',
+                    "placeholder": '["N"], ["Y"], or []',
                 }
             ),
             "action_plan_form": forms.TextInput(attrs={"class": "form-control"}),
@@ -290,7 +469,7 @@ class ChecklistItemForm(forms.ModelForm):
         if not item.pk:
             return cleaned
 
-        if result == ChecklistItem.RESULT_NO and not (cleaned.get("action_item") or "").strip():
+        if item.creates_action(result) and not (cleaned.get("action_item") or "").strip():
             cleaned["action_item"] = item.text
 
         if not self.validate_submit:

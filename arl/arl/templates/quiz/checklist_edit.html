@@ -152,7 +152,7 @@
           · {{ item_error_summary.need_ls }} need{{ item_error_summary.need_ls|pluralize:"s," }} L/S
         {% endif %}
         {% if item_error_summary.need_action %}
-          · {{ item_error_summary.need_action }} N answer{{ item_error_summary.need_action|pluralize }} need{{ item_error_summary.need_action|pluralize:"s," }} action plan
+          · {{ item_error_summary.need_action }} need{{ item_error_summary.need_action|pluralize:"s," }} an action plan
         {% endif %}
         {% if item_error_summary.need_answer %}
           · {{ item_error_summary.need_answer }} need{{ item_error_summary.need_answer|pluralize:"s," }} an answer
@@ -188,7 +188,8 @@
 
   <h5 class="mt-4">Items</h5>
   <p class="small text-muted mb-3">
-    Y = present, N = gap (opens a 6.4 action plan), N/A = does not apply.
+    Answer Y, N, or N/A. A follow-up is required only when that answer is listed on the question
+    (often N, sometimes Y, sometimes neither). L/S is required only for those follow-ups.
     L = Associate / franchisee; S = supplier / owner / gas company.
   </p>
   {{ formset.management_form }}
@@ -242,7 +243,7 @@
           {% endif %}
         </div>
         <div class="mb-2 resp-wrap {% if not f.instance.responsibility_assignable %}d-none{% endif %}{% if f.responsibility.errors %} has-error{% endif %}">
-          <div class="small text-muted mb-1">Responsibility <span class="resp-required {% if f.instance.result == 'na' or not f.instance.result %}d-none{% endif %}">(required for Y/N)</span></div>
+          <div class="small text-muted mb-1">Responsibility <span class="resp-required {% if not f.instance.creates_action %}d-none{% endif %}">(required)</span></div>
           <div class="resp-pills" data-role="responsibility">
             {% for radio in f.responsibility %}
               {% if radio.data.value %}
@@ -286,10 +287,10 @@
 
         <div class="action-plan {% if not f.instance.creates_action %}collapsed{% endif %}{% if f.action_required.errors or f.who.errors or f.target_date.errors %} has-error{% endif %}" data-role="action-plan">
           <div class="fw-semibold mb-2">Site Security Action Plan (6.4)</div>
-          <p class="small text-muted mb-2">Required because this item is N. Prefills from the checklist wording.</p>
+          <p class="small text-muted mb-2">Required for this answer. The action item prefills from the checklist wording.</p>
           {% if f.action_required.errors or f.who.errors or f.target_date.errors %}
             <div class="field-error mb-2" id="item-{{ f.instance.pk }}-action-error" data-item-error data-error-kind="action" role="alert" tabindex="-1">
-              N requires an action plan (action required, who, and when).
+              This answer requires an action plan (action required, who, and when).
             </div>
           {% endif %}
           <div class="mb-2">
@@ -332,7 +333,7 @@
   <div class="card mb-3" id="action-summary">
     <div class="card-body">
       <h5 class="mb-2">Action plan summary</h5>
-      <p class="small text-muted">Every N below uses the same action-plan record as the question above. Click a row to jump there.</p>
+      <p class="small text-muted">Follow-ups below use the same action-plan record as the question. Click a row to jump there.</p>
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
           <thead>
@@ -343,7 +344,7 @@
             </tr>
           </thead>
           <tbody id="action-summary-body">
-            <tr class="text-muted" data-empty="1"><td colspan="3">No N answers yet.</td></tr>
+            <tr class="text-muted" data-empty="1"><td colspan="3">No follow-ups yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -529,6 +530,7 @@
     const AUTOSAVE_URL = actionUrl + (actionUrl.includes('?') ? '&' : '?') + 'autosave=1';
     let saveTimer = null;
     let inflight = false;
+    let pending = false;
     let nativeFallback = false;
 
     function csrfToken() {
@@ -546,9 +548,14 @@
 
     function checklistFormData(actionValue) {
       const fd = new FormData(form);
+      // Submit buttons are also named "action". If more than one value is
+      // posted, Django keeps the last one and a draft autosave becomes a
+      // full submit — notes and partial action plans are then rejected.
+      fd.delete('action');
       fd.set('action', actionValue || (actionInput && actionInput.value) || 'save');
       // Photos are uploaded on the Dropzone endpoint. Never re-post files
       // with save/submit — iOS camera originals can 400 the whole checklist.
+      // Notes, L/S, and action-plan fields stay in this body.
       if (typeof File !== 'undefined') {
         const keys = [];
         fd.forEach((value, key) => {
@@ -557,6 +564,15 @@
         keys.forEach((key) => fd.delete(key));
       }
       return fd;
+    }
+
+    function formDataBytes(fd) {
+      let bytes = 0;
+      fd.forEach((value, key) => {
+        const text = typeof value === 'string' ? value : '';
+        bytes += String(key).length + text.length;
+      });
+      return bytes;
     }
 
     form.querySelectorAll('button[data-action]').forEach((btn) => {
@@ -572,30 +588,48 @@
       statusEl.textContent = `💾 Draft auto-saved ${new Date(ts).toLocaleTimeString()}`;
     }
 
-    // Fire the autosave
+    // Fire the autosave. ?autosave=1 stores a draft (notes, L/S, action
+    // fields) and returns JSON. Do not treat an HTML 200 as success.
     async function doAutosave() {
-      if (inflight) return; // don’t pile up
+      if (inflight) {
+        pending = true;
+        return;
+      }
       inflight = true;
+      pending = false;
       try {
         const token = csrfToken();
-        const resp = await fetch(AUTOSAVE_URL, {
+        const headers = {
+          'X-Requested-With': 'XMLHttpRequest',
+          ...(token ? {'X-CSRFToken': token} : {})
+        };
+        const send = (keepalive) => fetch(AUTOSAVE_URL, {
           method: 'POST',
           body: checklistFormData('save'),
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            ...(token ? {'X-CSRFToken': token} : {})
-          },
-          credentials: 'same-origin'
+          headers,
+          credentials: 'same-origin',
+          redirect: 'manual',
+          keepalive
         });
+        const probe = checklistFormData('save');
+        const useKeepalive = formDataBytes(probe) < 50000;
+        let resp;
+        try {
+          resp = await send(useKeepalive);
+        } catch (e) {
+          if (!useKeepalive) throw e;
+          resp = await send(false);
+        }
         if (resp.ok) {
-          const data = await resp.json().catch(() => ({}));
-          showSavedAt(data.saved_at || Date.now());
+          const data = await resp.json().catch(() => null);
+          if (data && data.ok) showSavedAt(data.saved_at || Date.now());
         }
       } catch (e) {
         // silent fail is fine for drafts
         // console.warn('autosave failed', e);
       } finally {
         inflight = false;
+        if (pending) doAutosave();
       }
     }
 
@@ -615,6 +649,7 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') doAutosave();
     });
+    window.addEventListener('pagehide', () => doAutosave());
 
     // Native iOS multipart of this 80-item form 400s (MultiPartParserError /
     // TooManyFieldsSent) before Django can re-render validation errors.
@@ -701,16 +736,14 @@
       }
       const answer = selectedValue(answerWrap);
       const answerCode = {yes: 'Y', no: 'N', na: 'N/A'}[answer] || '';
-      if (!answer) errors.result = true;
-      if (
-        card.dataset.responsibilityAssignable === '1' &&
-        (answer === YES || answer === NO)
-      ) {
+      const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
+      const needsAction = creates.includes(answerCode);
+      if (card.dataset.itemRequired === '1' && !answer) errors.result = true;
+      if (needsAction && card.dataset.responsibilityAssignable === '1') {
         const resp = selectedValue(card.querySelector('[data-role="responsibility"]'));
         if (resp !== 'L' && resp !== 'S') errors.responsibility = true;
       }
-      const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
-      if (creates.includes(answerCode)) {
+      if (needsAction) {
         errors.action_required = !namedValue(card, 'action_required');
         errors.who = !namedValue(card, 'who');
         errors.target_date = !namedValue(card, 'target_date');
@@ -831,7 +864,7 @@
         if (errors.text) messages.push('This item requires an answer.');
         if (errors.responsibility) messages.push('Choose L or S responsibility.');
         if (errors.action) {
-          messages.push('N requires an action plan (action required, who, and when).');
+          messages.push('This answer requires an action plan (action required, who, and when).');
         }
         return {
           id: card.id,
@@ -847,12 +880,7 @@
       ];
       if (needLs) countBits.push(needLs + ' ' + needsWord(needLs) + ' L/S');
       if (needAction) {
-        countBits.push(
-          needAction +
-            (needAction === 1 ? ' N answer ' : ' N answers ') +
-            needsWord(needAction) +
-            ' action plan'
-        );
+        countBits.push(needAction + ' ' + needsWord(needAction) + ' an action plan');
       }
       if (needAnswer) countBits.push(needAnswer + ' ' + needsWord(needAnswer) + ' an answer');
 
@@ -902,7 +930,6 @@
     function clearAction(plan) {
       if (!plan) return;
       plan.querySelectorAll('textarea, input[type="text"], input[type="date"]').forEach((el) => {
-        if (el.readOnly) return;
         el.value = '';
       });
     }
@@ -922,13 +949,17 @@
       const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
       const answer = answerWrap ? selectedValue(answerWrap) : '';
       const answerCode = {yes: 'Y', no: 'N', na: 'N/A'}[answer] || '';
+      const previous = card.dataset.currentAnswer || '';
 
       if (respWrap && card.dataset.responsibilityAssignable === '1') {
         const req = respWrap.querySelector('.resp-required');
-        if (req) req.classList.toggle('d-none', !(answer === YES || answer === NO));
+        if (req) req.classList.toggle('d-none', !creates.includes(answerCode));
       }
 
-      if (!plan) return;
+      if (!plan) {
+        card.dataset.currentAnswer = answer;
+        return;
+      }
       const shouldOpen = creates.includes(answerCode);
       const isOpen = !plan.classList.contains('collapsed');
       if (shouldOpen) {
@@ -938,17 +969,24 @@
         if (itemField && !(itemField.value || '').trim() && title) {
           itemField.value = title.textContent.trim();
         }
-      } else if (isOpen) {
+        card.dataset.currentAnswer = answer;
+        return;
+      }
+      if (isOpen) {
         if (confirmDiscard && actionHasContent(plan)) {
           const ok = window.confirm('Discard the action plan for this item?');
           if (!ok) {
-            setAnswer(card, NO);
+            const revert = previous && previous !== answer
+              ? previous
+              : (creates.includes('N') ? NO : YES);
+            if (revert && revert !== answer) setAnswer(card, revert);
             return;
           }
         }
         clearAction(plan);
         plan.classList.add('collapsed');
       }
+      card.dataset.currentAnswer = answer;
     }
 
     function refreshSummary() {
@@ -959,7 +997,10 @@
         const answerWrap = card.querySelector('[data-role="answer"]');
         const plan = card.querySelector('[data-role="action-plan"]');
         if (!answerWrap || !plan) return;
-        if (selectedValue(answerWrap) !== NO) return;
+        const creates = (card.dataset.createsAction || '').split(',').filter(Boolean);
+        const answer = selectedValue(answerWrap);
+        const answerCode = {yes: 'Y', no: 'N', na: 'N/A'}[answer] || '';
+        if (!creates.includes(answerCode)) return;
         const title = (card.querySelector('[data-role="item-title"]') || {}).textContent || '';
         const who = (plan.querySelector('input[name$="-who"]') || {}).value || '';
         const when = (plan.querySelector('input[name$="-target_date"]') || {}).value || '';
@@ -971,7 +1012,7 @@
         const empty = document.createElement('tr');
         empty.className = 'text-muted';
         empty.dataset.empty = '1';
-        empty.innerHTML = '<td colspan="3">No N answers yet.</td>';
+        empty.innerHTML = '<td colspan="3">No follow-ups yet.</td>';
         body.appendChild(empty);
         return;
       }
