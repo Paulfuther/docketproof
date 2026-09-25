@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin, messages
 from django.db.models import Q
 from django.shortcuts import redirect
@@ -10,6 +11,20 @@ from .admin_repair import repair_flow_step
 from .forms import BulkDynamicRepairRowForm, OnboardingRepairFilterForm
 from .models import (DocumentFlow, DocumentFlowStep, ImmigrationStatusEvent,
                      SentDocuSignEnvelope)
+
+
+class ImmigrationStatusEventAdminForm(forms.ModelForm):
+    class Meta:
+        model = ImmigrationStatusEvent
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("created_by"):
+            user = getattr(self.__class__, "request_user", None)
+            if getattr(user, "pk", None):
+                cleaned["created_by"] = user
+        return cleaned
 
 
 class DocumentFlowStepInline(admin.TabularInline):
@@ -312,6 +327,7 @@ class DocumentFlowAdmin(admin.ModelAdmin):
 
 @admin.register(ImmigrationStatusEvent)
 class ImmigrationStatusEventAdmin(admin.ModelAdmin):
+    form = ImmigrationStatusEventAdminForm
     list_display = (
         "user",
         "employer",
@@ -356,3 +372,8 @@ class ImmigrationStatusEventAdmin(admin.ModelAdmin):
 
     ordering = ("-created_at",)
     list_per_page = 25
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.request_user = request.user
+        return form

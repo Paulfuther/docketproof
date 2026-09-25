@@ -45,7 +45,45 @@ from .models import (
     Store,
     UserManager,
 )
+from arl.documentflow.services_immigration import (
+    EXTENSION_SHORTCUT_DATE_ERROR,
+    extension_shortcut_error,
+)
 from arl.utils.crypto import normalize_digits, sin_hash
+
+
+def with_extension_shortcut_validation(form_class):
+    """Reject extension shortcut edits that have no filing date or proof event."""
+    if getattr(form_class, "validates_extension_shortcut", False):
+        return form_class
+
+    class ValidatedExtensionForm(form_class):
+        validates_extension_shortcut = True
+
+        def clean(self):
+            cleaned = super().clean()
+            requested = cleaned.get(
+                "work_permit_extension_requested",
+                getattr(self.instance, "work_permit_extension_requested", False),
+            )
+            extension_date = cleaned.get(
+                "work_permit_extension_date",
+                getattr(self.instance, "work_permit_extension_date", None),
+            )
+            error = extension_shortcut_error(
+                self.instance,
+                requested,
+                extension_date,
+                self.changed_data,
+            )
+            if error == EXTENSION_SHORTCUT_DATE_ERROR:
+                self.add_error("work_permit_extension_date", error)
+            elif error:
+                self.add_error("work_permit_extension_requested", error)
+            return cleaned
+
+    ValidatedExtensionForm.__name__ = form_class.__name__
+    return ValidatedExtensionForm
 
 
 class ExternalRecipientAdmin(admin.ModelAdmin):
@@ -180,6 +218,16 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
                 attrs={"type": "date"}
             )  # ✅ Uses native date input, no calendar
         return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is None:
+            return super().get_form(request, obj, **kwargs)
+        form_class = super().get_form(request, obj, **kwargs)
+        return with_extension_shortcut_validation(form_class)
+
+    def get_changelist_form(self, request, **kwargs):
+        form_class = super().get_changelist_form(request, **kwargs)
+        return with_extension_shortcut_validation(form_class)
 
     # Customize the fields you want to display
     inlines = [ProcessedDocusignDocumentInline]
@@ -379,10 +427,17 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
         (
             "Work Permit Extension",
             {
+                "description": (
+                    "Admin shortcut for rows that already have a filing on file. "
+                    "Turning this on, or changing the filing date, requires the date "
+                    "and an active immigration status event that overrides the permit "
+                    "and includes a document or reference number. Leaving an existing "
+                    "checked row untouched does not demand a new event."
+                ),
                 "fields": (
                     "work_permit_extension_requested",
                     "work_permit_extension_date",
-                )
+                ),
             },
         )
     )
@@ -393,13 +448,6 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
             obj.phone_number = form.cleaned_data["phone_number"]
         else:
             obj.phone_number = CustomUser.objects.get(pk=obj.pk).phone_number
-
-        if obj.work_permit_extension_requested and not obj.work_permit_extension_date:
-            messages.error(
-                request,
-                "Work permit extension date is required when extension requested is checked.",
-            )
-            return
 
         super().save_model(request, obj, form, change)
 

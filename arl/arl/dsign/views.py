@@ -3,12 +3,14 @@ import logging
 import mimetypes
 import os
 import uuid
+from datetime import datetime
 from io import BytesIO
 
 from celery.result import AsyncResult
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import ValidationError
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Q
@@ -46,7 +48,10 @@ from .tasks import (
     process_docusign_webhook,
     validate_template_signature_tabs_task,
 )
-from arl.documentflow.constants import IMMIGRATION_STATUS_TYPES
+from arl.documentflow.constants import (
+    IMMIGRATION_STATUS_TYPES,
+    immigration_status_overrides_permit,
+)
 
 register_heif_opener()
 
@@ -508,6 +513,18 @@ ALLOWED_UPLOAD_CT = {
 MAX_UPLOAD_MB = 25
 
 
+def _immigration_validation_message(exc):
+    if getattr(exc, "message_dict", None):
+        parts = []
+        for field_messages in exc.message_dict.values():
+            parts.extend(str(message) for message in field_messages)
+        if parts:
+            return " ".join(parts)
+    if getattr(exc, "messages", None):
+        return " ".join(str(message) for message in exc.messages)
+    return "Immigration status was not saved. Add the effective date and a document or reference number."
+
+
 def _guess_ct(uploaded):
     # Some Androids use octet-stream—fallback to filename
     ct = getattr(uploaded, "content_type", None) or ""
@@ -541,6 +558,26 @@ def upload_employee_documents(request):
     immigration_reference_number = (
         request.POST.get("immigration_reference_number") or ""
     ).strip()
+
+    if immigration_status_type and immigration_status_type not in IMMIGRATION_STATUS_TYPES:
+        messages.error(request, "That immigration status is not a valid choice.")
+        return redirect(reverse("documents_dashboard") + "?employee")
+
+    if immigration_status_type and immigration_status_overrides_permit(
+        immigration_status_type
+    ):
+        if not immigration_effective_date:
+            messages.error(
+                request,
+                "Effective date is required when the immigration status "
+                "changes work-permit ranking.",
+            )
+            return redirect(reverse("documents_dashboard") + "?employee")
+        try:
+            datetime.strptime(immigration_effective_date, "%Y-%m-%d")
+        except ValueError:
+            messages.error(request, "Effective date must be a real date.")
+            return redirect(reverse("documents_dashboard") + "?employee")
 
     # Basic validations
     if not user_id or not title or not fileobj:
@@ -660,18 +697,22 @@ def upload_employee_documents(request):
     )
 
     if immigration_status_type:
-        ImmigrationStatusEvent.objects.create(
-            user=employee,
-            employer=employer,
-            status_type=immigration_status_type,
-            effective_date=immigration_effective_date,
-            expiry_date=immigration_expiry_date,
-            reference_number=immigration_reference_number,
-            notes=notes,
-            document_file=uploaded_doc,
-            created_by=request.user,
-            is_active=True,
-        )
+        try:
+            ImmigrationStatusEvent.objects.create(
+                user=employee,
+                employer=employer,
+                status_type=immigration_status_type,
+                effective_date=immigration_effective_date,
+                expiry_date=immigration_expiry_date,
+                reference_number=immigration_reference_number,
+                notes=notes,
+                document_file=uploaded_doc,
+                created_by=request.user,
+                is_active=True,
+            )
+        except ValidationError as exc:
+            messages.error(request, _immigration_validation_message(exc))
+            return redirect(reverse("documents_dashboard") + "?employee")
 
     messages.success(
         request, f"Uploaded '{title}' for {employee.get_full_name() or employee.email}."
