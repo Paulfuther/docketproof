@@ -1,5 +1,9 @@
 <div class="mb-4">
   <h4 class="mb-1">Immigration Audit</h4>
+  <p class="small text-muted mb-0">
+    “Expiring within 120 days (HR watch)” is the on-screen watch list.
+    It is not an email send date.
+  </p>
 </div>
 
 <div class="card shadow-sm border-0 mb-4">
@@ -90,7 +94,7 @@
       </div>
 
       <div class="immigration-summary">
-        <span class="imm-pill is-{{ row.overall_status.pill_class }}">
+        <span class="imm-pill is-{{ row.overall_status.pill_class }}" title="{{ row.overall_status.label }}">
           {{ row.overall_status.label }}
         </span>
       </div>
@@ -174,7 +178,7 @@
       <!-- SIN -->
       <div class="immigration-detail-row">
         <span class="immigration-detail-label">SIN Status</span>
-        <span class="imm-pill is-{{ row.sin_info.pill_class }}">
+        <span class="imm-pill is-{{ row.sin_info.pill_class }}" title="{{ row.sin_info.label }}">
           {{ row.sin_info.label }}
         </span>
       </div>
@@ -204,10 +208,13 @@
       <!-- PERMIT -->
       <div class="immigration-detail-row">
         <span class="immigration-detail-label">Permit Status</span>
-        <span class="imm-pill is-{{ row.permit_info.pill_class }}">
+        <span class="imm-pill is-{{ row.permit_info.pill_class }}" title="{{ row.permit_info.label }}">
           {{ row.permit_info.label }}
         </span>
       </div>
+      {% if row.permit_info.source == "checkbox" %}
+        <div class="immigration-subtext text-end">Admin shortcut. No proof event on file.</div>
+      {% endif %}
 
       {% if row.extension_requested %}
         <div class="immigration-detail-row">
@@ -323,7 +330,7 @@
 }
 
 .immigration-detail-row > .imm-pill {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: min(18rem, 62%);
   margin-left: auto;

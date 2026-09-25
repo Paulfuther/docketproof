@@ -1,5 +1,43 @@
 from datetime import date
-from django.db.models import Q
+
+from django.db.models import F, Q
+
+from arl.documentflow.constants import (
+    IMMIGRATION_STATUS_TYPES,
+    OVERRIDE_PERMIT_STATUS_TYPES,
+    immigration_status_overrides_permit,
+)
+
+# On-screen watch window. Not an email milestone. The 90/60/30 mailer
+# lives in a separate change and is not applied here.
+HR_WATCH_DAYS = 120
+HR_WATCH_LABEL = "Expiring within 120 days (HR watch)"
+
+# Lower sorts first. Unknown codes use overall_priority() and stay ahead of compliant.
+PRIORITY_MAP = {
+    "urgent": 0,
+    "expiring_soon": 1,
+    "extension_pending": 2,
+    "compliant_sin_update_needed": 3,
+    "compliant": 4,
+}
+
+EXTENSION_SHORTCUT_DATE_ERROR = (
+    "Work permit extension date is required when extension requested is checked."
+)
+EXTENSION_SHORTCUT_EVENT_ERROR = (
+    "Checking an extension, or changing its filing date, needs an active "
+    "immigration status event that overrides the permit and has a document "
+    "or a reference number. Add that event first. The checkbox alone is not "
+    "a proof trail."
+)
+
+
+def overall_priority(code):
+    """Sort weight for an overall status code. Missing codes stay before compliant."""
+    if code in PRIORITY_MAP:
+        return PRIORITY_MAP[code]
+    return PRIORITY_MAP["compliant"] - 1
 
 
 def _get_sin_value(user):
@@ -15,6 +53,75 @@ def _days_until(target_date):
     if not target_date:
         return None
     return (target_date - date.today()).days
+
+
+def event_has_permit_proof(event):
+    """Document or reference number. Whitespace-only references do not count."""
+    if event is None:
+        return False
+    if getattr(event, "document_file_id", None):
+        return True
+    document = getattr(event, "document_file", None)
+    if getattr(document, "pk", None):
+        return True
+    return bool((getattr(event, "reference_number", None) or "").strip())
+
+
+def event_overrides_permit(event):
+    """Active override-type event with a document or reference number."""
+    if event is None or not getattr(event, "is_active", False):
+        return False
+    if not immigration_status_overrides_permit(getattr(event, "status_type", None)):
+        return False
+    return event_has_permit_proof(event)
+
+
+def _override_label(event):
+    getter = getattr(event, "get_status_type_display", None)
+    if callable(getter):
+        label = getter()
+        if label:
+            return label
+    meta = IMMIGRATION_STATUS_TYPES.get(getattr(event, "status_type", None)) or {}
+    return meta.get("label") or "Extension Pending"
+
+
+def active_permit_override_event(user):
+    """Latest active override event that has a document or reference number."""
+    events = (
+        user.immigration_status_events.filter(
+            is_active=True,
+            status_type__in=OVERRIDE_PERMIT_STATUS_TYPES,
+        )
+        .select_related("document_file")
+        .order_by(F("effective_date").desc(nulls_last=True), "-created_at")
+    )
+    for event in events:
+        if event_overrides_permit(event):
+            return event
+    return None
+
+
+def extension_shortcut_error(user, requested, extension_date, changed_fields):
+    """
+    Admin shortcut guard.
+
+    Existing checked rows can still be saved when the extension fields are
+    not part of this edit. Turning the shortcut on, or changing its date,
+    requires a filing date and a proof event.
+    """
+    changed = set(changed_fields or [])
+    if not (
+        {"work_permit_extension_requested", "work_permit_extension_date"} & changed
+    ):
+        return None
+    if not requested:
+        return None
+    if not extension_date:
+        return EXTENSION_SHORTCUT_DATE_ERROR
+    if not getattr(user, "pk", None) or not active_permit_override_event(user):
+        return EXTENSION_SHORTCUT_EVENT_ERROR
+    return None
 
 
 def _sin_status(user):
@@ -55,10 +162,10 @@ def _sin_status(user):
                 "days_left": days_left,
             }
 
-        if days_left is not None and days_left <= 120:
+        if days_left is not None and days_left <= HR_WATCH_DAYS:
             return {
                 "code": "expiring_soon",
-                "label": "Temporary SIN",
+                "label": HR_WATCH_LABEL,
                 "pill_class": "warning",
                 "is_temporary": True,
                 "expiry": sin_expiry,
@@ -85,11 +192,22 @@ def _sin_status(user):
     }
 
 
-def _permit_status(user, sin_info):
+def _permit_status(user, sin_info, override_event=None):
     expiry = getattr(user, "work_permit_expiration_date", None)
     days_left = _days_until(expiry)
 
-    # 🔥 NEW: extension overrides expiry
+    # Proof event drives maintained-status style ranking. The checkbox below
+    # remains a fallback for rows filed before events were required.
+    if event_overrides_permit(override_event):
+        return {
+            "code": "extension_pending",
+            "label": _override_label(override_event),
+            "pill_class": "primary",
+            "expiry": expiry,
+            "days_left": days_left,
+            "source": "event",
+        }
+
     if user.work_permit_extension_requested:
         return {
             "code": "extension_pending",
@@ -97,9 +215,8 @@ def _permit_status(user, sin_info):
             "pill_class": "primary",
             "expiry": expiry,
             "days_left": days_left,
+            "source": "checkbox",
         }
-
-    # existing logic continues below
 
     if not sin_info["is_temporary"]:
         return {
@@ -108,6 +225,7 @@ def _permit_status(user, sin_info):
             "pill_class": "dark",
             "expiry": expiry,
             "days_left": days_left,
+            "source": None,
         }
 
     if not expiry:
@@ -117,6 +235,7 @@ def _permit_status(user, sin_info):
             "pill_class": "danger",
             "expiry": expiry,
             "days_left": days_left,
+            "source": None,
         }
 
     if days_left is not None and days_left < 0:
@@ -126,15 +245,17 @@ def _permit_status(user, sin_info):
             "pill_class": "danger",
             "expiry": expiry,
             "days_left": days_left,
+            "source": None,
         }
 
-    if days_left is not None and days_left <= 120:
+    if days_left is not None and days_left <= HR_WATCH_DAYS:
         return {
             "code": "expiring_soon",
-            "label": "Expiring Soon",
+            "label": HR_WATCH_LABEL,
             "pill_class": "warning",
             "expiry": expiry,
             "days_left": days_left,
+            "source": None,
         }
 
     return {
@@ -143,6 +264,7 @@ def _permit_status(user, sin_info):
         "pill_class": "success",
         "expiry": expiry,
         "days_left": days_left,
+        "source": None,
     }
 
 
@@ -152,7 +274,7 @@ def _overall_status(sin_info, permit_info):
     if permit_info["code"] == "extension_pending":
         return {
             "code": "extension_pending",
-            "label": "Extension Pending",
+            "label": permit_info.get("label") or "Extension Pending",
             "pill_class": "primary",
         }
 
@@ -180,7 +302,7 @@ def _overall_status(sin_info, permit_info):
             }
         return {
             "code": "expiring_soon",
-            "label": "Expiring Soon",
+            "label": HR_WATCH_LABEL,
             "pill_class": "warning",
         }
 
@@ -194,7 +316,7 @@ def _overall_status(sin_info, permit_info):
     if permit_info["code"] == "expiring_soon":
         return {
             "code": "expiring_soon",
-            "label": "Expiring Soon",
+            "label": HR_WATCH_LABEL,
             "pill_class": "warning",
         }
 
@@ -230,21 +352,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
             .first()
         )
 
-        permit_event = (
-            employee.immigration_status_events
-            .filter(
-                is_active=True,
-                status_type__in=[
-                    "work_permit_extension",
-                    "maintained_status",
-                    "pgwp_application",
-                    "restoration_application",
-                    "new_work_permit",
-                ],
-            )
-            .order_by("-created_at")
-            .first()
-        )
+        permit_event = active_permit_override_event(employee)
 
         immigration_events = (
             employee.immigration_status_events
@@ -259,7 +367,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         permit_expiry = employee.work_permit_expiration_date
         permit_days = _days_until(permit_expiry)
 
-        permit_info = _permit_status(employee, sin_info)
+        permit_info = _permit_status(employee, sin_info, permit_event)
         overall = _overall_status(sin_info, permit_info)
 
         row = {
@@ -285,17 +393,9 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
 
         rows.append(row)
 
-    PRIORITY_MAP = {
-        "urgent": 0,
-        "expiring_soon": 1,
-        "extension_pending": 2,
-        "needs_review": 3,
-        "compliant": 4,
-    }
-
     rows.sort(
         key=lambda r: (
-            PRIORITY_MAP.get(r["overall_status"]["code"], 99),
+            overall_priority(r["overall_status"]["code"]),
             r["permit_days"] if r["permit_days"] is not None else 9999,
             -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
         )

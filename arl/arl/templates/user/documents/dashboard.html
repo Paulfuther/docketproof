@@ -277,7 +277,7 @@
                                 id="immigration-status-type"
                                 class="form-select"
                                 onchange="updateImmigrationStatusHelp(this)">
-                          
+                          <option value="">No immigration status change</option>
 
                           {% regroup IMMIGRATION_STATUS_TYPES.items by 1.category as status_groups %}
 
@@ -285,7 +285,8 @@
                             <optgroup label="{{ group.grouper }}">
                               {% for code, meta in group.list %}
                                 <option value="{{ code }}"
-                                        data-description="{{ meta.description|escape }}">
+                                        data-overrides-permit="{% if meta.overrides_permit %}1{% else %}0{% endif %}"
+                                        data-description="{{ meta.description|default:''|escape }}">
                                   {{ meta.label }}
                                 </option>
                               {% endfor %}
@@ -587,12 +588,17 @@ document.addEventListener("DOMContentLoaded", function () {
 <script>
 function updateImmigrationStatusHelp(selectEl) {
   const selected = selectEl.options[selectEl.selectedIndex];
-  const description = selected.getAttribute("data-description");
+  const description = selected ? selected.getAttribute("data-description") : "";
+  const overrides = selected && selected.getAttribute("data-overrides-permit") === "1";
 
   const help = document.getElementById("immigration-status-help");
   if (!help) return;
 
-  help.textContent = description || "Select this only if the document changes or explains immigration status.";
+  let text = description || "Select this only if the document changes or explains immigration status.";
+  if (overrides) {
+    text += " This status changes the immigration audit ranking. Enter the effective date. The uploaded file is the proof document; a reference number is optional.";
+  }
+  help.textContent = text;
 }
 </script>
 {% endblock %}

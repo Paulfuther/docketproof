@@ -1,5 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.db import models
-from .constants import IMMIGRATION_STATUS_CHOICES
+
+from .constants import IMMIGRATION_STATUS_CHOICES, immigration_status_overrides_permit
 
 
 # Create your models here.
@@ -214,3 +216,41 @@ class ImmigrationStatusEvent(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.get_status_type_display()}"
+
+    def validate_override_proof(self):
+        """Block ranking changes that have no who / when / document-or-reference."""
+        if not self.is_active:
+            return
+        if not immigration_status_overrides_permit(self.status_type):
+            return
+
+        if self.reference_number:
+            self.reference_number = self.reference_number.strip()
+
+        errors = {}
+        has_reference = bool(self.reference_number)
+        has_document = bool(self.document_file_id)
+        if not has_reference and not has_document:
+            message = (
+                "This status changes work-permit ranking. Attach a document or "
+                "enter a reference number (IRCC application or file number)."
+            )
+            errors["reference_number"] = message
+            errors["document_file"] = message
+        if not self.effective_date:
+            errors["effective_date"] = (
+                "Enter the date this status took effect, or the date IRCC "
+                "received the application."
+            )
+        if not self.created_by_id:
+            errors["created_by"] = "Record who entered this status."
+        if errors:
+            raise ValidationError(errors)
+
+    def clean(self):
+        super().clean()
+        self.validate_override_proof()
+
+    def save(self, *args, **kwargs):
+        self.validate_override_proof()
+        return super().save(*args, **kwargs)

@@ -60,3 +60,15 @@ IMMIGRATION_STATUS_CHOICES = [
     (code, data["label"])
     for code, data in IMMIGRATION_STATUS_TYPES.items()
 ]
+
+# Statuses that can change work-permit ranking when the event has a proof trail.
+OVERRIDE_PERMIT_STATUS_TYPES = tuple(
+    code
+    for code, data in IMMIGRATION_STATUS_TYPES.items()
+    if data.get("overrides_permit")
+)
+
+
+def immigration_status_overrides_permit(status_type):
+    meta = IMMIGRATION_STATUS_TYPES.get(status_type) or {}
+    return bool(meta.get("overrides_permit"))
