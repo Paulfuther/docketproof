@@ -1003,11 +1003,13 @@ def immigration_audit_partial(request):
 
     immigration_search = request.GET.get("imm_q", "")
     immigration_flagged_only = request.GET.get("imm_flagged") == "1"
+    immigration_sort = request.GET.get("imm_sort", "")
 
     immigration_context = build_immigration_audit(
         employer=employer,
         search_query=immigration_search,
         flagged_only=immigration_flagged_only,
+        sort=immigration_sort,
     )
 
     return render(
