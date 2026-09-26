@@ -43,7 +43,10 @@ from twilio.rest import Client
 from arl.bucket.helpers import download_from_s3
 from arl.documentflow.models import DocumentFlow
 from arl.documentflow.services import build_document_audit
-from arl.documentflow.services_immigration import build_immigration_audit
+from arl.documentflow.services_immigration import (
+    build_immigration_audit,
+    render_immigration_audit_csv,
+)
 from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
 from arl.dsign.tasks import create_docusign_envelope_task
 from arl.msg.helpers import check_verification_token, request_verification_token
@@ -1012,6 +1015,29 @@ def immigration_audit_partial(request):
         "user/hr/partials/immigration_audit.html",
         immigration_context,
     )
+
+
+@login_required
+def immigration_audit_export(request):
+    """CSV of every active employee for this employer.
+
+    Same permission as the immigration audit, and the same ranking as
+    build_immigration_audit with no search or issues-only filter.
+    """
+    employer = getattr(request.user, "employer", None)
+
+    if not _user_can_access_hr_dashboard(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    if not _user_can_access_immigration(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    slug = slugify(getattr(employer, "name", "") or "") or "employer"
+    filename = f"immigration-audit-{slug}.csv"
+    payload = render_immigration_audit_csv(employer).encode("utf-8-sig")
+    response = HttpResponse(payload, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @login_required

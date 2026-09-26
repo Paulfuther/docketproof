@@ -408,7 +408,10 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
                     "expiry date. These employees are left out of the "
                     "90, 60, and 30 day work-permit milestone emails. "
                     "The date is when the extension was submitted to IRCC, "
-                    "not a new expiry."
+                    "not a new expiry. "
+                    "On the immigration audit this ranks as "
+                    "“Authorized - extension on file”. An active immigration "
+                    "event whose type overrides the permit ranks the same way."
                 ),
                 "fields": (
                     "work_permit_extension_requested",

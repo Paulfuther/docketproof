@@ -1,5 +1,15 @@
+import csv
+from io import StringIO
+
 from django.db.models import Q
 from django.utils import timezone
+
+from .constants import IMMIGRATION_STATUS_TYPES
+
+# User-facing label when a checkbox or an overrides-permit event
+# keeps the employee work-authorized. The status code stays
+# extension_pending so audit ranking does not move.
+AUTHORIZED_EXTENSION_LABEL = "Authorized - extension on file"
 
 
 def _get_sin_value(user):
@@ -96,15 +106,25 @@ def _sin_status(user):
     }
 
 
-def _permit_status(user, sin_info):
+def permit_override_status_types():
+    """Immigration event types that prove work authorization."""
+    return [
+        code
+        for code, meta in IMMIGRATION_STATUS_TYPES.items()
+        if meta.get("overrides_permit")
+    ]
+
+
+def _permit_status(user, sin_info, permit_override=False):
     expiry = getattr(user, "work_permit_expiration_date", None)
     days_left = _days_until(expiry)
 
-    # 🔥 NEW: extension overrides expiry
-    if user.work_permit_extension_requested:
+    # Checkbox ("extension letter on file") or an active event whose
+    # type has overrides_permit. Either one means authorized with proof.
+    if user.work_permit_extension_requested or permit_override:
         return {
             "code": "extension_pending",
-            "label": "Extension Pending",
+            "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
             "expiry": expiry,
             "days_left": days_left,
@@ -160,12 +180,13 @@ def _permit_status(user, sin_info):
 def _overall_status(sin_info, permit_info):
     # Extension / maintained-status path overrides SIN expiry.
     # A temporary SIN may expire while the employee remains work-authorized.
-    # This is the only way a permanent SIN leaves Compliant: a real
-    # extension letter on file, not a leftover permit date.
+    # A permanent SIN leaves Compliant only for a real extension letter
+    # (checkbox) or an active overrides-permit event, not a leftover
+    # permit date.
     if permit_info["code"] == "extension_pending":
         return {
             "code": "extension_pending",
-            "label": "Extension Pending",
+            "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
         }
 
@@ -228,6 +249,146 @@ def _overall_status(sin_info, permit_info):
     }
 
 
+# Same 120-day window _permit_status uses for "Expiring Soon".
+# Chip color only — it does not feed the audit sort.
+_PERMIT_WATCH_DAYS = 120
+
+_OVERALL_SCAN = {
+    "compliant": ("Compliant", "ok"),
+    "urgent": ("Urgent", "urgent"),
+    "expiring_soon": ("Expiring soon", "watch"),
+    "compliant_sin_update_needed": ("SIN update", "watch"),
+    "extension_pending": ("Authorized", "auth"),
+    "needs_review": ("Needs review", "watch"),
+}
+
+
+def _scan_chip(label, title, tone, detail=None):
+    chip = {"label": label, "title": title, "tone": tone}
+    if detail:
+        chip["detail"] = detail
+    return chip
+
+
+def _event_scan_label(event):
+    meta = IMMIGRATION_STATUS_TYPES.get(event.status_type) or {}
+    return meta.get("scan_label") or event.get_status_type_display()
+
+
+def _sin_scan_chip(row):
+    info = row["sin_info"]
+    code = info["code"]
+    title = info["label"]
+    if row["sin_expiry"]:
+        title = f"{info['label']} — expires {row['sin_expiry'].isoformat()}"
+
+    if code == "permanent":
+        return _scan_chip("Permanent", info["label"], "ok")
+    if code == "expired":
+        return _scan_chip("SIN expired", title, "urgent")
+    if code == "missing":
+        return _scan_chip("No SIN", info["label"], "urgent")
+    return _scan_chip("Temp SIN", title, "watch")
+
+
+def _permit_scan_chip(row):
+    """Calendar state of the permit, separate from authorization proof.
+
+    An extension or overrides-permit event stays on the Proof and Overall
+    chips. A permanent SIN stays "Not required" even when a leftover
+    permit date is expired — same rule the ranker already uses.
+    """
+    info = row["permit_info"]
+    code = info["code"]
+    days = row["permit_days"]
+    full = info["label"]
+
+    if code == "not_required":
+        return _scan_chip("Not required", full, "muted")
+
+    if code == "missing_expiry" or (code == "extension_pending" and days is None):
+        if code == "missing_expiry":
+            return _scan_chip("No expiry", full, "urgent")
+        return _scan_chip("No expiry", f"No permit expiry on file. {full}", "watch")
+
+    if code == "expired" or (days is not None and days < 0):
+        title = full
+        if code == "extension_pending":
+            title = f"Permit expired. {full}"
+        return _scan_chip("Expired", title, "urgent")
+
+    if days is not None:
+        label = "1 day" if days == 1 else f"{days} days"
+        if code == "valid" or (
+            code == "extension_pending" and days > _PERMIT_WATCH_DAYS
+        ):
+            tone = "ok"
+        else:
+            tone = "watch"
+        return _scan_chip(label, f"{full} — {label} remaining", tone)
+
+    if code == "valid":
+        return _scan_chip("Valid", full, "ok")
+
+    return _scan_chip(full, full, "muted")
+
+
+def _proof_scan_chip(row):
+    """Proof column: authorization evidence, otherwise the latest event.
+
+    Blue when the employee is work-authorized by an extension checkbox
+    or an overrides-permit event. Gray for context events, no proof,
+    and permit-not-required.
+    """
+    permit_event = row["permit_event"]
+    if permit_event is not None:
+        full = permit_event.get_status_type_display()
+        title = full
+        if full != AUTHORIZED_EXTENSION_LABEL:
+            title = f"{full}. {AUTHORIZED_EXTENSION_LABEL}"
+        return _scan_chip(
+            _event_scan_label(permit_event),
+            title,
+            "auth",
+            detail=full,
+        )
+
+    if row["extension_requested"]:
+        return _scan_chip(
+            "Extension on file",
+            AUTHORIZED_EXTENSION_LABEL,
+            "auth",
+            detail="Extension on file",
+        )
+
+    latest = row["latest_immigration_event"]
+    if latest is not None:
+        return _scan_chip(
+            _event_scan_label(latest),
+            latest.get_status_type_display(),
+            "muted",
+        )
+
+    if row["sin_info"]["is_temporary"]:
+        return _scan_chip("None", "No proof on file", "muted")
+
+    return _scan_chip("—", "No proof required", "muted")
+
+
+def _overall_scan_chip(row):
+    info = row["overall_status"]
+    label, tone = _OVERALL_SCAN.get(info["code"], (info["label"], "muted"))
+    return _scan_chip(label, info["label"], tone)
+
+
+def _attach_scan_chips(row):
+    """Display chips for the scan list. Does not change rank inputs."""
+    row["sin_chip"] = _sin_scan_chip(row)
+    row["permit_chip"] = _permit_scan_chip(row)
+    row["proof_chip"] = _proof_scan_chip(row)
+    row["overall_chip"] = _overall_scan_chip(row)
+
+
 def build_immigration_audit(employer, search_query="", flagged_only=False):
     employees = (
         employer.customuser_set.filter(is_active=True)
@@ -244,6 +405,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         )
 
     rows = []
+    override_types = permit_override_status_types()
 
     for employee in employees:
         latest_event = (
@@ -257,13 +419,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
             employee.immigration_status_events
             .filter(
                 is_active=True,
-                status_type__in=[
-                    "work_permit_extension",
-                    "maintained_status",
-                    "pgwp_application",
-                    "restoration_application",
-                    "new_work_permit",
-                ],
+                status_type__in=override_types,
             )
             .order_by("-created_at")
             .first()
@@ -282,7 +438,11 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         permit_expiry = employee.work_permit_expiration_date
         permit_days = _days_until(permit_expiry)
 
-        permit_info = _permit_status(employee, sin_info)
+        permit_info = _permit_status(
+            employee,
+            sin_info,
+            permit_override=permit_event is not None,
+        )
         overall = _overall_status(sin_info, permit_info)
 
         row = {
@@ -334,8 +494,110 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         )
     )
 
+    for row in rows:
+        _attach_scan_chips(row)
+
     return {
         "immigration_rows": rows,
         "immigration_search": search_query,
         "immigration_flagged_only": flagged_only,
     }
+
+
+IMMIGRATION_EXPORT_COLUMNS = (
+    ("name", "Name"),
+    ("email", "Email"),
+    ("store", "Store"),
+    ("employer", "Employer"),
+    ("masked_sin", "Masked SIN"),
+    ("sin_type", "SIN Type"),
+    ("sin_expiry", "SIN Expiry"),
+    ("sin_days_left", "SIN Days Left"),
+    ("permit_expiry", "Permit Expiry"),
+    ("permit_days_left", "Permit Days Left"),
+    ("extension_authorized", "Extension Authorized"),
+    ("overall_status", "Overall Status"),
+    ("overall_status_code", "Overall Status Code"),
+    ("latest_event_type", "Latest Event Type"),
+    ("latest_event_effective_date", "Latest Event Effective Date"),
+    ("latest_event_has_document", "Latest Event Has Document"),
+    ("latest_event_has_reference", "Latest Event Has Reference"),
+)
+
+
+def _csv_date(value):
+    return value.isoformat() if value else ""
+
+
+def _csv_days(value):
+    return "" if value is None else str(value)
+
+
+def _csv_yes(value):
+    return "Yes" if value else "No"
+
+
+def _sin_type_for_export(sin_info):
+    if sin_info["code"] == "missing":
+        return "missing"
+    if sin_info["is_temporary"]:
+        return "temporary"
+    return "permanent"
+
+
+def immigration_audit_export_records(employer):
+    """All active employees, in the same order as the unfiltered audit."""
+    audit = build_immigration_audit(employer)
+    employer_name = employer.name if employer else ""
+    records = []
+    for row in audit["immigration_rows"]:
+        employee = row["employee"]
+        event = row["latest_immigration_event"]
+        store = ""
+        if employee.store_id and employee.store is not None:
+            store = str(employee.store.number)
+        full_name = (employee.get_full_name() or "").strip()
+        records.append(
+            {
+                "name": full_name or employee.username or "",
+                "email": employee.email or "",
+                "store": store,
+                "employer": employer_name,
+                "masked_sin": row["sin_masked"],
+                "sin_type": _sin_type_for_export(row["sin_info"]),
+                "sin_expiry": _csv_date(row["sin_expiry"]),
+                "sin_days_left": _csv_days(row["sin_days"]),
+                "permit_expiry": _csv_date(row["permit_expiry"]),
+                "permit_days_left": _csv_days(row["permit_days"]),
+                "extension_authorized": _csv_yes(
+                    row["overall_status"]["code"] == "extension_pending"
+                ),
+                "overall_status": row["overall_status"]["label"],
+                "overall_status_code": row["overall_status"]["code"],
+                "latest_event_type": (
+                    event.get_status_type_display() if event else ""
+                ),
+                "latest_event_effective_date": (
+                    _csv_date(event.effective_date) if event else ""
+                ),
+                "latest_event_has_document": _csv_yes(
+                    bool(event and event.document_file_id)
+                ),
+                "latest_event_has_reference": _csv_yes(
+                    bool(event and (event.reference_number or "").strip())
+                ),
+            }
+        )
+    return records
+
+
+def render_immigration_audit_csv(employer):
+    """Excel-openable CSV. Caller adds a UTF-8 BOM for Excel."""
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([label for _key, label in IMMIGRATION_EXPORT_COLUMNS])
+    for record in immigration_audit_export_records(employer):
+        writer.writerow(
+            [record[key] for key, _label in IMMIGRATION_EXPORT_COLUMNS]
+        )
+    return buffer.getvalue()
