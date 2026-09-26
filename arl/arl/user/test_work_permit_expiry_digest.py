@@ -7,7 +7,12 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from arl.documentflow.services_immigration import (
+    build_immigration_audit,
+    requires_work_permit,
+)
 from arl.user.models import CustomUser, Employer, Store, WorkPermitMilestoneNotice
+from arl.user.services import set_user_sin
 from arl.user.tasks import work_permit_milestone_reminders
 from arl.user.work_permit_reminders import (
     IMMIGRATION_EMAIL_GROUP,
@@ -17,23 +22,41 @@ from arl.user.work_permit_reminders import (
     send_work_permit_milestone_reminders,
 )
 
+# Temporary SIN: digits start with 9. Permanent SIN: anything else.
+TEMPORARY_SIN = "946454286"
+PERMANENT_SIN = "130692544"
+FERNET_TEST_KEY = "iNKsr5HSwIPaWnIPgLRQLSluZRH0zEzZnJ_f6WdFZBQ="
+SIN_SETTINGS = dict(
+    SECRET_KEY="ci-test-secret-key-not-for-production",
+    FERNET_PRIMARY_KEY=FERNET_TEST_KEY,
+    FERNET_OLD_KEYS=[],
+    SIN_HASH_SALT="work-permit-test-salt",
+)
 
-@override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
+
+@override_settings(**SIN_SETTINGS)
 class DueMilestoneTests(TestCase):
-    def test_bands_send_once_each_and_ignore_outside(self):
-        self.assertIsNone(due_milestone(None))
-        self.assertIsNone(due_milestone(91))
-        self.assertIsNone(due_milestone(-1))
+    def test_only_exact_days_match(self):
         self.assertEqual(due_milestone(90), 90)
-        self.assertEqual(due_milestone(61), 90)
         self.assertEqual(due_milestone(60), 60)
-        self.assertEqual(due_milestone(31), 60)
         self.assertEqual(due_milestone(30), 30)
-        self.assertEqual(due_milestone(0), 30)
+        for days_left in (None, 91, 89, 61, 59, 31, 29, 4, 1, 0, -1):
+            self.assertIsNone(due_milestone(days_left), days_left)
+
+    def test_only_a_temporary_sin_needs_a_permit(self):
+        self.assertTrue(requires_work_permit(_Sin("9 46-454 286")))
+        self.assertFalse(requires_work_permit(_Sin("130 692 544")))
+        self.assertFalse(requires_work_permit(_Sin("")))
+        self.assertFalse(requires_work_permit(_Sin(None)))
+
+
+class _Sin:
+    def __init__(self, sin_plain):
+        self.sin_plain = sin_plain
 
 
 @override_settings(
-    SECRET_KEY="ci-test-secret-key-not-for-production",
+    **SIN_SETTINGS,
     MAIL_DEFAULT_SENDER="digest@example.com",
 )
 class WorkPermitMilestoneTests(TestCase):
@@ -83,8 +106,8 @@ class WorkPermitMilestoneTests(TestCase):
             **extra,
         )
 
-    def _employee(self, username, days, **extra):
-        return self._user(
+    def _employee(self, username, days, sin=TEMPORARY_SIN, **extra):
+        user = self._user(
             username,
             f"{username}@example.com",
             extra.pop("phone"),
@@ -93,6 +116,9 @@ class WorkPermitMilestoneTests(TestCase):
             store=extra.pop("store", self.store),
             **extra,
         )
+        if sin:
+            set_user_sin(user, sin, validate_luhn=False, save=True)
+        return user
 
     def _milestones(self, today=None):
         result = send_work_permit_milestone_reminders(
@@ -100,18 +126,25 @@ class WorkPermitMilestoneTests(TestCase):
         )
         return [(row["name"], row["milestone"]) for row in result["candidates"]]
 
-    def test_exact_and_late_inside_the_band_only(self):
+    def test_only_exact_milestone_days_are_listed(self):
         self._employee(
             "ninety", 90, phone="+15195552090", first_name="Nan", last_name="Ninety"
         )
         self._employee(
-            "late-ninety", 87, phone="+15195552087", first_name="Lana", last_name="Late"
+            "almost-ninety",
+            89,
+            phone="+15195552089",
+            first_name="Lana",
+            last_name="Almost",
         )
         self._employee(
             "sixty", 60, phone="+15195552060", first_name="Sam", last_name="Sixty"
         )
         self._employee(
             "thirty", 30, phone="+15195552030", first_name="Tara", last_name="Thirty"
+        )
+        self._employee(
+            "four-left", 4, phone="+15195552004", first_name="Finn", last_name="Four"
         )
         self._employee(
             "today", 0, phone="+15195552000", first_name="Tim", last_name="Today"
@@ -122,19 +155,29 @@ class WorkPermitMilestoneTests(TestCase):
         self.assertEqual(
             self._milestones(),
             [
-                ("Lana Late", 90),
                 ("Nan Ninety", 90),
                 ("Sam Sixty", 60),
                 ("Tara Thirty", 30),
-                ("Tim Today", 30),
             ],
         )
 
-    def test_missed_90_band_sends_60_only(self):
+    def test_missed_exact_day_is_not_backfilled(self):
         self._employee(
-            "first-seen", 45, phone="+15195553045", first_name="Fay", last_name="First"
+            "missed-ninety",
+            89,
+            phone="+15195553089",
+            first_name="Mia",
+            last_name="Missed",
         )
-        self.assertEqual(self._milestones(), [("Fay First", 60)])
+        self._employee(
+            "between", 45, phone="+15195553045", first_name="Bea", last_name="Between"
+        )
+        self._employee(
+            "four-left", 4, phone="+15195553004", first_name="Finn", last_name="Four"
+        )
+        result = send_work_permit_milestone_reminders(today=self.today)
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(WorkPermitMilestoneNotice.objects.count(), 0)
 
     def test_extension_letter_is_excluded(self):
         self._employee(
@@ -147,7 +190,7 @@ class WorkPermitMilestoneTests(TestCase):
             last_name="Pass",
         )
         kept = self._employee(
-            "kept", 12, phone="+15195553003", first_name="Kay", last_name="Kept"
+            "kept", 30, phone="+15195553003", first_name="Kay", last_name="Kept"
         )
         self.assertEqual(self._milestones(), [("Kay Kept", 30)])
         self.assertNotIn("Bo Pass", [name for name, _milestone in self._milestones()])
@@ -170,6 +213,12 @@ class WorkPermitMilestoneTests(TestCase):
         self.assertEqual(mock_send.call_count, 1)
         self.assertEqual(again["candidates"], [])
 
+        next_night = send_work_permit_milestone_reminders(
+            today=self.today + timedelta(days=1)
+        )
+        self.assertEqual(next_night["candidates"], [])
+        self.assertEqual(mock_send.call_count, 1)
+
         day_60 = self.today + timedelta(days=30)
         second = send_work_permit_milestone_reminders(today=day_60)
         self.assertEqual(mock_send.call_count, 2)
@@ -191,17 +240,26 @@ class WorkPermitMilestoneTests(TestCase):
         self.assertEqual(mock_send.call_count, 3)
 
     @patch("arl.msg.helpers.create_master_email", return_value=True)
-    def test_new_permit_date_starts_the_sequence_over(self, mock_send):
+    def test_new_permit_date_starts_over_only_on_an_exact_day(self, mock_send):
         person = self._employee(
             "ada", 90, phone="+15195554011", first_name="Ada", last_name="Due"
         )
         send_work_permit_milestone_reminders(today=self.today)
         person.work_permit_expiration_date = self.today + timedelta(days=88)
         person.save(update_fields=["work_permit_expiration_date"])
+        off_day = send_work_permit_milestone_reminders(today=self.today)
+        self.assertEqual(off_day["candidates"], [])
+        self.assertEqual(mock_send.call_count, 1)
+
+        person.work_permit_expiration_date = self.today + timedelta(days=60)
+        person.save(update_fields=["work_permit_expiration_date"])
         again = send_work_permit_milestone_reminders(today=self.today)
-        self.assertEqual(again["candidates"][0]["milestone"], 90)
-        self.assertEqual(again["candidates"][0]["days_left"], 88)
+        self.assertEqual(again["candidates"][0]["milestone"], 60)
+        self.assertEqual(again["candidates"][0]["days_left"], 60)
         self.assertEqual(mock_send.call_count, 2)
+        self.assertEqual(
+            WorkPermitMilestoneNotice.objects.filter(user=person).count(), 2
+        )
 
     @patch("arl.msg.helpers.create_master_email", return_value=True)
     def test_emails_only_immigration_email_for_that_employer(self, mock_send):
@@ -301,3 +359,161 @@ class WorkPermitMilestoneTests(TestCase):
         second = work_permit_milestone_reminders()
         self.assertEqual(second["candidates"], [])
         self.assertFalse(mock_send.called)
+
+
+@override_settings(**SIN_SETTINGS)
+class PermanentSinAndAuditTests(TestCase):
+    """Paul's live-data examples: permanent SIN is not a permit reminder."""
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.employer = Employer.objects.create(name="Audit Fuels")
+
+    def _person(self, username, phone, sin, permit_days, sin_days=None, **extra):
+        user = CustomUser.objects.create_user(
+            username=username,
+            email=f"{username}@example.com",
+            password="pass12345",
+            phone_number=phone,
+            employer=self.employer,
+            first_name=extra.pop("first_name", username.split(".")[0].title()),
+            last_name=extra.pop("last_name", "Worker"),
+            **extra,
+        )
+        if sin:
+            set_user_sin(user, sin, validate_luhn=False, save=True)
+        updates = []
+        if permit_days is not None:
+            user.work_permit_expiration_date = self.today + timedelta(days=permit_days)
+            updates.append("work_permit_expiration_date")
+        if sin_days is not None:
+            user.sin_expiration_date = self.today + timedelta(days=sin_days)
+            updates.append("sin_expiration_date")
+        if updates:
+            user.save(update_fields=updates)
+        return user
+
+    def _audit_row(self, last_name):
+        audit = build_immigration_audit(self.employer)
+        for row in audit["immigration_rows"]:
+            if row["employee"].last_name == last_name:
+                return row
+        self.fail(f"No audit row for {last_name}")
+
+    def test_permanent_sin_on_an_exact_day_is_not_mailed_and_stays_compliant(self):
+        self._person(
+            "pat.permanent",
+            "+15195558030",
+            PERMANENT_SIN,
+            30,
+            first_name="Pat",
+            last_name="Permanent",
+        )
+        self._person(
+            "old.date",
+            "+15195558004",
+            PERMANENT_SIN,
+            -20,
+            first_name="Omar",
+            last_name="Leftover",
+        )
+        self._person(
+            "no.sin",
+            "+15195558031",
+            None,
+            30,
+            first_name="Ned",
+            last_name="Missing",
+        )
+        watched = self._person(
+            "terry.watch",
+            "+15195558082",
+            TEMPORARY_SIN,
+            82,
+            sin_days=400,
+            first_name="Terry",
+            last_name="Watch",
+        )
+        self._person(
+            "tina.thirty",
+            "+15195558032",
+            "923456789",
+            30,
+            sin_days=400,
+            first_name="Tina",
+            last_name="Thirty",
+        )
+        sin_watch = self._person(
+            "sam.sinwatch",
+            "+15195558083",
+            "934567890",
+            200,
+            sin_days=82,
+            first_name="Sam",
+            last_name="Sinwatch",
+        )
+
+        result = send_work_permit_milestone_reminders(today=self.today, dry_run=True)
+        listed = [row["name"] for row in result["candidates"]]
+        self.assertEqual(listed, ["Tina Thirty"])
+        self.assertEqual(result["candidates"][0]["days_left"], 30)
+        self.assertEqual(result["candidates"][0]["milestone"], 30)
+
+        permanent = self._audit_row("Permanent")
+        self.assertEqual(permanent["permit_info"]["code"], "not_required")
+        self.assertEqual(permanent["permit_info"]["label"], "Permit Not Required")
+        self.assertEqual(permanent["overall_status"]["code"], "compliant")
+        self.assertEqual(permanent["overall_status"]["label"], "Compliant")
+        self.assertFalse(permanent["is_flagged"])
+        self.assertEqual(permanent["permit_days"], 30)
+
+        leftover = self._audit_row("Leftover")
+        self.assertEqual(leftover["permit_info"]["code"], "not_required")
+        self.assertEqual(leftover["overall_status"]["code"], "compliant")
+        self.assertEqual(leftover["permit_days"], -20)
+        self.assertFalse(leftover["is_flagged"])
+
+        watch = self._audit_row("Watch")
+        self.assertEqual(watch["sin_info"]["is_temporary"], True)
+        self.assertEqual(watch["permit_info"]["code"], "expiring_soon")
+        self.assertEqual(watch["permit_info"]["pill_class"], "warning")
+        self.assertEqual(watch["overall_status"]["code"], "expiring_soon")
+        self.assertEqual(watch["overall_status"]["pill_class"], "warning")
+        self.assertEqual(watch["permit_days"], 82)
+        self.assertTrue(watch["is_flagged"])
+        self.assertEqual(
+            watched.work_permit_expiration_date, self.today + timedelta(days=82)
+        )
+
+        sin_row = self._audit_row("Sinwatch")
+        self.assertEqual(sin_row["sin_info"]["code"], "expiring_soon")
+        self.assertEqual(
+            sin_row["overall_status"]["code"], "compliant_sin_update_needed"
+        )
+        self.assertEqual(sin_row["overall_status"]["pill_class"], "warning")
+        self.assertEqual(sin_watch.sin_expiration_date, self.today + timedelta(days=82))
+
+        names = [
+            row["employee"].last_name
+            for row in build_immigration_audit(self.employer)["immigration_rows"]
+        ]
+        self.assertLess(names.index("Watch"), names.index("Permanent"))
+        self.assertLess(names.index("Sinwatch"), names.index("Permanent"))
+        self.assertLess(names.index("Watch"), names.index("Leftover"))
+
+    def test_permanent_sin_extension_letter_is_the_only_override(self):
+        self._person(
+            "pat.extension",
+            "+15195558130",
+            PERMANENT_SIN,
+            30,
+            first_name="Pat",
+            last_name="Extension",
+            work_permit_extension_requested=True,
+            work_permit_extension_date=self.today - timedelta(days=3),
+        )
+        row = self._audit_row("Extension")
+        self.assertEqual(row["permit_info"]["code"], "extension_pending")
+        self.assertEqual(row["overall_status"]["code"], "extension_pending")
+        self.assertNotEqual(row["overall_status"]["code"], "expiring_soon")
+        self.assertNotEqual(row["overall_status"]["code"], "urgent")
