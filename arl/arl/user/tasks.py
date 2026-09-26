@@ -293,12 +293,17 @@ def send_new_hire_invite_task(
 
 @app.task(name="work_permit_milestone_reminders")
 def work_permit_milestone_reminders():
-    """Send the 90, then 60, then 30 day work-permit notices.
+    """Send work-permit notices only on the exact 90, 60, and 30 day marks.
 
-    Register this name in Django Admin → Periodic Tasks and use the
-    Enabled checkbox to turn the nightly run on or off. Each employee
-    is emailed once per milestone. Extension-letter employees are skipped.
-    Recipients are the immigration_email group.
+    Days remaining = permit expiry minus today in Django TIME_ZONE.
+    89 days left is not a 90-day notice, and a night the server misses
+    is not backfilled the next day. Only temporary SINs (digits start
+    with 9) are included; a permanent SIN is skipped even on an exact
+    milestone day. Register this name in Django Admin
+    → Periodic Tasks and use the Enabled checkbox to turn the nightly
+    run on or off. Each employee is emailed once per milestone and
+    permit date. Extension-letter employees are skipped. Recipients
+    are the immigration_email group.
     """
     from arl.user.work_permit_reminders import send_work_permit_milestone_reminders
 

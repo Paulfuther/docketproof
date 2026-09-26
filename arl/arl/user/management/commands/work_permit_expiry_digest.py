@@ -10,11 +10,17 @@ The list is one line per employee who would get a notice tonight:
 milestone (90, 60, or 30), name, employer, permit expiry, days left.
 
 Rule
-    One email at 90 days (or the first night they are seen with
-    61–90 days left), then nothing until 60 (31–60 days left),
-    then nothing until 30 (0–30 days left). A missed night does not
-    send every following night. Already expired is not listed.
-    Extension letter on file (work_permit_extension_requested) is skipped.
+    Days remaining = permit expiry minus today (Django TIME_ZONE).
+    Send only when that count is exactly 90, exactly 60, or exactly 30.
+    There are no bands: 89 days left is not a 90-day notice, and
+    4 days left is not a 30-day notice. A missed night is not
+    backfilled — if the server is down on day 90, day 89 does not
+    send a late 90-day notice. Already expired and every other day
+    count are not listed. Only a temporary SIN is included (digits of
+    sin_plain start with 9). A permanent SIN is skipped even on an
+    exact 90, 60, or 30 day permit date. Extension letter on file
+    (work_permit_extension_requested) is skipped. Each milestone is
+    stored once per employee and permit date.
 
 Turn the nightly job on or off
     Django Admin → Periodic Tasks → Add (django-celery-beat).

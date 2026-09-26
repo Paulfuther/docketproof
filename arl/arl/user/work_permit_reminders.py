@@ -1,32 +1,44 @@
-"""One work-permit reminder at 90 days, then 60, then 30.
+"""One work-permit reminder on the exact 90, 60, and 30 day marks.
 
 Days remaining = permit expiration date minus today in Django TIME_ZONE
 (America/New_York in production settings). Same subtraction the
 immigration audit uses.
 
-Milestone bands (one send each, per employee and permit date):
+Send only when days remaining is exactly one of these:
 
-- 90-day notice when 61–90 days remain, if that notice was not sent yet
-- 60-day notice when 31–60 days remain, if that notice was not sent yet
-- 30-day notice when 0–30 days remain (today counts), if not sent yet
+- 90 → 90-day notice, if that notice was not sent yet
+- 60 → 60-day notice, if that notice was not sent yet
+- 30 → 30-day notice, if that notice was not sent yet
 
-A missed night still sends once the first time the employee is seen
-inside that band. It does not email them again on later nights in the
-same band. If the whole 90-day band is missed, the next run sends the
-60-day notice only (not a late 90-day email, and not both). Same for a
-missed 60-day band: the 30-day notice is the next one. Already-expired
-permits (days remaining below 0) are not in this mailer.
+There are no windows. 89 days left is not a 90-day notice. 4 days left
+is not a 30-day notice. 0 days (expires today) and already-expired
+permits (days remaining below 0) are not in this mailer, and neither
+is any other count.
+
+A missed night is not backfilled. If the server is down on the day
+someone has exactly 90 days left, the next run (89 days left) does
+not send a late 90-day notice. The next email for that permit is the
+60-day notice, and only on the day 60 days remain. Same for a missed
+60-day night: nothing until the exact 30-day night.
 
 Records live on WorkPermitMilestoneNotice (user + permit date +
-milestone). A new permit date starts the sequence over. Delete a row
-in admin to allow that milestone to send again.
+milestone). A new permit date starts the sequence over, and that new
+date still fires only on an exact 90, 60, or 30 day match. Delete a
+row in admin to allow that milestone to send again.
+
+Who is included
+    Only a temporary SIN: the digits of sin_plain start with 9.
+    A permanent SIN (anything else) is skipped even when
+    work_permit_expiration_date is set and lands on exactly 90, 60,
+    or 30. A missing SIN is skipped. Old permit dates left on a
+    permanent-SIN row do not email.
 
 Bypass: work_permit_extension_requested (extension letter on file).
 
 When anything is actually due, one email per employer goes to each
 active user in the immigration_email group for that employer. The
-message lists only tonight's milestones, not everyone still inside a
-window. Empty nights send nothing.
+message lists only tonight's exact-day milestones. Empty nights send
+nothing.
 
 The Celery task name is work_permit_milestone_reminders. Turn it on
 or off in Django Admin → Periodic Tasks (django-celery-beat). The
@@ -40,6 +52,7 @@ from django.contrib.auth.models import Group
 from django.utils import timezone
 from django.utils.html import escape
 
+from arl.documentflow.services_immigration import requires_work_permit
 from arl.msg.email_utils import EMAIL_SOURCE_IN_APP, wrap_in_app_email_html
 from arl.msg.models import EmailLog
 from arl.setup.models import TenantApiKeys
@@ -52,17 +65,15 @@ MILESTONES = (90, 60, 30)
 
 
 def due_milestone(days_left):
-    """Return 90, 60, or 30 for the band days_left is in, else None.
+    """Return 90, 60, or 30 only when days_left is that exact count.
 
-    91 or more, or already expired (below 0), is outside this mailer.
+    Neighbouring days are not a late notice. 89 is not 90, 4 is not 30,
+    and 0 (expires today) is not 30. Already expired (below 0) is outside
+    this mailer. A missed exact day is not backfilled on the next night.
     """
-    if days_left is None or days_left < 0 or days_left > 90:
-        return None
-    if days_left > 60:
-        return 90
-    if days_left > 30:
-        return 60
-    return 30
+    if days_left in MILESTONES:
+        return days_left
+    return None
 
 
 def _today(today=None):
@@ -80,15 +91,17 @@ def _store_label(user):
     return "—"
 
 
+def _exact_milestone_dates(today):
+    return [today + timedelta(days=days) for days in MILESTONES]
+
+
 def _candidate_queryset(today):
     return (
         CustomUser.objects.filter(
             is_active=True,
             employer__isnull=False,
-            work_permit_expiration_date__isnull=False,
             work_permit_extension_requested=False,
-            work_permit_expiration_date__gte=today,
-            work_permit_expiration_date__lte=today + timedelta(days=90),
+            work_permit_expiration_date__in=_exact_milestone_dates(today),
         )
         .select_related("employer", "store")
         .order_by("employer_id", "last_name", "first_name", "id")
@@ -113,6 +126,8 @@ def pending_milestones(today=None):
         days_left = (expiry - today).days
         milestone = due_milestone(days_left)
         if milestone is None:
+            continue
+        if not requires_work_permit(user):
             continue
         if (user.pk, expiry, milestone) in sent:
             continue
@@ -177,10 +192,10 @@ def render_reminder_html(employer_name, rows, today):
             f"as of {escape(today.strftime('%B %d, %Y'))}.</p>"
         ),
         (
-            "<p>Each person is listed once, for the milestone they reached. "
-            "They are not listed again until the next milestone "
-            "(90, then 60, then 30). Employees with an extension letter "
-            "on file are not included.</p>"
+            "<p>Each person below has a temporary SIN and a work permit that "
+            "expires in exactly 90, 60, or 30 days. They are listed once "
+            "for that day. Permanent SINs and employees with an extension "
+            "letter on file are not included.</p>"
         ),
     ]
     for milestone in MILESTONES:

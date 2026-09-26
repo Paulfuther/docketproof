@@ -102,8 +102,8 @@ class CustomUser(AbstractUser):
     # Work Permit Extension Tracking.
     # Checked when a government extension / authorization letter is on file.
     # That letter has no expiry. The employee stays legal to work, including
-    # when the work permit itself is expired or inside the 90/60/30 reminder
-    # windows. The nightly work-permit digest skips these people.
+    # when the work permit itself is expired. The nightly exact-day
+    # work-permit mailer skips these people.
     work_permit_extension_requested = models.BooleanField(
         default=False,
         verbose_name="Extension letter on file",
@@ -111,7 +111,7 @@ class CustomUser(AbstractUser):
             "Check when a government extension or work-authorization letter "
             "is on file and the employee is still legal to work. The letter "
             "has no expiry date. Checked employees are left out of the "
-            "nightly 90/60/30 work-permit reminder."
+            "nightly exact-day work-permit reminder."
         ),
     )
 
@@ -294,8 +294,10 @@ class EmployeeDocument(models.Model):
 class WorkPermitMilestoneNotice(models.Model):
     """One sent reminder per employee, permit date, and milestone (90, 60, 30).
 
-    Keyed by the permit expiration date so a renewed permit starts over.
-    Delete a row in admin to allow that milestone to send again.
+    The mailer writes a row only on the night that many days remain
+    exactly. A missed night is not backfilled. Keyed by the permit
+    expiration date so a renewed permit starts over. Delete a row in
+    admin to allow that milestone to send again.
     """
 
     MILESTONE_CHOICES = (

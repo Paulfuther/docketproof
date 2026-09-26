@@ -1,5 +1,5 @@
-from datetime import date
 from django.db.models import Q
+from django.utils import timezone
 
 
 def _get_sin_value(user):
@@ -11,10 +11,21 @@ def _get_sin_value(user):
     return "".join(ch for ch in str(raw) if ch.isdigit())
 
 
-def _days_until(target_date):
+def requires_work_permit(user):
+    """True only when the SIN is temporary (digits start with 9).
+
+    Permanent SINs, a blank SIN, and a SIN that cannot be decrypted do
+    not need a work permit. A leftover work_permit_expiration_date on
+    those rows is not a milestone reminder.
+    """
+    return _get_sin_value(user).startswith("9")
+
+
+def _days_until(target_date, today=None):
     if not target_date:
         return None
-    return (target_date - date.today()).days
+    today = today or timezone.localdate()
+    return (target_date - today).days
 
 
 def _sin_status(user):
@@ -149,11 +160,23 @@ def _permit_status(user, sin_info):
 def _overall_status(sin_info, permit_info):
     # Extension / maintained-status path overrides SIN expiry.
     # A temporary SIN may expire while the employee remains work-authorized.
+    # This is the only way a permanent SIN leaves Compliant: a real
+    # extension letter on file, not a leftover permit date.
     if permit_info["code"] == "extension_pending":
         return {
             "code": "extension_pending",
             "label": "Extension Pending",
             "pill_class": "primary",
+        }
+
+    # Permanent SIN does not need a work permit. A leftover
+    # work_permit_expiration_date — even one that is expired or inside
+    # 120 days — must not flip the overall pill to expiring soon or urgent.
+    if sin_info["code"] == "permanent":
+        return {
+            "code": "compliant",
+            "label": "Compliant",
+            "pill_class": "success",
         }
 
     # Valid permit should also prevent expired SIN from becoming "urgent".
@@ -288,15 +311,25 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
     PRIORITY_MAP = {
         "urgent": 0,
         "expiring_soon": 1,
+        "compliant_sin_update_needed": 1,
         "extension_pending": 2,
         "needs_review": 3,
         "compliant": 4,
     }
 
+    def _rank_permit_days(row):
+        # A permanent SIN is Permit Not Required. Do not rank that row
+        # by a leftover work_permit_expiration_date.
+        if row["permit_info"]["code"] == "not_required":
+            return 9999
+        if row["permit_days"] is None:
+            return 9999
+        return row["permit_days"]
+
     rows.sort(
         key=lambda r: (
             PRIORITY_MAP.get(r["overall_status"]["code"], 99),
-            r["permit_days"] if r["permit_days"] is not None else 9999,
+            _rank_permit_days(r),
             -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
         )
     )
