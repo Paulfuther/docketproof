@@ -101,19 +101,19 @@
                 {% endif %}
               </div>
 
-              <span class="imm-chip is-{{ row.sin_chip.tone }}" title="{{ row.sin_chip.title }}">
+              <span class="imm-chip imm-chip-sin is-{{ row.sin_chip.tone }}" title="{{ row.sin_chip.title }}">
                 <span class="imm-dot" aria-hidden="true"></span>
                 <span class="imm-chip-label">{{ row.sin_chip.label }}</span>
               </span>
-              <span class="imm-chip is-{{ row.permit_chip.tone }}" title="{{ row.permit_chip.title }}">
+              <span class="imm-chip imm-chip-permit is-{{ row.permit_chip.tone }}" title="{{ row.permit_chip.title }}">
                 <span class="imm-dot" aria-hidden="true"></span>
                 <span class="imm-chip-label">{{ row.permit_chip.label }}</span>
               </span>
-              <span class="imm-chip is-{{ row.proof_chip.tone }}" title="{{ row.proof_chip.title }}">
+              <span class="imm-chip imm-chip-proof is-{{ row.proof_chip.tone }}" title="{{ row.proof_chip.title }}">
                 <span class="imm-dot" aria-hidden="true"></span>
                 <span class="imm-chip-label">{{ row.proof_chip.label }}</span>
               </span>
-              <span class="imm-chip is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
+              <span class="imm-chip imm-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
                 <span class="imm-dot" aria-hidden="true"></span>
                 <span class="imm-chip-label">{{ row.overall_chip.label }}</span>
               </span>
@@ -689,26 +689,126 @@
   border: 0;
 }
 
-@media (max-width: 720px) {
+/* Card stack at the Bootstrap md breakpoint and below. Wide screens keep the scan row. */
+@media (max-width: 767.98px) {
   .imm-audit {
     padding: 16px 12px 20px;
+    max-width: 100%;
   }
 
   .imm-title {
     font-size: 1.45rem;
   }
 
+  .imm-toolbar {
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  .imm-search {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
   .imm-toolbar-actions {
     margin-left: 0;
     width: 100%;
+    min-width: 0;
   }
 
   .imm-toolbar-actions .imm-btn {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .imm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+    max-width: 100%;
+  }
+
+  .imm-scan-head {
+    display: none;
+  }
+
+  .imm-row {
+    background: #fff;
+    border: 1px solid #eef1f6;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+    max-width: 100%;
+  }
+
+  .imm-row + .imm-row {
+    border-top: 1px solid #eef1f6;
+  }
+
+  .imm-row .imm-scan {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "who who"
+      "sin permit"
+      "proof overall"
+      "details details";
+    column-gap: 8px;
+    row-gap: 8px;
+    align-items: center;
+    min-width: 0;
+    width: auto;
+    padding: 14px 14px 12px;
+  }
+
+  .imm-who {
+    grid-area: who;
+  }
+
+  .imm-chip-sin { grid-area: sin; }
+  .imm-chip-permit { grid-area: permit; }
+  .imm-chip-proof { grid-area: proof; }
+  .imm-chip-overall { grid-area: overall; }
+
+  .imm-chip {
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .imm-details-toggle {
+    grid-area: details;
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    min-height: 36px;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+
+  .imm-fold-body {
+    min-width: 0;
+    margin: 0 12px 12px;
   }
 
   .imm-facts {
     grid-template-columns: 1fr;
+  }
+
+  .imm-history-item {
+    align-items: flex-start;
+  }
+
+  .imm-empty {
+    background: #fff;
+    border: 1px solid #eef1f6;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 }
 </style>
