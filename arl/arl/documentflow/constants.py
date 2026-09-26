@@ -33,7 +33,10 @@ IMMIGRATION_STATUS_TYPES = {
         "label": "Studies Completed",
         "pill_class": "secondary",
         "category": "context",
-        "overrides_permit": False,
+        # An active event with proof overrides an expired permit date.
+        # It does not use the extension-on-file label. Ranking is Compliant.
+        "overrides_permit": True,
+        "compliant_with_proof": True,
     },
     "review_note": {
         "label": "HR Review Note",

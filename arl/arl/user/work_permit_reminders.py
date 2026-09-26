@@ -33,7 +33,10 @@ Who is included
     or 30. A missing SIN is skipped. Old permit dates left on a
     permanent-SIN row do not email.
 
-Bypass: work_permit_extension_requested (extension letter on file).
+Bypass: work_permit_extension_requested (extension letter on file),
+    and an active Studies Completed event that has a document or a
+    reference number. That proof ranks Compliant on the audit, so the
+    old permit date is not a milestone either.
 
 When anything is actually due, one email per employer goes to each
 active user in the immigration_email group for that employer. The
@@ -127,6 +130,7 @@ def pending_milestones(today=None):
         milestone = due_milestone(days_left)
         if milestone is None:
             continue
+        # Skips a permanent or missing SIN, and Studies Completed proof.
         if not requires_work_permit(user):
             continue
         if (user.pk, expiry, milestone) in sent:
@@ -194,8 +198,9 @@ def render_reminder_html(employer_name, rows, today):
         (
             "<p>Each person below has a temporary SIN and a work permit that "
             "expires in exactly 90, 60, or 30 days. They are listed once "
-            "for that day. Permanent SINs and employees with an extension "
-            "letter on file are not included.</p>"
+            "for that day. Permanent SINs, employees with an extension "
+            "letter on file, and employees with Studies Completed proof "
+            "on file are not included.</p>"
         ),
     ]
     for milestone in MILESTONES:

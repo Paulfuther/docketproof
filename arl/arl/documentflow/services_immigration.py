@@ -22,13 +22,18 @@ def _get_sin_value(user):
 
 
 def requires_work_permit(user):
-    """True only when the SIN is temporary (digits start with 9).
+    """True only when the SIN is temporary and studies are not completed.
 
     Permanent SINs, a blank SIN, and a SIN that cannot be decrypted do
     not need a work permit. A leftover work_permit_expiration_date on
     those rows is not a milestone reminder.
+
+    An active Studies Completed event with proof (a document or a
+    reference number) also means the old permit date is not a reminder.
     """
-    return _get_sin_value(user).startswith("9")
+    if not _get_sin_value(user).startswith("9"):
+        return False
+    return not _has_study_completed_proof(user)
 
 
 def _days_until(target_date, today=None):
@@ -107,25 +112,69 @@ def _sin_status(user):
 
 
 def permit_override_status_types():
-    """Immigration event types that prove work authorization."""
+    """Event types that use the extension-on-file authorized path.
+
+    Studies Completed overrides an expired permit too, but it ranks as
+    Compliant and is not part of this list.
+    """
     return [
         code
         for code, meta in IMMIGRATION_STATUS_TYPES.items()
-        if meta.get("overrides_permit")
+        if meta.get("overrides_permit") and not meta.get("compliant_with_proof")
     ]
 
 
-def _permit_status(user, sin_info, permit_override=False):
+def _study_completed_status_types():
+    return [
+        code
+        for code, meta in IMMIGRATION_STATUS_TYPES.items()
+        if meta.get("compliant_with_proof")
+    ]
+
+
+def _has_study_completed_proof(user):
+    """Active Studies Completed event with a document or reference number.
+
+    A plain event with neither does not count. Inactive events do not
+    count. Objects that are not users (SIN stubs) have no events.
+    """
+    related = getattr(user, "immigration_status_events", None)
+    if related is None or not hasattr(related, "filter"):
+        return False
+    types = _study_completed_status_types()
+    if not types:
+        return False
+    events = related.filter(is_active=True, status_type__in=types)
+    if events.filter(document_file__isnull=False).exists():
+        return True
+    for reference in events.values_list("reference_number", flat=True):
+        if (reference or "").strip():
+            return True
+    return False
+
+
+def _permit_status(user, sin_info, permit_override=False, study_completed=False):
     expiry = getattr(user, "work_permit_expiration_date", None)
     days_left = _days_until(expiry)
 
     # Checkbox ("extension letter on file") or an active event whose
-    # type has overrides_permit. Either one means authorized with proof.
+    # type has overrides_permit and is not Studies Completed.
+    # Either one means authorized with proof. Studies Completed is a
+    # separate path so it does not reuse the extension label.
     if user.work_permit_extension_requested or permit_override:
         return {
             "code": "extension_pending",
             "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
+            "expiry": expiry,
+            "days_left": days_left,
+        }
+
+    if study_completed:
+        return {
+            "code": "study_completed",
+            "label": IMMIGRATION_STATUS_TYPES["study_completed"]["label"],
+            "pill_class": "success",
             "expiry": expiry,
             "days_left": days_left,
         }
@@ -188,6 +237,15 @@ def _overall_status(sin_info, permit_info):
             "code": "extension_pending",
             "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
+        }
+
+    # Studies Completed with proof. The old permit date, even when
+    # expired, does not make the row urgent.
+    if permit_info["code"] == "study_completed":
+        return {
+            "code": "compliant",
+            "label": "Compliant",
+            "pill_class": "success",
         }
 
     # Permanent SIN does not need a work permit. A leftover
@@ -302,6 +360,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
             employee,
             sin_info,
             permit_override=permit_event is not None,
+            study_completed=_has_study_completed_proof(employee),
         )
         overall = _overall_status(sin_info, permit_info)
 
@@ -338,9 +397,10 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
     }
 
     def _rank_permit_days(row):
-        # A permanent SIN is Permit Not Required. Do not rank that row
-        # by a leftover work_permit_expiration_date.
-        if row["permit_info"]["code"] == "not_required":
+        # Do not rank these rows by a leftover work_permit_expiration_date.
+        # Permanent SIN is Permit Not Required. Studies Completed is
+        # already Compliant from proof, even when that date is expired.
+        if row["permit_info"]["code"] in {"not_required", "study_completed"}:
             return 9999
         if row["permit_days"] is None:
             return 9999
