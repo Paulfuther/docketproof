@@ -15,7 +15,7 @@
       <input type="hidden" name="tab" value="immigration_audit">
 
       <!-- Search -->
-      <div class="col-12 col-md-6">
+      <div class="col-12 col-md-4">
         <label class="form-label small text-muted mb-1">Search employee</label>
         <input
           type="text"
@@ -35,7 +35,7 @@
       </div>
 
       <!-- Flagged only -->
-      <div class="col-12 col-md-3">
+      <div class="col-12 col-md-2">
         <div class="form-check mt-4">
           <input
             class="form-check-input"
@@ -54,8 +54,18 @@
         </div>
       </div>
 
+      <!-- All active employees, not the search filter -->
+      <div class="col-6 col-md-3 d-flex">
+        <a
+          class="btn btn-outline-primary w-100"
+          href="{% url 'immigration_audit_export' %}"
+          title="CSV of all active employees for this employer">
+          Download spreadsheet
+        </a>
+      </div>
+
       <!-- Reset -->
-      <div class="col-12 col-md-3 d-flex gap-2">
+      <div class="col-6 col-md-3 d-flex gap-2">
         <button
           type="button"
           class="btn btn-outline-secondary w-100"

@@ -7,7 +7,9 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from arl.documentflow.models import ImmigrationStatusEvent
 from arl.documentflow.services_immigration import (
+    AUTHORIZED_EXTENSION_LABEL,
     build_immigration_audit,
     requires_work_permit,
 )
@@ -514,6 +516,80 @@ class PermanentSinAndAuditTests(TestCase):
         )
         row = self._audit_row("Extension")
         self.assertEqual(row["permit_info"]["code"], "extension_pending")
+        self.assertEqual(row["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(row["permit_info"]["pill_class"], "primary")
         self.assertEqual(row["overall_status"]["code"], "extension_pending")
+        self.assertEqual(row["overall_status"]["label"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(row["overall_status"]["pill_class"], "primary")
         self.assertNotEqual(row["overall_status"]["code"], "expiring_soon")
         self.assertNotEqual(row["overall_status"]["code"], "urgent")
+        self.assertNotIn("Extension Pending", row["permit_info"]["label"])
+        self.assertNotIn("Extension Pending", row["overall_status"]["label"])
+
+    def test_overrides_permit_event_uses_authorized_label(self):
+        person = self._person(
+            "eve.event",
+            "+15195558131",
+            TEMPORARY_SIN,
+            -5,
+            sin_days=10,
+            first_name="Eve",
+            last_name="Event",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="work_permit_extension",
+            effective_date=self.today - timedelta(days=2),
+            reference_number="IRCC-100",
+        )
+        row = self._audit_row("Event")
+        self.assertFalse(row["extension_requested"])
+        self.assertEqual(row["permit_info"]["code"], "extension_pending")
+        self.assertEqual(row["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(row["permit_info"]["pill_class"], "primary")
+        self.assertEqual(row["overall_status"]["code"], "extension_pending")
+        self.assertEqual(row["overall_status"]["label"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(row["overall_status"]["pill_class"], "primary")
+
+    def test_non_override_event_does_not_authorize(self):
+        self._person(
+            "pri.note",
+            "+15195558132",
+            TEMPORARY_SIN,
+            -5,
+            first_name="Pri",
+            last_name="Note",
+        )
+        person = CustomUser.objects.get(username="pri.note")
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="pr_application",
+            effective_date=self.today,
+        )
+        row = self._audit_row("Note")
+        self.assertEqual(row["permit_info"]["code"], "expired")
+        self.assertEqual(row["overall_status"]["code"], "urgent")
+        self.assertNotEqual(row["overall_status"]["label"], AUTHORIZED_EXTENSION_LABEL)
+
+    def test_inactive_override_event_does_not_authorize(self):
+        person = self._person(
+            "ina.ctive",
+            "+15195558133",
+            TEMPORARY_SIN,
+            20,
+            sin_days=400,
+            first_name="Ina",
+            last_name="Ctive",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="maintained_status",
+            effective_date=self.today,
+            is_active=False,
+        )
+        row = self._audit_row("Ctive")
+        self.assertEqual(row["permit_info"]["code"], "expiring_soon")
+        self.assertNotEqual(row["overall_status"]["code"], "extension_pending")
