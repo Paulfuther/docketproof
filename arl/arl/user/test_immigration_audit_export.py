@@ -288,6 +288,7 @@ class ImmigrationAuditExportTests(TestCase):
         self.assertContains(response, "Download spreadsheet")
         self.assertContains(response, reverse("immigration_audit_export"))
         self.assertNotContains(response, "Extension Pending")
+        self.assertNotContains(response, "Authorized - extension on file")
 
     def test_export_requires_hr_and_immigration_access(self):
         url = reverse("immigration_audit_export")

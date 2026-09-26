@@ -515,6 +515,7 @@ class PermanentSinAndAuditTests(TestCase):
             work_permit_extension_date=self.today - timedelta(days=3),
         )
         row = self._audit_row("Extension")
+        self.assertEqual(AUTHORIZED_EXTENSION_LABEL, "Extension on file")
         self.assertEqual(row["permit_info"]["code"], "extension_pending")
         self.assertEqual(row["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
         self.assertEqual(row["permit_info"]["pill_class"], "primary")

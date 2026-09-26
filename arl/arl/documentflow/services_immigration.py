@@ -7,9 +7,9 @@ from django.utils import timezone
 from .constants import IMMIGRATION_STATUS_TYPES
 
 # User-facing label when a checkbox or an overrides-permit event
-# keeps the employee work-authorized. The status code stays
-# extension_pending so audit ranking does not move.
-AUTHORIZED_EXTENSION_LABEL = "Authorized - extension on file"
+# keeps the employee work-authorized. Short enough for the audit
+# pill. The status code stays extension_pending so ranking does not move.
+AUTHORIZED_EXTENSION_LABEL = "Extension on file"
 
 
 def _get_sin_value(user):

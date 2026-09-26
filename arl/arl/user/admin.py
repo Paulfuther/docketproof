@@ -410,7 +410,7 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
                     "The date is when the extension was submitted to IRCC, "
                     "not a new expiry. "
                     "On the immigration audit this ranks as "
-                    "“Authorized - extension on file”. An active immigration "
+                    "“Extension on file”. An active immigration "
                     "event whose type overrides the permit ranks the same way."
                 ),
                 "fields": (
