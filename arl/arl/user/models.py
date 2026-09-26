@@ -99,13 +99,30 @@ class CustomUser(AbstractUser):
         ],
         null=True,
     )
-    # Work Permit Extension Tracking
-    work_permit_extension_requested = models.BooleanField(default=False)
+    # Work Permit Extension Tracking.
+    # Checked when a government extension / authorization letter is on file.
+    # That letter has no expiry. The employee stays legal to work, including
+    # when the work permit itself is expired or inside the 90/60/30 reminder
+    # windows. The nightly work-permit digest skips these people.
+    work_permit_extension_requested = models.BooleanField(
+        default=False,
+        verbose_name="Extension letter on file",
+        help_text=(
+            "Check when a government extension or work-authorization letter "
+            "is on file and the employee is still legal to work. The letter "
+            "has no expiry date. Checked employees are left out of the "
+            "nightly 90/60/30 work-permit reminder."
+        ),
+    )
 
     work_permit_extension_date = models.DateField(
         null=True,
         blank=True,
-        help_text="Date extension was submitted to IRCC"
+        verbose_name="Extension submitted",
+        help_text=(
+            "Date the extension was submitted to IRCC. This is not an expiry. "
+            "Required when an extension letter is on file."
+        ),
     )
 
     # NEW encrypted fields
@@ -272,6 +289,44 @@ class EmployeeDocument(models.Model):
 
     def __str__(self):
         return f"{self.document_type.name} for {self.user.username}"
+
+
+class WorkPermitMilestoneNotice(models.Model):
+    """One sent reminder per employee, permit date, and milestone (90, 60, 30).
+
+    Keyed by the permit expiration date so a renewed permit starts over.
+    Delete a row in admin to allow that milestone to send again.
+    """
+
+    MILESTONE_CHOICES = (
+        (90, "90 days"),
+        (60, "60 days"),
+        (30, "30 days"),
+    )
+
+    user = models.ForeignKey(
+        "CustomUser",
+        on_delete=models.CASCADE,
+        related_name="work_permit_milestone_notices",
+    )
+    employer = models.ForeignKey(
+        "Employer",
+        on_delete=models.CASCADE,
+        related_name="work_permit_milestone_notices",
+    )
+    permit_expiration_date = models.DateField()
+    milestone = models.PositiveSmallIntegerField(choices=MILESTONE_CHOICES)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "permit_expiration_date", "milestone")
+        ordering = ("-sent_at",)
+
+    def __str__(self):
+        return (
+            f"{self.user} — {self.milestone}-day notice "
+            f"for permit {self.permit_expiration_date}"
+        )
 
 
 class EmployerSMSTask(models.Model):

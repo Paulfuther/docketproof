@@ -42,6 +42,7 @@ from .models import (
     ExternalRecipient,
     NewHireInvite,
     SMSOptOut,
+    WorkPermitMilestoneNotice,
     Store,
     UserManager,
 )
@@ -52,6 +53,26 @@ class ExternalRecipientAdmin(admin.ModelAdmin):
     list_display = ("first_name", "last_name", "company", "email", "group")
     search_fields = ("first_name", "last_name", "company", "email",
                      "group__name")
+
+
+@admin.register(WorkPermitMilestoneNotice)
+class WorkPermitMilestoneNoticeAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "employer",
+        "milestone",
+        "permit_expiration_date",
+        "sent_at",
+    )
+    list_filter = ("milestone", "employer")
+    search_fields = (
+        "user__first_name",
+        "user__last_name",
+        "user__email",
+        "employer__name",
+    )
+    readonly_fields = ("sent_at",)
+    autocomplete_fields = ("user", "employer")
 
 
 # This class is used for exporting
@@ -212,6 +233,7 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
         "groups",
         "sin_expiration_date",
         "work_permit_expiration_date",
+        "work_permit_extension_requested",
         SINFirstDigitFilter,
     )
     ordering = ("-id",)
@@ -379,10 +401,19 @@ class CustomUserAdmin(ExportActionMixin, UserAdmin):
         (
             "Work Permit Extension",
             {
+                "description": (
+                    "Check “Extension letter on file” when a government "
+                    "extension or authorization letter is on file and the "
+                    "employee is still legal to work. That letter has no "
+                    "expiry date. These employees are left out of the "
+                    "90, 60, and 30 day work-permit milestone emails. "
+                    "The date is when the extension was submitted to IRCC, "
+                    "not a new expiry."
+                ),
                 "fields": (
                     "work_permit_extension_requested",
                     "work_permit_extension_date",
-                )
+                ),
             },
         )
     )

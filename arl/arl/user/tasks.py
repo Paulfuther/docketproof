@@ -289,3 +289,17 @@ def send_new_hire_invite_task(
     except Exception as e:
         print(f"🚨 Error in new hire invite task: {e}")
         return False
+
+
+@app.task(name="work_permit_milestone_reminders")
+def work_permit_milestone_reminders():
+    """Send the 90, then 60, then 30 day work-permit notices.
+
+    Register this name in Django Admin → Periodic Tasks and use the
+    Enabled checkbox to turn the nightly run on or off. Each employee
+    is emailed once per milestone. Extension-letter employees are skipped.
+    Recipients are the immigration_email group.
+    """
+    from arl.user.work_permit_reminders import send_work_permit_milestone_reminders
+
+    return send_work_permit_milestone_reminders()
