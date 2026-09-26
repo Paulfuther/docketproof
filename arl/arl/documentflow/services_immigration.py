@@ -249,6 +249,146 @@ def _overall_status(sin_info, permit_info):
     }
 
 
+# Same 120-day window _permit_status uses for "Expiring Soon".
+# Chip color only — it does not feed the audit sort.
+_PERMIT_WATCH_DAYS = 120
+
+_OVERALL_SCAN = {
+    "compliant": ("Compliant", "ok"),
+    "urgent": ("Urgent", "urgent"),
+    "expiring_soon": ("Expiring soon", "watch"),
+    "compliant_sin_update_needed": ("SIN update", "watch"),
+    "extension_pending": ("Authorized", "auth"),
+    "needs_review": ("Needs review", "watch"),
+}
+
+
+def _scan_chip(label, title, tone, detail=None):
+    chip = {"label": label, "title": title, "tone": tone}
+    if detail:
+        chip["detail"] = detail
+    return chip
+
+
+def _event_scan_label(event):
+    meta = IMMIGRATION_STATUS_TYPES.get(event.status_type) or {}
+    return meta.get("scan_label") or event.get_status_type_display()
+
+
+def _sin_scan_chip(row):
+    info = row["sin_info"]
+    code = info["code"]
+    title = info["label"]
+    if row["sin_expiry"]:
+        title = f"{info['label']} — expires {row['sin_expiry'].isoformat()}"
+
+    if code == "permanent":
+        return _scan_chip("Permanent", info["label"], "ok")
+    if code == "expired":
+        return _scan_chip("SIN expired", title, "urgent")
+    if code == "missing":
+        return _scan_chip("No SIN", info["label"], "urgent")
+    return _scan_chip("Temp SIN", title, "watch")
+
+
+def _permit_scan_chip(row):
+    """Calendar state of the permit, separate from authorization proof.
+
+    An extension or overrides-permit event stays on the Proof and Overall
+    chips. A permanent SIN stays "Not required" even when a leftover
+    permit date is expired — same rule the ranker already uses.
+    """
+    info = row["permit_info"]
+    code = info["code"]
+    days = row["permit_days"]
+    full = info["label"]
+
+    if code == "not_required":
+        return _scan_chip("Not required", full, "muted")
+
+    if code == "missing_expiry" or (code == "extension_pending" and days is None):
+        if code == "missing_expiry":
+            return _scan_chip("No expiry", full, "urgent")
+        return _scan_chip("No expiry", f"No permit expiry on file. {full}", "watch")
+
+    if code == "expired" or (days is not None and days < 0):
+        title = full
+        if code == "extension_pending":
+            title = f"Permit expired. {full}"
+        return _scan_chip("Expired", title, "urgent")
+
+    if days is not None:
+        label = "1 day" if days == 1 else f"{days} days"
+        if code == "valid" or (
+            code == "extension_pending" and days > _PERMIT_WATCH_DAYS
+        ):
+            tone = "ok"
+        else:
+            tone = "watch"
+        return _scan_chip(label, f"{full} — {label} remaining", tone)
+
+    if code == "valid":
+        return _scan_chip("Valid", full, "ok")
+
+    return _scan_chip(full, full, "muted")
+
+
+def _proof_scan_chip(row):
+    """Proof column: authorization evidence, otherwise the latest event.
+
+    Blue when the employee is work-authorized by an extension checkbox
+    or an overrides-permit event. Gray for context events, no proof,
+    and permit-not-required.
+    """
+    permit_event = row["permit_event"]
+    if permit_event is not None:
+        full = permit_event.get_status_type_display()
+        title = full
+        if full != AUTHORIZED_EXTENSION_LABEL:
+            title = f"{full}. {AUTHORIZED_EXTENSION_LABEL}"
+        return _scan_chip(
+            _event_scan_label(permit_event),
+            title,
+            "auth",
+            detail=full,
+        )
+
+    if row["extension_requested"]:
+        return _scan_chip(
+            "Extension on file",
+            AUTHORIZED_EXTENSION_LABEL,
+            "auth",
+            detail="Extension on file",
+        )
+
+    latest = row["latest_immigration_event"]
+    if latest is not None:
+        return _scan_chip(
+            _event_scan_label(latest),
+            latest.get_status_type_display(),
+            "muted",
+        )
+
+    if row["sin_info"]["is_temporary"]:
+        return _scan_chip("None", "No proof on file", "muted")
+
+    return _scan_chip("—", "No proof required", "muted")
+
+
+def _overall_scan_chip(row):
+    info = row["overall_status"]
+    label, tone = _OVERALL_SCAN.get(info["code"], (info["label"], "muted"))
+    return _scan_chip(label, info["label"], tone)
+
+
+def _attach_scan_chips(row):
+    """Display chips for the scan list. Does not change rank inputs."""
+    row["sin_chip"] = _sin_scan_chip(row)
+    row["permit_chip"] = _permit_scan_chip(row)
+    row["proof_chip"] = _proof_scan_chip(row)
+    row["overall_chip"] = _overall_scan_chip(row)
+
+
 def build_immigration_audit(employer, search_query="", flagged_only=False):
     employees = (
         employer.customuser_set.filter(is_active=True)
@@ -353,6 +493,9 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
             -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
         )
     )
+
+    for row in rows:
+        _attach_scan_chips(row)
 
     return {
         "immigration_rows": rows,

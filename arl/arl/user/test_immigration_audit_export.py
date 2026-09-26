@@ -270,6 +270,190 @@ class ImmigrationAuditExportTests(TestCase):
             [row["Email"] for row in rows],
         )
 
+    def test_scan_chips_follow_shipped_status_without_changing_rank(self):
+        self._person(
+            "pat.perm",
+            "+15195559101",
+            PERMANENT_SIN,
+            -20,
+            store=self.store,
+            first_name="Pat",
+            last_name="Permanent",
+        )
+        self._person(
+            "lee.auth",
+            "+15195559102",
+            TEMPORARY_SIN,
+            88,
+            sin_days=400,
+            first_name="Lee",
+            last_name="Authorized",
+            work_permit_extension_requested=True,
+            work_permit_extension_date=self.today,
+        )
+        self._person(
+            "una.urgent",
+            "+15195559103",
+            TEMPORARY_SIN,
+            -3,
+            sin_days=-2,
+            first_name="Una",
+            last_name="Urgent",
+        )
+        studies = self._person(
+            "sam.studies",
+            "+15195559104",
+            TEMPORARY_SIN,
+            200,
+            sin_days=400,
+            first_name="Sam",
+            last_name="Studies",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=studies,
+            employer=self.employer,
+            status_type="study_completed",
+            effective_date=self.today - timedelta(days=10),
+        )
+        renewed = self._person(
+            "ned.newpermit",
+            "+15195559105",
+            TEMPORARY_SIN,
+            -5,
+            sin_days=30,
+            first_name="Ned",
+            last_name="Newpermit",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=renewed,
+            employer=self.employer,
+            status_type="new_work_permit",
+            effective_date=self.today - timedelta(days=1),
+        )
+
+        rows = build_immigration_audit(self.employer)["immigration_rows"]
+        by_last = {row["employee"].last_name: row for row in rows}
+
+        permanent = by_last["Permanent"]
+        self.assertEqual(permanent["sin_chip"], {
+            "label": "Permanent",
+            "title": "Permanent SIN",
+            "tone": "ok",
+        })
+        self.assertEqual(permanent["permit_chip"]["label"], "Not required")
+        self.assertEqual(permanent["permit_chip"]["tone"], "muted")
+        self.assertEqual(permanent["proof_chip"]["label"], "—")
+        self.assertEqual(permanent["proof_chip"]["tone"], "muted")
+        self.assertEqual(permanent["overall_chip"]["label"], "Compliant")
+        self.assertEqual(permanent["overall_chip"]["tone"], "ok")
+        self.assertEqual(permanent["overall_status"]["code"], "compliant")
+        self.assertEqual(permanent["permit_days"], -20)
+
+        authorized = by_last["Authorized"]
+        self.assertEqual(authorized["sin_chip"]["label"], "Temp SIN")
+        self.assertEqual(authorized["sin_chip"]["tone"], "watch")
+        self.assertEqual(authorized["permit_chip"]["label"], "88 days")
+        self.assertEqual(authorized["permit_chip"]["tone"], "watch")
+        self.assertEqual(authorized["proof_chip"]["label"], "Extension on file")
+        self.assertEqual(authorized["proof_chip"]["tone"], "auth")
+        self.assertEqual(authorized["proof_chip"]["title"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(authorized["overall_chip"]["label"], "Authorized")
+        self.assertEqual(authorized["overall_chip"]["tone"], "auth")
+        self.assertEqual(
+            authorized["overall_chip"]["title"], AUTHORIZED_EXTENSION_LABEL
+        )
+        self.assertEqual(
+            authorized["overall_status"]["label"], AUTHORIZED_EXTENSION_LABEL
+        )
+        self.assertEqual(authorized["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
+
+        urgent = by_last["Urgent"]
+        self.assertEqual(urgent["sin_chip"]["label"], "SIN expired")
+        self.assertEqual(urgent["sin_chip"]["tone"], "urgent")
+        self.assertEqual(urgent["permit_chip"]["label"], "Expired")
+        self.assertEqual(urgent["permit_chip"]["tone"], "urgent")
+        self.assertEqual(urgent["proof_chip"]["label"], "None")
+        self.assertEqual(urgent["overall_chip"]["label"], "Urgent")
+        self.assertEqual(urgent["overall_status"]["code"], "urgent")
+
+        studied = by_last["Studies"]
+        self.assertEqual(studied["proof_chip"]["label"], "Studies Completed")
+        self.assertEqual(studied["proof_chip"]["tone"], "muted")
+        self.assertEqual(studied["permit_chip"]["label"], "200 days")
+        self.assertEqual(studied["permit_chip"]["tone"], "ok")
+        self.assertEqual(studied["overall_status"]["code"], "compliant")
+        self.assertNotEqual(
+            studied["overall_status"]["label"], AUTHORIZED_EXTENSION_LABEL
+        )
+
+        new_permit = by_last["Newpermit"]
+        self.assertEqual(new_permit["permit_chip"]["label"], "Expired")
+        self.assertEqual(new_permit["proof_chip"]["label"], "New work permit")
+        self.assertEqual(new_permit["proof_chip"]["tone"], "auth")
+        self.assertEqual(new_permit["proof_chip"]["detail"], "New Work Permit")
+        self.assertIn(AUTHORIZED_EXTENSION_LABEL, new_permit["proof_chip"]["title"])
+        self.assertEqual(new_permit["overall_chip"]["label"], "Authorized")
+        self.assertEqual(new_permit["overall_status"]["code"], "extension_pending")
+
+        order = [row["employee"].last_name for row in rows]
+        self.assertLess(order.index("Urgent"), order.index("Newpermit"))
+        self.assertLess(order.index("Newpermit"), order.index("Authorized"))
+        self.assertLess(order.index("Authorized"), order.index("Studies"))
+        self.assertLess(order.index("Studies"), order.index("Permanent"))
+
+    def test_audit_page_is_a_scan_list_with_details_and_documents(self):
+        person = self._person(
+            "lee.letter",
+            "+15195559110",
+            TEMPORARY_SIN,
+            88,
+            sin_days=400,
+            store=self.store,
+            first_name="Jordan",
+            last_name="Lee",
+            email="jordan.lee@company.com",
+            work_permit_extension_requested=True,
+            work_permit_extension_date=self.today,
+        )
+        document = SignedDocumentFile.objects.create(
+            user=person,
+            employer=self.employer,
+            envelope_id="env-scan",
+            file_name="extension.pdf",
+            file_path="DOCUMENTS/extension.pdf",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="work_permit_extension",
+            effective_date=self.today,
+            reference_number="IRCC-55",
+            document_file=document,
+        )
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("immigration_audit_partial"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn("imm-scan-head", body)
+        self.assertIn(">SIN<", body)
+        self.assertIn(">PERMIT<", body)
+        self.assertIn(">PROOF<", body)
+        self.assertIn(">OVERALL<", body)
+        self.assertIn("Extension on file", body)
+        self.assertIn("Authorized", body)
+        self.assertIn(AUTHORIZED_EXTENSION_LABEL, body)
+        self.assertIn("Store 42", body)
+        self.assertIn("jordan.lee@company.com", body)
+        self.assertIn("88 days", body)
+        self.assertIn(reverse("download_signed_document", args=[document.id]), body)
+        self.assertIn("IRCC-55", body)
+        self.assertIn("Issues only", body)
+        self.assertIn("Reset", body)
+        self.assertIn("Download spreadsheet", body)
+        self.assertIn(reverse("immigration_audit_export"), body)
+        self.assertNotIn("immigration-card", body)
+        self.assertNotIn("Extension Pending", body)
+
     def test_audit_page_shows_new_label_and_download(self):
         self._person(
             "lee.letter",
