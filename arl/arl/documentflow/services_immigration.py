@@ -1,7 +1,8 @@
 import csv
 from io import StringIO
 
-from django.db.models import Q
+from django.db.models import CharField, Q
+from django.db.models.functions import Cast
 from django.utils import timezone
 
 from .constants import IMMIGRATION_STATUS_TYPES
@@ -389,7 +390,82 @@ def _attach_scan_chips(row):
     row["overall_chip"] = _overall_scan_chip(row)
 
 
-def build_immigration_audit(employer, search_query="", flagged_only=False):
+def _normalize_audit_sort(sort):
+    """Blank stays the urgency ranking. Only SIN and Permit are extra sorts."""
+    sort = (sort or "").strip().lower()
+    if sort in {"sin", "permit"}:
+        return sort
+    return ""
+
+
+def _audit_name_key(employee):
+    return (
+        (employee.last_name or "").casefold(),
+        (employee.first_name or "").casefold(),
+        (employee.username or "").casefold(),
+        employee.pk or 0,
+    )
+
+
+def _audit_days_key(days):
+    """Sooner dates first. A missing date sorts after any real number."""
+    if days is None:
+        return (1, 0)
+    return (0, days)
+
+
+# Worst SIN chip first. Matches _sin_scan_chip: No SIN, SIN expired,
+# then Temp SIN (no date, then inside 120 days, then later), then Permanent.
+_SIN_SEVERITY = {
+    "missing": 0,
+    "expired": 1,
+    "missing_expiry": 2,
+    "expiring_soon": 3,
+    "temporary": 4,
+    "permanent": 5,
+}
+
+
+def _permit_severity(row):
+    """Worst permit chip first. Same calendar rules as _permit_scan_chip.
+
+    Not required is last, including a permanent SIN with a leftover date.
+    Expired, then no expiry, then inside the 120-day watch window, then
+    a later valid date.
+    """
+    code = row["permit_info"]["code"]
+    days = row["permit_days"]
+    if code == "not_required":
+        return 5
+    if code == "expired" or (days is not None and days < 0):
+        return 0
+    if code == "missing_expiry" or days is None:
+        return 1
+    if days <= _PERMIT_WATCH_DAYS:
+        return 2
+    return 3
+
+
+def _search_audit_employees(employees, search_query):
+    """Each word must match name, email, username, or store number."""
+    search_query = (search_query or "").strip()
+    if not search_query:
+        return employees
+    employees = employees.annotate(
+        _store_number_text=Cast("store__number", CharField())
+    )
+    for token in search_query.split():
+        employees = employees.filter(
+            Q(first_name__icontains=token)
+            | Q(last_name__icontains=token)
+            | Q(email__icontains=token)
+            | Q(username__icontains=token)
+            | Q(_store_number_text__icontains=token)
+        )
+    return employees
+
+
+def build_immigration_audit(employer, search_query="", flagged_only=False, sort=""):
     employees = (
         employer.customuser_set.filter(is_active=True)
         .select_related("store")
@@ -397,12 +473,8 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
     )
 
     search_query = (search_query or "").strip()
-    if search_query:
-        employees = employees.filter(
-            Q(first_name__icontains=search_query)
-            | Q(last_name__icontains=search_query)
-            | Q(email__icontains=search_query)
-        )
+    employees = _search_audit_employees(employees, search_query)
+    sort = _normalize_audit_sort(sort)
 
     rows = []
     override_types = permit_override_status_types()
@@ -486,13 +558,32 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
             return 9999
         return row["permit_days"]
 
-    rows.sort(
-        key=lambda r: (
-            PRIORITY_MAP.get(r["overall_status"]["code"], 99),
-            _rank_permit_days(r),
-            -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
+    if sort == "sin":
+        rows.sort(
+            key=lambda r: (
+                _SIN_SEVERITY.get(r["sin_info"]["code"], 99),
+                _audit_days_key(r["sin_days"]),
+                _audit_name_key(r["employee"]),
+            )
         )
-    )
+    elif sort == "permit":
+        rows.sort(
+            key=lambda r: (
+                _permit_severity(r),
+                _audit_days_key(
+                    None if _permit_severity(r) == 5 else r["permit_days"]
+                ),
+                _audit_name_key(r["employee"]),
+            )
+        )
+    else:
+        rows.sort(
+            key=lambda r: (
+                PRIORITY_MAP.get(r["overall_status"]["code"], 99),
+                _rank_permit_days(r),
+                -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
+            )
+        )
 
     for row in rows:
         _attach_scan_chips(row)
@@ -501,6 +592,7 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         "immigration_rows": rows,
         "immigration_search": search_query,
         "immigration_flagged_only": flagged_only,
+        "immigration_sort": sort,
     }
 
 

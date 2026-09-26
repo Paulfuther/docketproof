@@ -2,11 +2,14 @@
   <h2 class="imm-title">Immigration Audit</h2>
 
   <form
+    id="imm-toolbar"
     class="imm-toolbar"
     hx-get="{% url 'immigration_audit_partial' %}"
-    hx-target="#immigration_audit"
-    hx-swap="innerHTML"
+    hx-target="#imm-list"
+    hx-select="#imm-list"
+    hx-swap="outerHTML"
     hx-indicator="#immigration-loading"
+    hx-sync="#imm-toolbar:replace"
     hx-trigger="submit">
 
     <input type="hidden" name="tab" value="immigration_audit">
@@ -19,15 +22,18 @@
       <input
         type="search"
         name="imm_q"
+        id="imm_q"
         value="{{ immigration_search }}"
         placeholder="Search employees..."
         aria-label="Search employees"
         autocomplete="off"
         hx-get="{% url 'immigration_audit_partial' %}"
-        hx-trigger="keyup changed delay:300ms"
-        hx-target="#immigration_audit"
-        hx-swap="innerHTML"
-        hx-include="closest form"
+        hx-trigger="input changed delay:300ms, search"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
         hx-indicator="#immigration-loading">
     </div>
 
@@ -40,11 +46,33 @@
         {% if immigration_flagged_only %}checked{% endif %}
         hx-get="{% url 'immigration_audit_partial' %}"
         hx-trigger="change"
-        hx-target="#immigration_audit"
-        hx-swap="innerHTML"
-        hx-include="closest form"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
         hx-indicator="#immigration-loading">
       <span>Issues only</span>
+    </label>
+
+    <label class="imm-sort" for="imm_sort">
+      <span>Sort</span>
+      <select
+        name="imm_sort"
+        id="imm_sort"
+        aria-label="Sort employees"
+        hx-get="{% url 'immigration_audit_partial' %}"
+        hx-trigger="change"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
+        hx-indicator="#immigration-loading">
+        <option value="" {% if not immigration_sort %}selected{% endif %}>Urgency</option>
+        <option value="sin" {% if immigration_sort == "sin" %}selected{% endif %}>SIN status</option>
+        <option value="permit" {% if immigration_sort == "permit" %}selected{% endif %}>Permit status</option>
+      </select>
     </label>
 
     <div class="imm-toolbar-actions">
@@ -71,12 +99,24 @@
     Searching…
   </div>
 
-  <div class="imm-list">
+  <div class="imm-list" id="imm-list">
     {% if immigration_rows %}
       <div class="imm-scan imm-scan-head">
         <span class="imm-head-employee"><span class="imm-sr">Employee</span></span>
-        <span>SIN</span>
-        <span>PERMIT</span>
+        <button
+          type="button"
+          class="imm-col-sort{% if immigration_sort == 'sin' %} is-active{% endif %}"
+          data-sort="{% if immigration_sort == 'sin' %}{% else %}sin{% endif %}"
+          aria-pressed="{% if immigration_sort == 'sin' %}true{% else %}false{% endif %}"
+          title="{% if immigration_sort == 'sin' %}Sorted by SIN severity. Click to restore urgency.{% else %}Sort by SIN severity{% endif %}"
+          onclick="var s=document.getElementById('imm_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">SIN</button>
+        <button
+          type="button"
+          class="imm-col-sort{% if immigration_sort == 'permit' %} is-active{% endif %}"
+          data-sort="{% if immigration_sort == 'permit' %}{% else %}permit{% endif %}"
+          aria-pressed="{% if immigration_sort == 'permit' %}true{% else %}false{% endif %}"
+          title="{% if immigration_sort == 'permit' %}Sorted by permit severity. Click to restore urgency.{% else %}Sort by permit severity{% endif %}"
+          onclick="var s=document.getElementById('imm_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">PERMIT</button>
         <span>PROOF</span>
         <span>OVERALL</span>
         <span class="imm-sr">Details</span>
@@ -324,6 +364,52 @@
   margin: 0;
   accent-color: #2563eb;
   cursor: pointer;
+}
+
+.imm-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.imm-sort select {
+  height: 38px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.imm-col-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #98a2b3;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.imm-col-sort:hover,
+.imm-col-sort.is-active {
+  color: #1d4ed8;
 }
 
 .imm-toolbar-actions {
@@ -708,6 +794,15 @@
   .imm-search {
     flex: 1 1 100%;
     max-width: none;
+    min-width: 0;
+  }
+
+  .imm-sort {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .imm-sort select {
     min-width: 0;
   }
 

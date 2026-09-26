@@ -518,3 +518,153 @@ class ImmigrationAuditExportTests(TestCase):
         response = self.client.get(reverse("immigration_audit_export"))
         self.assertEqual(response.status_code, 200)
         self.assertIn(boss.email, response.content.decode("utf-8-sig"))
+
+    def test_search_and_column_sort_filter_first_then_order(self):
+        self._person(
+            "amy.missing",
+            "+15195559201",
+            None,
+            None,
+            first_name="Amy",
+            last_name="Missing",
+            email="amy.missing@example.com",
+        )
+        self._person(
+            "ben.expired",
+            "+15195559202",
+            TEMPORARY_SIN,
+            -2,
+            sin_days=-5,
+            first_name="Ben",
+            last_name="Expired",
+        )
+        self._person(
+            "noa.nodate",
+            "+15195559203",
+            TEMPORARY_SIN,
+            None,
+            first_name="Noa",
+            last_name="Nodate",
+        )
+        self._person(
+            "eli.soon",
+            "+15195559204",
+            TEMPORARY_SIN,
+            80,
+            sin_days=15,
+            first_name="Eli",
+            last_name="Soon",
+            email="eli.soon@example.com",
+        )
+        self._person(
+            "cara.later",
+            "+15195559205",
+            TEMPORARY_SIN,
+            30,
+            sin_days=40,
+            first_name="Cara",
+            last_name="Later",
+        )
+        self._person(
+            "ada.perm",
+            "+15195559206",
+            PERMANENT_SIN,
+            -10,
+            first_name="Ada",
+            last_name="Permanent",
+        )
+        self._person(
+            "bea.perm",
+            "+15195559207",
+            PERMANENT_SIN,
+            None,
+            store=self.store,
+            first_name="Bea",
+            last_name="Permanent",
+            email="bea.store@example.com",
+        )
+
+        def first_names(**kwargs):
+            rows = build_immigration_audit(self.employer, **kwargs)["immigration_rows"]
+            return [row["employee"].first_name for row in rows]
+
+        urgency = first_names()
+        self.assertEqual(urgency[0], "Ben")
+        self.assertEqual(first_names(sort=""), urgency)
+        self.assertEqual(first_names(sort="not-a-column"), urgency)
+
+        self.assertEqual(
+            first_names(sort="sin"),
+            ["Hannah", "Amy", "Ben", "Noa", "Eli", "Cara", "Ada", "Bea"],
+        )
+        self.assertEqual(
+            first_names(sort="permit"),
+            ["Ben", "Noa", "Cara", "Eli", "Hannah", "Amy", "Ada", "Bea"],
+        )
+        self.assertEqual(
+            first_names(search_query="Permanent", sort="sin"),
+            ["Ada", "Bea"],
+        )
+        self.assertEqual(
+            first_names(search_query="Amy Missing"),
+            ["Amy"],
+        )
+        self.assertEqual(
+            first_names(search_query="eli.soon@example.com"),
+            ["Eli"],
+        )
+        self.assertEqual(first_names(search_query="42"), ["Bea"])
+        self.assertEqual(
+            first_names(flagged_only=True, sort="sin"),
+            ["Hannah", "Amy", "Ben", "Noa", "Eli", "Cara"],
+        )
+
+        self.client.force_login(self.hr)
+        response = self.client.get(
+            reverse("immigration_audit_partial"),
+            {"imm_sort": "sin", "imm_q": "Permanent", "imm_flagged": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn('id="imm-list"', body)
+        self.assertIn('hx-trigger="input changed delay:300ms, search"', body)
+        self.assertIn('hx-target="#imm-list"', body)
+        self.assertIn('value="sin" selected', body)
+        self.assertIn("No employees found.", body)
+        self.assertNotIn("Ada Permanent", body)
+
+        listed = self.client.get(
+            reverse("immigration_audit_partial"),
+            {"imm_sort": "permit"},
+        )
+        listed_body = listed.content.decode()
+        permit_names = [
+            "Ben Expired",
+            "Noa Nodate",
+            "Cara Later",
+            "Eli Soon",
+            "Hannah Audit",
+            "Amy Missing",
+            "Ada Permanent",
+            "Bea Permanent",
+        ]
+        positions = [listed_body.index(name) for name in permit_names]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("imm-col-sort is-active", listed_body)
+        self.assertIn(">PERMIT<", listed_body)
+
+        _, exported = self._csv_rows(query="imm_sort=sin")
+        self.assertEqual(
+            [row["Name"] for row in exported],
+            [
+                " ".join(
+                    part
+                    for part in (
+                        row["employee"].first_name,
+                        row["employee"].last_name,
+                    )
+                    if part
+                )
+                for row in build_immigration_audit(self.employer)["immigration_rows"]
+            ],
+        )
