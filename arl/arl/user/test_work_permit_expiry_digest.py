@@ -13,6 +13,7 @@ from arl.documentflow.services_immigration import (
     build_immigration_audit,
     requires_work_permit,
 )
+from arl.dsign.models import SignedDocumentFile
 from arl.user.models import CustomUser, Employer, Store, WorkPermitMilestoneNotice
 from arl.user.services import set_user_sin
 from arl.user.tasks import work_permit_milestone_reminders
@@ -21,6 +22,7 @@ from arl.user.work_permit_reminders import (
     TASK_NAME,
     due_milestone,
     format_milestone_report,
+    pending_milestones,
     send_work_permit_milestone_reminders,
 )
 
@@ -515,6 +517,7 @@ class PermanentSinAndAuditTests(TestCase):
             work_permit_extension_date=self.today - timedelta(days=3),
         )
         row = self._audit_row("Extension")
+        self.assertEqual(AUTHORIZED_EXTENSION_LABEL, "Extension on file")
         self.assertEqual(row["permit_info"]["code"], "extension_pending")
         self.assertEqual(row["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
         self.assertEqual(row["permit_info"]["pill_class"], "primary")
@@ -593,3 +596,139 @@ class PermanentSinAndAuditTests(TestCase):
         row = self._audit_row("Ctive")
         self.assertEqual(row["permit_info"]["code"], "expiring_soon")
         self.assertNotEqual(row["overall_status"]["code"], "extension_pending")
+
+    def _study_document(self, user):
+        return SignedDocumentFile.objects.create(
+            user=user,
+            employer=self.employer,
+            envelope_id=f"env-{user.username}",
+            file_name="studies-completed.pdf",
+            file_path=f"DOCUMENTS/{user.username}/studies-completed.pdf",
+        )
+
+    def test_study_completed_with_document_is_compliant_when_permit_expired(self):
+        person = self._person(
+            "stu.dies",
+            "+15195558140",
+            TEMPORARY_SIN,
+            -12,
+            sin_days=400,
+            first_name="Stu",
+            last_name="Dies",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="study_completed",
+            effective_date=self.today - timedelta(days=4),
+            document_file=self._study_document(person),
+        )
+        row = self._audit_row("Dies")
+        self.assertEqual(row["permit_info"]["code"], "study_completed")
+        self.assertEqual(row["permit_info"]["label"], "Studies Completed")
+        self.assertEqual(row["permit_info"]["pill_class"], "success")
+        self.assertNotEqual(row["permit_info"]["label"], AUTHORIZED_EXTENSION_LABEL)
+        self.assertEqual(row["overall_status"]["code"], "compliant")
+        self.assertEqual(row["overall_status"]["label"], "Compliant")
+        self.assertEqual(row["overall_status"]["pill_class"], "success")
+        self.assertFalse(row["is_flagged"])
+        self.assertNotEqual(row["overall_status"]["code"], "urgent")
+        self.assertNotEqual(row["overall_status"]["code"], "extension_pending")
+        self.assertFalse(requires_work_permit(person))
+
+        urgent = self._person(
+            "una.still",
+            "+15195558141",
+            "923456789",
+            -3,
+            sin_days=400,
+            first_name="Una",
+            last_name="Still",
+        )
+        self.assertTrue(requires_work_permit(urgent))
+        names = [
+            row["employee"].last_name
+            for row in build_immigration_audit(self.employer)["immigration_rows"]
+        ]
+        self.assertLess(names.index("Still"), names.index("Dies"))
+
+    def test_study_completed_reference_is_proof_and_skips_the_mailer(self):
+        done = self._person(
+            "lea.done",
+            "+15195558142",
+            "934567890",
+            30,
+            sin_days=400,
+            first_name="Lea",
+            last_name="Done",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=done,
+            employer=self.employer,
+            status_type="study_completed",
+            effective_date=self.today,
+            reference_number="SC-200",
+        )
+        self._person(
+            "ned.due",
+            "+15195558143",
+            "945678901",
+            30,
+            sin_days=400,
+            first_name="Ned",
+            last_name="Due",
+        )
+        row = self._audit_row("Done")
+        self.assertEqual(row["permit_info"]["label"], "Studies Completed")
+        self.assertEqual(row["overall_status"]["code"], "compliant")
+        self.assertFalse(requires_work_permit(done))
+
+        listed = [item["name"] for item in pending_milestones(self.today)]
+        self.assertIn("Ned Due", listed)
+        self.assertNotIn("Lea Done", listed)
+
+    def test_study_completed_without_proof_stays_urgent(self):
+        person = self._person(
+            "no.proof",
+            "+15195558144",
+            "956789012",
+            -8,
+            sin_days=400,
+            first_name="No",
+            last_name="Proof",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="study_completed",
+            effective_date=self.today,
+            reference_number="   ",
+        )
+        row = self._audit_row("Proof")
+        self.assertEqual(row["permit_info"]["code"], "expired")
+        self.assertEqual(row["overall_status"]["code"], "urgent")
+        self.assertEqual(row["overall_status"]["label"], "Urgent")
+        self.assertTrue(requires_work_permit(person))
+
+    def test_inactive_study_completed_does_not_clear_urgent(self):
+        person = self._person(
+            "old.study",
+            "+15195558145",
+            "967890123",
+            -2,
+            sin_days=400,
+            first_name="Old",
+            last_name="Study",
+        )
+        ImmigrationStatusEvent.objects.create(
+            user=person,
+            employer=self.employer,
+            status_type="study_completed",
+            effective_date=self.today,
+            document_file=self._study_document(person),
+            is_active=False,
+        )
+        row = self._audit_row("Study")
+        self.assertEqual(row["overall_status"]["code"], "urgent")
+        self.assertNotEqual(row["permit_info"]["label"], "Studies Completed")
+        self.assertTrue(requires_work_permit(person))
