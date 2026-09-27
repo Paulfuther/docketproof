@@ -127,6 +127,18 @@ def _employee_name_key(employee):
     )
 
 
+def _hired_sort_key(employee):
+    """Newest date hired first. A missing date sorts last, then by name.
+
+    Date hired is CustomUser.date_joined. The employee record has no
+    separate hire-date column; the account is created when they join.
+    """
+    hired = getattr(employee, "date_joined", None)
+    if hired is None:
+        return (1, _employee_name_key(employee))
+    return (0, -hired.timestamp(), _employee_name_key(employee))
+
+
 def _search_audit_employees(employees, search_query):
     """Each word must match name, email, username, or store number."""
     search_query = (search_query or "").strip()
@@ -148,8 +160,11 @@ def _search_audit_employees(employees, search_query):
 
 def _normalize_doc_sort(sort, step_ids):
     sort = (sort or "").strip()
-    if sort == "name":
-        return sort
+    lowered = sort.lower()
+    if lowered == "name":
+        return "name"
+    if lowered == "hired":
+        return "hired"
     if sort.startswith("step-") and sort[5:].isdigit() and int(sort[5:]) in step_ids:
         return sort
     return ""
@@ -384,6 +399,8 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
 
     if sort == "name":
         rows.sort(key=lambda row: _employee_name_key(row["employee"]))
+    elif sort == "hired":
+        rows.sort(key=lambda row: _hired_sort_key(row["employee"]))
     elif sort.startswith("step-"):
         step_id = int(sort[5:])
 

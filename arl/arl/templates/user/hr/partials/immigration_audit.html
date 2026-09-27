@@ -70,6 +70,8 @@
         hx-sync="#imm-toolbar:replace"
         hx-indicator="#immigration-loading">
         <option value="" {% if not immigration_sort %}selected{% endif %}>Urgency</option>
+        <option value="name" {% if immigration_sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+        <option value="hired" {% if immigration_sort == "hired" %}selected{% endif %}>Date hired (newest)</option>
         <option value="sin" {% if immigration_sort == "sin" %}selected{% endif %}>SIN status</option>
         <option value="permit" {% if immigration_sort == "permit" %}selected{% endif %}>Permit status</option>
       </select>

@@ -391,9 +391,9 @@ def _attach_scan_chips(row):
 
 
 def _normalize_audit_sort(sort):
-    """Blank stays the urgency ranking. Only SIN and Permit are extra sorts."""
+    """Blank stays urgency. Extra sorts are SIN, Permit, Name, and Date hired."""
     sort = (sort or "").strip().lower()
-    if sort in {"sin", "permit"}:
+    if sort in {"sin", "permit", "name", "hired"}:
         return sort
     return ""
 
@@ -405,6 +405,27 @@ def _audit_name_key(employee):
         (employee.username or "").casefold(),
         employee.pk or 0,
     )
+
+
+def _audit_display_name_key(employee):
+    """A-Z by the name shown on the row. A blank name sorts last."""
+    full = (employee.get_full_name() or "").strip()
+    if not full:
+        username = (getattr(employee, "username", None) or "").casefold()
+        return (1, username, employee.pk or 0)
+    return (0, full.casefold(), employee.pk or 0)
+
+
+def _hired_sort_key(employee, name_key):
+    """Newest date hired first. A missing date sorts last, then by name.
+
+    Date hired is CustomUser.date_joined. The employee record has no
+    separate hire-date column; the account is created when they join.
+    """
+    hired = getattr(employee, "date_joined", None)
+    if hired is None:
+        return (1, name_key(employee))
+    return (0, -hired.timestamp(), name_key(employee))
 
 
 def _audit_days_key(days):
@@ -576,6 +597,10 @@ def build_immigration_audit(employer, search_query="", flagged_only=False, sort=
                 _audit_name_key(r["employee"]),
             )
         )
+    elif sort == "name":
+        rows.sort(key=lambda r: _audit_display_name_key(r["employee"]))
+    elif sort == "hired":
+        rows.sort(key=lambda r: _hired_sort_key(r["employee"], _audit_name_key))
     else:
         rows.sort(
             key=lambda r: (

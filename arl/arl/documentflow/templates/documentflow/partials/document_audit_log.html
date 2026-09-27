@@ -78,6 +78,7 @@
         hx-indicator="#hrdoc-loading">
         <option value="" {% if not audit_sort %}selected{% endif %}>Issues</option>
         <option value="name" {% if audit_sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+        <option value="hired" {% if audit_sort == "hired" %}selected{% endif %}>Date hired (newest)</option>
         {% for column in audit_columns %}
           <option value="{{ column.sort }}" {% if audit_sort == column.sort %}selected{% endif %}>{{ column.name }}</option>
         {% endfor %}
