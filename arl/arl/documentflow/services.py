@@ -158,6 +158,13 @@ def _search_audit_employees(employees, search_query):
     return employees
 
 
+def sort_param_or_date_hired(params, key):
+    """No sort param lands on date hired. A blank value keeps Urgency or Issues."""
+    if key not in params:
+        return "hired"
+    return params.get(key) or ""
+
+
 def _normalize_doc_sort(sort, step_ids):
     sort = (sort or "").strip()
     lowered = sort.lower()

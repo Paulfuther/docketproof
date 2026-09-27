@@ -380,7 +380,7 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn("Offer Letter", body)
 
     def test_partial_uses_live_search_and_real_step_names(self):
-        self._person(
+        mia = self._person(
             "mia.missing",
             "+15195550150",
             first_name="Mia",
@@ -394,11 +394,17 @@ class HRDocumentsScanTests(TestCase):
             last_name="Sent",
             store=self.store,
         )
+        now = timezone.now()
+        mia.date_joined = now - timedelta(days=12)
+        sent_user.date_joined = now - timedelta(days=1)
+        mia.save(update_fields=["date_joined"])
+        sent_user.save(update_fields=["date_joined"])
         self._envelope(sent_user, self.offer_step, "sent", "env-ui-offer")
         self.client.force_login(self.hr)
         response = self.client.get(reverse("document_audit_log_partial"))
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
+        self.assertIn('value="hired" selected', body)
         self.assertIn("HR Documents", body)
         self.assertIn("Issues only", body)
         self.assertIn("Offer Letter", body)
@@ -420,7 +426,25 @@ class HRDocumentsScanTests(TestCase):
             body,
         )
         self.assertNotIn("SIN docs", body)
-        self.assertLess(body.index("Mia Missing"), body.index("Sam Sent"))
+        self.assertLess(body.index("Sam Sent"), body.index("Mia Missing"))
+
+        dashboard = self.client.get(reverse("hr_dashboard"))
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_body = dashboard.content.decode()
+        self.assertIn('value="hired" selected', dashboard_body)
+        self.assertLess(
+            dashboard_body.index("Sam Sent"),
+            dashboard_body.index("Mia Missing"),
+        )
+
+        issues = self.client.get(
+            reverse("document_audit_log_partial"),
+            {"audit_sort": ""},
+        )
+        issues_body = issues.content.decode()
+        self.assertIn('value="" selected', issues_body)
+        self.assertNotIn('value="hired" selected', issues_body)
+        self.assertLess(issues_body.index("Mia Missing"), issues_body.index("Sam Sent"))
 
         flagged = self.client.get(
             reverse("document_audit_log_partial"),

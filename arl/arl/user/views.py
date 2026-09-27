@@ -46,6 +46,7 @@ from arl.documentflow.models import DocumentFlow
 from arl.documentflow.services import (
     build_document_audit,
     resend_employee_flow_documents,
+    sort_param_or_date_hired,
 )
 from arl.documentflow.services_immigration import (
     build_immigration_audit,
@@ -1007,7 +1008,7 @@ def immigration_audit_partial(request):
 
     immigration_search = request.GET.get("imm_q", "")
     immigration_flagged_only = request.GET.get("imm_flagged") == "1"
-    immigration_sort = request.GET.get("imm_sort", "")
+    immigration_sort = sort_param_or_date_hired(request.GET, "imm_sort")
 
     immigration_context = build_immigration_audit(
         employer=employer,
@@ -1126,7 +1127,7 @@ def hr_dashboard(request):
 
     audit_search = (request.GET.get("audit_q") or "").strip()
     audit_incomplete_only = request.GET.get("audit_incomplete") == "1"
-    audit_sort = request.GET.get("audit_sort", "")
+    audit_sort = sort_param_or_date_hired(request.GET, "audit_sort")
 
     document_audit_context = build_document_audit(
         employer=employer,
@@ -1275,7 +1276,7 @@ def resend_hr_documents(request, user_id):
         employer=employer,
         search_query=request.POST.get("audit_q", ""),
         incomplete_only=request.POST.get("audit_incomplete") == "1",
-        sort=request.POST.get("audit_sort", ""),
+        sort=sort_param_or_date_hired(request.POST, "audit_sort"),
     )
     context["resend_notice"] = _hr_document_resend_notice(employee, result)
     return render(

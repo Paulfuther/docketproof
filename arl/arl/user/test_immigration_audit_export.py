@@ -819,3 +819,33 @@ class ImmigrationAuditExportTests(TestCase):
         self.assertLess(body.index("Amy Young"), body.index("Zoe Young"))
         self.assertNotIn("amy adams", body)
         self.assertNotIn("Pat Permanent", body)
+
+        def displayed_names(sort):
+            rows = build_immigration_audit(self.employer, sort=sort)["immigration_rows"]
+            names = []
+            for row in rows:
+                employee = row["employee"]
+                full_name = (employee.get_full_name() or "").strip()
+                names.append(full_name or employee.username)
+            return names
+
+        hired_names = displayed_names("hired")
+        urgency_names = displayed_names("")
+        self.assertNotEqual(hired_names, urgency_names)
+
+        landing = self.client.get(reverse("immigration_audit_partial"))
+        self.assertEqual(landing.status_code, 200)
+        landing_body = landing.content.decode()
+        self.assertIn('value="hired" selected', landing_body)
+        hired_positions = [landing_body.index(name) for name in hired_names]
+        self.assertEqual(hired_positions, sorted(hired_positions))
+
+        urgency = self.client.get(
+            reverse("immigration_audit_partial"),
+            {"imm_sort": ""},
+        )
+        urgency_body = urgency.content.decode()
+        self.assertIn('value="" selected', urgency_body)
+        self.assertNotIn('value="hired" selected', urgency_body)
+        urgency_positions = [urgency_body.index(name) for name in urgency_names]
+        self.assertEqual(urgency_positions, sorted(urgency_positions))
