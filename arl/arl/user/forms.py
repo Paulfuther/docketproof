@@ -1,17 +1,34 @@
+import re
+
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Div, Field, Layout, Submit
 from django import forms
+from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import (
     MaxLengthValidator,
     MinLengthValidator,
     RegexValidator,
 )
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django_countries import countries
+from phonenumbers import PhoneNumberFormat, format_number, is_valid_number, parse
+from phonenumbers.phonenumberutil import NumberParseException
+
+from arl.utils.crypto import normalize_digits, sin_luhn_valid
 
 from .models import CustomUser, Employer, NewHireInvite, Store
 from arl.user.services import set_user_sin
+
+
+def _reg_attrs(**extra):
+    attrs = {"class": "form-control reg-input"}
+    attrs.update(extra)
+    return attrs
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -180,7 +197,7 @@ class CustomUserCreationForm(UserCreationForm):
             user.save()
 
         return user
-    
+
 
 class TwoFactorAuthenticationForm(forms.Form):
     verification_code = forms.CharField(
@@ -285,3 +302,350 @@ class NewHireInviteForm(forms.ModelForm):
         if commit:
             invite.save()
         return invite
+
+
+class PhoneStepForm(forms.Form):
+    """Mobile number for the registration SMS code."""
+
+    phone_number = forms.CharField(
+        label="Mobile phone",
+        max_length=20,
+        widget=forms.TextInput(
+            attrs=_reg_attrs(
+                type="tel",
+                inputmode="tel",
+                autocomplete="tel",
+                autocapitalize="off",
+                placeholder="416 555 0100",
+            )
+        ),
+        help_text="Include the area code. We'll text a code to this number.",
+        error_messages={
+            "required": "Enter the mobile number where we can text your code.",
+        },
+    )
+
+    def clean_phone_number(self):
+        raw = (self.cleaned_data.get("phone_number") or "").strip()
+        try:
+            parsed = parse(raw, "CA")
+        except NumberParseException:
+            raise forms.ValidationError(
+                "Enter a valid phone number, including the area code."
+            )
+        if not is_valid_number(parsed):
+            raise forms.ValidationError(
+                "That phone number doesn't look valid. Check the digits and try again."
+            )
+        e164 = format_number(parsed, PhoneNumberFormat.E164)
+        if CustomUser.objects.filter(phone_number=e164).exists():
+            raise forms.ValidationError(
+                "This phone number is already registered. Use a different number or contact HR."
+            )
+        return e164
+
+
+class OTPForm(forms.Form):
+    """Code from the SMS we just sent."""
+
+    verification_code = forms.CharField(
+        label="Text message code",
+        max_length=12,
+        widget=forms.TextInput(
+            attrs=_reg_attrs(
+                inputmode="numeric",
+                autocomplete="one-time-code",
+                autocapitalize="off",
+                placeholder="123456",
+            )
+        ),
+        help_text="Enter the code from the text message.",
+        error_messages={
+            "required": "Enter the code from the text message.",
+        },
+    )
+
+    def clean_verification_code(self):
+        digits = normalize_digits(self.cleaned_data.get("verification_code") or "")
+        if len(digits) < 4:
+            raise forms.ValidationError("Enter the numeric code from the text message.")
+        return digits
+
+
+class StoreChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        bits = [f"Store {obj.number}"]
+        place = ", ".join(part for part in (obj.address, obj.city) if part)
+        if place:
+            bits.append(place)
+        return " — ".join(bits)
+
+
+class YouStepForm(forms.Form):
+    """Identity, login, and SIN. The SIN never stays in plaintext."""
+
+    username = forms.CharField(
+        label="Username",
+        max_length=150,
+        validators=[UnicodeUsernameValidator()],
+        widget=forms.TextInput(
+            attrs=_reg_attrs(
+                autocomplete="username", autocapitalize="off", spellcheck="false"
+            )
+        ),
+        help_text="You'll use this to log in.",
+        error_messages={
+            "required": "Pick a username.",
+            "max_length": "Keep the username to 150 characters or fewer.",
+        },
+    )
+    password1 = forms.CharField(
+        label="Password",
+        strip=False,
+        widget=forms.PasswordInput(attrs=_reg_attrs(autocomplete="new-password")),
+        help_text="At least 8 characters. You'll use this to log in.",
+        error_messages={"required": "Choose a password."},
+    )
+    password2 = forms.CharField(
+        label="Confirm password",
+        strip=False,
+        widget=forms.PasswordInput(attrs=_reg_attrs(autocomplete="new-password")),
+        error_messages={"required": "Type the password again."},
+    )
+    first_name = forms.CharField(
+        label="First name",
+        max_length=150,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="given-name")),
+        error_messages={
+            "required": "Enter your first name.",
+            "max_length": "Keep your first name to 150 characters or fewer.",
+        },
+    )
+    last_name = forms.CharField(
+        label="Last name",
+        max_length=150,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="family-name")),
+        error_messages={
+            "required": "Enter your last name.",
+            "max_length": "Keep your last name to 150 characters or fewer.",
+        },
+    )
+    dob = forms.DateField(
+        label="Date of birth",
+        widget=forms.DateInput(attrs=_reg_attrs(type="date", autocomplete="bday")),
+        error_messages={
+            "required": "Enter your date of birth.",
+            "invalid": "Enter a real date of birth.",
+        },
+    )
+    address = forms.CharField(
+        label="Street address",
+        max_length=100,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="address-line1")),
+        error_messages={
+            "required": "Enter your street address.",
+            "max_length": "Keep the address to 100 characters or fewer.",
+        },
+    )
+    address_two = forms.CharField(
+        label="Apartment, unit, or suite",
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="address-line2")),
+        error_messages={
+            "max_length": "Keep the apartment or unit to 100 characters or fewer.",
+        },
+    )
+    city = forms.CharField(
+        label="City",
+        max_length=100,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="address-level2")),
+        error_messages={
+            "required": "Enter your city.",
+            "max_length": "Keep the city to 100 characters or fewer.",
+        },
+    )
+    state_province = forms.CharField(
+        label="Province or state",
+        max_length=100,
+        widget=forms.TextInput(attrs=_reg_attrs(autocomplete="address-level1")),
+        help_text="For example, ON.",
+        error_messages={
+            "required": "Enter your province or state.",
+            "max_length": "Keep the province or state to 100 characters or fewer.",
+        },
+    )
+    country = forms.ChoiceField(
+        label="Country",
+        choices=[("", "Select a country")] + list(countries),
+        initial="CA",
+        widget=forms.Select(attrs=_reg_attrs(autocomplete="country")),
+        error_messages={
+            "required": "Select your country.",
+            "invalid_choice": "Select a country from the list.",
+        },
+    )
+    postal = forms.CharField(
+        label="Postal code",
+        max_length=12,
+        widget=forms.TextInput(
+            attrs=_reg_attrs(autocomplete="postal-code", autocapitalize="characters")
+        ),
+        error_messages={"required": "Enter your postal code."},
+    )
+    sin_input = forms.CharField(
+        label="Social Insurance Number (SIN)",
+        max_length=20,
+        widget=forms.TextInput(
+            attrs=_reg_attrs(
+                inputmode="numeric",
+                autocomplete="off",
+                autocapitalize="off",
+                spellcheck="false",
+            )
+        ),
+        help_text="9 digits. Spaces are okay. We encrypt this before saving it.",
+        error_messages={"required": "Enter the 9 digits of your SIN. Spaces are okay."},
+    )
+    sin_expiration_date = forms.DateField(
+        label="SIN expiry date",
+        required=False,
+        widget=forms.DateInput(attrs=_reg_attrs(type="date")),
+        help_text="Required when your SIN starts with 9.",
+        error_messages={"invalid": "Enter a real SIN expiry date."},
+    )
+    work_permit_expiration_date = forms.DateField(
+        label="Work permit expiry date",
+        required=False,
+        widget=forms.DateInput(attrs=_reg_attrs(type="date")),
+        help_text="Required when your SIN starts with 9.",
+        error_messages={"invalid": "Enter a real work permit expiry date."},
+    )
+
+    def __init__(self, *args, invite_email="", **kwargs):
+        self.invite_email = invite_email
+        super().__init__(*args, **kwargs)
+        today = timezone.localdate().isoformat()
+        self.fields["dob"].widget.attrs["max"] = today
+        self.fields["dob"].widget.attrs["min"] = "1900-01-01"
+
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        if CustomUser.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError("That username is already taken. Pick another.")
+        return username
+
+    def clean_sin_input(self):
+        digits = normalize_digits(self.cleaned_data.get("sin_input") or "")
+        if len(digits) != 9:
+            raise forms.ValidationError(
+                "Enter the 9 digits of your SIN. Spaces are okay."
+            )
+        if not sin_luhn_valid(digits):
+            raise forms.ValidationError(
+                "Those digits aren't a valid SIN. Check for a typo."
+            )
+        return digits
+
+    def clean(self):
+        cleaned = super().clean()
+        self._clean_passwords(cleaned)
+        self._clean_dob(cleaned)
+        self._clean_postal(cleaned)
+        self._clean_sin_dates(cleaned)
+        return cleaned
+
+    def _clean_passwords(self, cleaned):
+        password1 = cleaned.get("password1")
+        password2 = cleaned.get("password2")
+        if password1 and password2 and password1 != password2:
+            self.add_error(
+                "password2", "The two passwords don't match. Type them again."
+            )
+        if password1 and not self.errors.get("password1"):
+            user = CustomUser(
+                username=cleaned.get("username") or "",
+                first_name=cleaned.get("first_name") or "",
+                last_name=cleaned.get("last_name") or "",
+                email=self.invite_email or "",
+            )
+            try:
+                password_validation.validate_password(password1, user=user)
+            except DjangoValidationError as exc:
+                self.add_error("password1", exc)
+
+    def _clean_dob(self, cleaned):
+        dob = cleaned.get("dob")
+        if not dob:
+            return
+        today = timezone.localdate()
+        if dob > today:
+            self.add_error("dob", "Date of birth has to be before today.")
+        elif dob.year < 1900:
+            self.add_error("dob", "Check the year on your date of birth.")
+
+    def _clean_postal(self, cleaned):
+        postal = cleaned.get("postal")
+        if not postal:
+            return
+        if cleaned.get("country") == "CA":
+            compact = re.sub(r"[^A-Za-z0-9]", "", postal).upper()
+            if not re.fullmatch(r"[A-Z]\d[A-Z]\d[A-Z]\d", compact):
+                self.add_error("postal", "Enter a Canadian postal code, like A1A 1A1.")
+                return
+            cleaned["postal"] = f"{compact[:3]} {compact[3:]}"
+            return
+        compact = postal.strip()
+        if len(compact) > 7:
+            self.add_error("postal", "Enter a postal code of 7 characters or fewer.")
+            return
+        cleaned["postal"] = compact
+
+    def _clean_sin_dates(self, cleaned):
+        sin = cleaned.get("sin_input")
+        if not sin or not sin.startswith("9"):
+            return
+        if not cleaned.get("sin_expiration_date"):
+            self.add_error(
+                "sin_expiration_date",
+                "SINs that start with 9 need an expiry date.",
+            )
+        if not cleaned.get("work_permit_expiration_date"):
+            self.add_error(
+                "work_permit_expiration_date",
+                "SINs that start with 9 need a work permit expiry date.",
+            )
+
+
+class WorkStepForm(forms.Form):
+    """Store selection. Employer and role come from the invite."""
+
+    store = StoreChoiceField(
+        label="Store",
+        queryset=Store.objects.none(),
+        required=False,
+        empty_label="Select your store",
+        widget=forms.Select(attrs=_reg_attrs()),
+        error_messages={
+            "invalid_choice": "Choose a store from the list.",
+        },
+    )
+
+    def __init__(self, *args, employer, role, **kwargs):
+        self.role = role
+        super().__init__(*args, **kwargs)
+        self.fields["store"].queryset = Store.objects.filter(
+            employer=employer, is_active=True
+        ).order_by("number")
+
+    def clean_store(self):
+        store = self.cleaned_data.get("store")
+        if self.role == "EMPLOYER":
+            return None
+        if store is None:
+            if not self.fields["store"].queryset.exists():
+                raise forms.ValidationError(
+                    "This employer has no active stores yet. Ask HR to add a store, then come back to this invite."
+                )
+            raise forms.ValidationError("Choose the store you will work at.")
+        return store
