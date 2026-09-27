@@ -148,6 +148,7 @@ class NewHireRegistrationTests(TestCase):
         self.assertContains(response, "3. Work")
         self.assertContains(response, "4. Confirm")
         self.assertContains(response, "font-size: 16px")
+        self.assertContains(response, "reg-page")
         self.assertNotContains(response, "Submit registration")
 
     def test_unknown_token_is_not_found(self):
@@ -161,6 +162,7 @@ class NewHireRegistrationTests(TestCase):
         response = self.client.get(self._url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "already been used")
+        self.assertContains(response, "reg-page")
         self.assertNotContains(response, "Join Today")
 
     def test_cannot_skip_ahead(self):
