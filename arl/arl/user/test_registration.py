@@ -8,6 +8,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from phonenumbers import PhoneNumberFormat, format_number, parse
 
+from arl.user.forms import YouStepForm
 from arl.user.models import CustomUser, Employer, NewHireInvite, Store
 from arl.user.registration import SESSION_KEY, load_invite
 
@@ -223,14 +224,69 @@ class NewHireRegistrationTests(TestCase):
         self.assertContains(response, "aren&#x27;t a valid SIN")
         self.assertEqual(CustomUser.objects.count(), 0)
 
+    def _error_count(self, response, message):
+        return response.content.decode().count(message)
+
     def test_temporary_sin_requires_expiry_dates(self):
         self._verify_phone()
         response = self._post(self._you_data(sin_input=TEMPORARY_SIN))
-        self.assertContains(response, "SINs that start with 9 need an expiry date.")
-        self.assertContains(
-            response, "SINs that start with 9 need a work permit expiry date."
-        )
+        # The page script always includes each message once. Field errors add more.
+        self.assertGreater(self._error_count(response, YouStepForm.TEMPORARY_SIN_EXPIRY_ERROR), 1)
+        self.assertGreater(self._error_count(response, YouStepForm.TEMPORARY_SIN_PERMIT_ERROR), 1)
+        html = response.content.decode()
+        self.assertIn('data-temporary-sin-date="sin"', html)
+        self.assertRegex(html, r'data-temporary-sin-date="sin"[^>]*\brequired\b')
         self.assertEqual(CustomUser.objects.count(), 0)
+
+    def test_temporary_sin_with_spaces_or_dashes_requires_both_dates(self):
+        self._verify_phone()
+        response = self._post(self._you_data(sin_input="900-000-001"))
+        self.assertGreater(self._error_count(response, YouStepForm.TEMPORARY_SIN_EXPIRY_ERROR), 1)
+        self.assertGreater(self._error_count(response, YouStepForm.TEMPORARY_SIN_PERMIT_ERROR), 1)
+        self.assertNotContains(response, "Where you'll work")
+
+        response = self._post(
+            self._you_data(
+                sin_input="9 0000 0001",
+                sin_expiration_date="2027-01-15",
+            )
+        )
+        self.assertEqual(self._error_count(response, YouStepForm.TEMPORARY_SIN_EXPIRY_ERROR), 1)
+        self.assertGreater(self._error_count(response, YouStepForm.TEMPORARY_SIN_PERMIT_ERROR), 1)
+        self.assertNotContains(response, "Where you'll work")
+        self.assertEqual(CustomUser.objects.count(), 0)
+
+    def test_permanent_sin_does_not_require_expiry_dates(self):
+        self._verify_phone()
+        response = self._post(self._you_data(sin_input="130 692-544"))
+        self.assertContains(response, "Where you'll work", html=True)
+        self.assertNotContains(response, "start with 9")
+        self.assertFalse(self._draft()["you"]["sin_expiration_date"])
+        self.assertFalse(self._draft()["you"]["work_permit_expiration_date"])
+        self.assertFalse(self._draft()["you"]["temporary_sin"])
+
+    def test_you_step_marks_dates_required_only_when_sin_starts_with_9(self):
+        temporary = YouStepForm(data={"sin_input": " 9 00-000-001 "})
+        self.assertTrue(temporary.fields["sin_expiration_date"].widget.attrs.get("required"))
+        self.assertEqual(
+            temporary.fields["work_permit_expiration_date"].widget.attrs.get("aria-required"),
+            "true",
+        )
+        permanent = YouStepForm(data={"sin_input": "130-692-544"})
+        self.assertNotIn("required", permanent.fields["sin_expiration_date"].widget.attrs)
+        self.assertNotIn(
+            "required", permanent.fields["work_permit_expiration_date"].widget.attrs
+        )
+        blank = YouStepForm()
+        self.assertNotIn("required", blank.fields["sin_expiration_date"].widget.attrs)
+
+        self._verify_phone()
+        page = self.client.get(f"{self._url()}?step=you")
+        self.assertContains(page, "data-temporary-sin-input")
+        self.assertContains(page, 'data-temporary-sin-date="sin"')
+        self.assertContains(page, 'data-temporary-sin-date="permit"')
+        self.assertContains(page, YouStepForm.TEMPORARY_SIN_EXPIRY_ERROR)
+        self.assertContains(page, YouStepForm.TEMPORARY_SIN_PERMIT_ERROR)
 
     def test_you_step_stores_ciphertext_not_plaintext(self):
         self._verify_phone()
@@ -322,6 +378,27 @@ class NewHireRegistrationTests(TestCase):
         self.assertEqual(user.sin_plain, TEMPORARY_SIN)
         self.assertEqual(user.sin_expiration_date, date(2027, 1, 15))
         self.assertEqual(user.work_permit_expiration_date, date(2027, 6, 1))
+
+    def test_confirm_rejects_temporary_sin_if_dates_are_removed(self):
+        self._verify_phone(raw="4165550104")
+        self._post(
+            self._you_data(
+                username="strip.dates",
+                sin_input="900 000 001",
+                sin_expiration_date="2027-01-15",
+                work_permit_expiration_date="2027-06-01",
+            )
+        )
+        self._post({"step": "work", "action": "save_work", "store": str(self.store.pk)})
+        session = self.client.session
+        you = session[SESSION_KEY][self.invite.token]["you"]
+        you["sin_expiration_date"] = ""
+        you["work_permit_expiration_date"] = ""
+        session.modified = True
+        session.save()
+        response = self._post({"step": "confirm", "action": "submit"})
+        self.assertContains(response, "add the SIN and work permit expiry dates")
+        self.assertFalse(CustomUser.objects.filter(username="strip.dates").exists())
 
     def test_employer_role_does_not_require_a_store(self):
         invite = self._invite(

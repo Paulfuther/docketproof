@@ -167,6 +167,113 @@
               {% include "user/partials/reg_field.html" with field=form.sin_input %}
               {% include "user/partials/reg_field.html" with field=form.sin_expiration_date %}
               {% include "user/partials/reg_field.html" with field=form.work_permit_expiration_date %}
+              <script>
+                (function () {
+                  var sin = document.querySelector("[data-temporary-sin-input]");
+                  var dates = [
+                    {
+                      input: document.querySelector('[data-temporary-sin-date="sin"]'),
+                      message: "{{ form.TEMPORARY_SIN_EXPIRY_ERROR|escapejs }}"
+                    },
+                    {
+                      input: document.querySelector('[data-temporary-sin-date="permit"]'),
+                      message: "{{ form.TEMPORARY_SIN_PERMIT_ERROR|escapejs }}"
+                    }
+                  ];
+                  if (!sin || !dates[0].input || !dates[1].input) return;
+
+                  function digitsOnly(value) {
+                    return String(value || "").replace(/\D/g, "");
+                  }
+
+                  function isTemporary() {
+                    return digitsOnly(sin.value).charAt(0) === "9";
+                  }
+
+                  function marker(input) {
+                    var label = document.querySelector('label[for="' + input.id + '"]');
+                    return label ? label.querySelector(".reg-required") : null;
+                  }
+
+                  function errorNode(input) {
+                    var wrap = input.closest(".mb-3");
+                    if (!wrap) return null;
+                    var node = wrap.querySelector(".reg-temp-sin-error");
+                    if (!node) {
+                      node = document.createElement("div");
+                      node.className = "invalid-feedback d-block reg-temp-sin-error";
+                      node.setAttribute("role", "alert");
+                      node.hidden = true;
+                      wrap.appendChild(node);
+                    }
+                    return node;
+                  }
+
+                  function applyRequired() {
+                    var on = isTemporary();
+                    dates.forEach(function (field) {
+                      if (on) {
+                        field.input.required = true;
+                        field.input.setAttribute("aria-required", "true");
+                      } else {
+                        field.input.required = false;
+                        field.input.removeAttribute("required");
+                        field.input.removeAttribute("aria-required");
+                        field.input.removeAttribute("aria-invalid");
+                      }
+                      var star = marker(field.input);
+                      if (star) star.hidden = !on;
+                      if (!on) {
+                        var node = errorNode(field.input);
+                        if (node) node.hidden = true;
+                      }
+                    });
+                  }
+
+                  function showErrors() {
+                    var on = isTemporary();
+                    var blocked = false;
+                    dates.forEach(function (field) {
+                      var missing = on && !field.input.value;
+                      var node = errorNode(field.input);
+                      var server = field.input.closest(".mb-3").querySelector(
+                        ".invalid-feedback:not(.reg-temp-sin-error)"
+                      );
+                      var alreadyShown = server && server.textContent.indexOf(field.message) !== -1;
+                      if (node) {
+                        node.textContent = field.message;
+                        node.hidden = !missing || alreadyShown;
+                      }
+                      if (missing) {
+                        field.input.setAttribute("aria-invalid", "true");
+                        blocked = true;
+                      }
+                    });
+                    return blocked;
+                  }
+
+                  sin.addEventListener("input", applyRequired);
+                  dates.forEach(function (field) {
+                    field.input.addEventListener("input", function () {
+                      if (field.input.value) {
+                        var node = errorNode(field.input);
+                        if (node) node.hidden = true;
+                        field.input.removeAttribute("aria-invalid");
+                      }
+                    });
+                  });
+                  var form = sin.closest("form");
+                  if (form) {
+                    form.addEventListener("submit", function (event) {
+                      var submitter = event.submitter;
+                      if (submitter && submitter.value && submitter.value !== "save_you") return;
+                      applyRequired();
+                      if (showErrors()) event.preventDefault();
+                    });
+                  }
+                  applyRequired();
+                })();
+              </script>
               <div class="reg-actions">
                 <button class="btn btn-outline-secondary" type="submit" name="action" value="back">Back</button>
                 <button class="btn btn-primary" type="submit" name="action" value="save_you">Continue</button>

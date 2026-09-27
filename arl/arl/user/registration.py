@@ -26,7 +26,13 @@ from arl.user.models import CustomUser, NewHireInvite, Store
 from arl.user.services import set_user_sin
 from arl.user.tasks import save_user_to_db
 from arl.msg.helpers import check_verification_token, request_verification_token
-from arl.utils.crypto import sin_decrypt, sin_encrypt, sin_last4, sin_luhn_valid
+from arl.utils.crypto import (
+    normalize_digits,
+    sin_decrypt,
+    sin_encrypt,
+    sin_last4,
+    sin_luhn_valid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +357,7 @@ def create_new_hire(draft, invite):
         raise RegistrationError(
             "We couldn't read your SIN. Go back to You and enter it again."
         )
-    if sin_plain.startswith("9") and (
+    if normalize_digits(sin_plain).startswith("9") and (
         not you.get("sin_expiration_date") or not you.get("work_permit_expiration_date")
     ):
         raise RegistrationError(

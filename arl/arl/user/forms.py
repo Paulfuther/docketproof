@@ -493,6 +493,11 @@ class YouStepForm(forms.Form):
         ),
         error_messages={"required": "Enter your postal code."},
     )
+    TEMPORARY_SIN_EXPIRY_ERROR = "SINs that start with 9 need an expiry date."
+    TEMPORARY_SIN_PERMIT_ERROR = (
+        "SINs that start with 9 need a work permit expiry date."
+    )
+
     sin_input = forms.CharField(
         label="Social Insurance Number (SIN)",
         max_length=20,
@@ -502,6 +507,7 @@ class YouStepForm(forms.Form):
                 autocomplete="off",
                 autocapitalize="off",
                 spellcheck="false",
+                **{"data-temporary-sin-input": "true"},
             )
         ),
         help_text="9 digits. Spaces are okay. We encrypt this before saving it.",
@@ -510,14 +516,18 @@ class YouStepForm(forms.Form):
     sin_expiration_date = forms.DateField(
         label="SIN expiry date",
         required=False,
-        widget=forms.DateInput(attrs=_reg_attrs(type="date")),
+        widget=forms.DateInput(
+            attrs=_reg_attrs(type="date", **{"data-temporary-sin-date": "sin"})
+        ),
         help_text="Required when your SIN starts with 9.",
         error_messages={"invalid": "Enter a real SIN expiry date."},
     )
     work_permit_expiration_date = forms.DateField(
         label="Work permit expiry date",
         required=False,
-        widget=forms.DateInput(attrs=_reg_attrs(type="date")),
+        widget=forms.DateInput(
+            attrs=_reg_attrs(type="date", **{"data-temporary-sin-date": "permit"})
+        ),
         help_text="Required when your SIN starts with 9.",
         error_messages={"invalid": "Enter a real work permit expiry date."},
     )
@@ -528,6 +538,26 @@ class YouStepForm(forms.Form):
         today = timezone.localdate().isoformat()
         self.fields["dob"].widget.attrs["max"] = today
         self.fields["dob"].widget.attrs["min"] = "1900-01-01"
+        self._mark_temporary_sin_dates()
+
+    def _posted_sin_digits(self):
+        if self.is_bound:
+            raw = self.data.get(self.add_prefix("sin_input"), "")
+        else:
+            raw = (self.initial or {}).get("sin_input", "")
+        return normalize_digits(str(raw or ""))
+
+    def _mark_temporary_sin_dates(self):
+        """HTML required state only. Server messages stay on the date fields."""
+        temporary = self._posted_sin_digits().startswith("9")
+        for name in ("sin_expiration_date", "work_permit_expiration_date"):
+            attrs = self.fields[name].widget.attrs
+            if temporary:
+                attrs["required"] = True
+                attrs["aria-required"] = "true"
+            else:
+                attrs.pop("required", None)
+                attrs.pop("aria-required", None)
 
     def clean_username(self):
         username = (self.cleaned_data.get("username") or "").strip()
@@ -602,18 +632,21 @@ class YouStepForm(forms.Form):
         cleaned["postal"] = compact
 
     def _clean_sin_dates(self, cleaned):
-        sin = cleaned.get("sin_input")
-        if not sin or not sin.startswith("9"):
+        # Digits only, so "900-000-001" and "9 00000001" follow the same rule.
+        # Use the posted value when the SIN field itself failed validation,
+        # so a number that starts with 9 still asks for both dates.
+        digits = cleaned.get("sin_input") or self._posted_sin_digits()
+        if not str(digits).startswith("9"):
             return
         if not cleaned.get("sin_expiration_date"):
             self.add_error(
                 "sin_expiration_date",
-                "SINs that start with 9 need an expiry date.",
+                self.TEMPORARY_SIN_EXPIRY_ERROR,
             )
         if not cleaned.get("work_permit_expiration_date"):
             self.add_error(
                 "work_permit_expiration_date",
-                "SINs that start with 9 need a work permit expiry date.",
+                self.TEMPORARY_SIN_PERMIT_ERROR,
             )
 
 
