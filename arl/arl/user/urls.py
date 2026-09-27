@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
+from .registration import register_complete
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -24,6 +25,7 @@ urlpatterns = [
     path("login", login_view, name="login"),
     path("mfa/setup-mfa/", setup_totp, name="admin_setup_mfa"),
     path("mfa/verify-mfa/", verify_totp, name="admin_verify_totp"),
+    path("register/complete/", register_complete, name="register_complete"),
     path("register/<str:token>/", RegisterView.as_view(), name="register"),
     path(
         "check_phone_number_unique/",
