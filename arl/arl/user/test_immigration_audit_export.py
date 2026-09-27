@@ -681,3 +681,141 @@ class ImmigrationAuditExportTests(TestCase):
                 for row in build_immigration_audit(self.employer)["immigration_rows"]
             ],
         )
+
+    def test_name_and_date_hired_sort(self):
+        from types import SimpleNamespace
+
+        from arl.documentflow.services_immigration import (
+            _audit_name_key,
+            _hired_sort_key,
+        )
+
+        amy = self._person(
+            "amy.young",
+            "+15195559301",
+            None,
+            None,
+            first_name="Amy",
+            last_name="Young",
+        )
+        zoe = self._person(
+            "zoe.young",
+            "+15195559302",
+            None,
+            None,
+            first_name="Zoe",
+            last_name="Young",
+        )
+        lower = self._person(
+            "amy.adams",
+            "+15195559303",
+            None,
+            None,
+            first_name="amy",
+            last_name="adams",
+        )
+        blank = self._person(
+            "blank.name",
+            "+15195559304",
+            None,
+            None,
+            first_name="",
+            last_name="",
+        )
+        compliant = self._person(
+            "pat.permanent",
+            "+15195559305",
+            PERMANENT_SIN,
+            None,
+            first_name="Pat",
+            last_name="Permanent",
+        )
+        now = timezone.now()
+        amy.date_joined = now - timedelta(days=1)
+        lower.date_joined = now - timedelta(days=5)
+        blank.date_joined = now - timedelta(days=10)
+        zoe.date_joined = now - timedelta(days=30)
+        compliant.date_joined = now
+        for user in (amy, zoe, lower, blank, compliant):
+            user.save(update_fields=["date_joined"])
+
+        wanted = {
+            amy.username,
+            zoe.username,
+            lower.username,
+            blank.username,
+        }
+
+        def usernames(**kwargs):
+            rows = build_immigration_audit(self.employer, **kwargs)["immigration_rows"]
+            return [
+                row["employee"].username
+                for row in rows
+                if row["employee"].username in wanted
+            ]
+
+        self.assertEqual(
+            usernames(sort="name"),
+            ["amy.adams", "amy.young", "zoe.young", "blank.name"],
+        )
+        self.assertEqual(
+            usernames(sort="NAME"),
+            ["amy.adams", "amy.young", "zoe.young", "blank.name"],
+        )
+        self.assertEqual(
+            usernames(sort="hired"),
+            ["amy.young", "amy.adams", "blank.name", "zoe.young"],
+        )
+        self.assertEqual(
+            usernames(sort="hired", search_query="Young"),
+            ["amy.young", "zoe.young"],
+        )
+        flagged = build_immigration_audit(
+            self.employer,
+            flagged_only=True,
+            sort="hired",
+        )["immigration_rows"]
+        flagged_names = [row["employee"].username for row in flagged]
+        self.assertNotIn("pat.permanent", flagged_names)
+        self.assertLess(
+            flagged_names.index("amy.young"),
+            flagged_names.index("zoe.young"),
+        )
+
+        missing = SimpleNamespace(
+            date_joined=None,
+            last_name="Young",
+            first_name="Zoe",
+            username="missing.date",
+            pk=blank.pk + 1,
+        )
+        present = SimpleNamespace(
+            date_joined=now,
+            last_name="Young",
+            first_name="Zoe",
+            username="has.date",
+            pk=blank.pk + 2,
+        )
+        self.assertLess(
+            _hired_sort_key(present, _audit_name_key),
+            _hired_sort_key(missing, _audit_name_key),
+        )
+
+        self.client.force_login(self.hr)
+        response = self.client.get(
+            reverse("immigration_audit_partial"),
+            {"imm_sort": "hired", "imm_q": "Young", "imm_flagged": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(">Urgency<", body)
+        self.assertIn(">Name (A-Z)<", body)
+        self.assertIn(">Date hired (newest)<", body)
+        self.assertIn(">SIN status<", body)
+        self.assertIn(">Permit status<", body)
+        self.assertIn('value="hired" selected', body)
+        self.assertIn('value="Young"', body)
+        self.assertIn("checked", body)
+        self.assertLess(body.index("Amy Young"), body.index("Zoe Young"))
+        self.assertNotIn("amy adams", body)
+        self.assertNotIn("Pat Permanent", body)

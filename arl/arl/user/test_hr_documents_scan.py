@@ -1,8 +1,11 @@
+from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from arl.documentflow.models import (
     DocumentFlow,
@@ -10,7 +13,11 @@ from arl.documentflow.models import (
     SentDocuSignEnvelope,
     SentDocuSignRecipient,
 )
-from arl.documentflow.services import build_document_audit
+from arl.documentflow.services import (
+    _employee_name_key,
+    _hired_sort_key,
+    build_document_audit,
+)
 from arl.dsign.models import DocuSignTemplate
 from arl.user.models import CustomUser, Employer, Store
 
@@ -249,6 +256,128 @@ class HRDocumentsScanTests(TestCase):
             if row["employee"].username in {"amy.user", "zoe.user"}
         ]
         self.assertEqual(ordered, ["Amy", "Zoe"])
+
+    def test_date_hired_sort_is_newest_first(self):
+        now = timezone.now()
+        older = self._person(
+            "zoe.hired",
+            "+15195550142",
+            first_name="Zoe",
+            last_name="Older",
+        )
+        newer = self._person(
+            "amy.hired",
+            "+15195550143",
+            first_name="Amy",
+            last_name="Newer",
+        )
+        blank = self._person(
+            "blank.hired",
+            "+15195550144",
+            first_name="",
+            last_name="",
+        )
+        older.date_joined = now - timedelta(days=40)
+        newer.date_joined = now - timedelta(days=2)
+        blank.date_joined = now - timedelta(days=9)
+        for user in (older, newer, blank):
+            user.save(update_fields=["date_joined"])
+
+        hired = [
+            row["employee"].username
+            for row in self._rows(sort="hired")
+            if row["employee"].username in {"zoe.hired", "amy.hired", "blank.hired"}
+        ]
+        self.assertEqual(hired, ["amy.hired", "blank.hired", "zoe.hired"])
+
+        complete = self._person(
+            "done.hired",
+            "+15195550145",
+            first_name="Done",
+            last_name="File",
+        )
+        self._envelope(complete, self.offer_step, "completed", "env-hired-offer")
+        self._envelope(complete, self.policy_step, "completed", "env-hired-policy")
+        complete.date_joined = now
+        complete.save(update_fields=["date_joined"])
+
+        filtered = [
+            row["employee"].username
+            for row in self._rows(
+                sort="Hired",
+                search_query="Newer",
+                incomplete_only=True,
+            )
+        ]
+        self.assertEqual(filtered, ["amy.hired"])
+
+        step_sort = f"step-{self.offer_step.id}"
+        self.assertEqual(
+            build_document_audit(self.employer, sort=step_sort)["audit_sort"],
+            step_sort,
+        )
+        self.assertEqual(
+            build_document_audit(self.employer, sort="nope")["audit_sort"],
+            "",
+        )
+
+        missing = SimpleNamespace(
+            date_joined=None,
+            last_name="Older",
+            first_name="Zoe",
+            username="missing.date",
+            pk=older.pk + 1,
+        )
+        present = SimpleNamespace(
+            date_joined=now,
+            last_name="Older",
+            first_name="Zoe",
+            username="has.date",
+            pk=older.pk + 2,
+        )
+        self.assertLess(
+            _hired_sort_key(present),
+            _hired_sort_key(missing),
+        )
+        missing_amy = SimpleNamespace(
+            date_joined=None,
+            last_name="Amy",
+            first_name="A",
+            username="a",
+            pk=1,
+        )
+        missing_zoe = SimpleNamespace(
+            date_joined=None,
+            last_name="Zoe",
+            first_name="A",
+            username="z",
+            pk=2,
+        )
+        self.assertLess(
+            _hired_sort_key(missing_amy),
+            _hired_sort_key(missing_zoe),
+        )
+        self.assertEqual(
+            _hired_sort_key(missing_amy)[1],
+            _employee_name_key(missing_amy),
+        )
+
+        self.client.force_login(self.hr)
+        response = self.client.get(
+            reverse("document_audit_log_partial"),
+            {"audit_sort": "hired", "audit_q": "Newer", "audit_incomplete": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(">Name (A-Z)<", body)
+        self.assertIn(">Date hired (newest)<", body)
+        self.assertIn('value="hired" selected', body)
+        self.assertIn('value="Newer"', body)
+        self.assertIn("checked", body)
+        self.assertIn("Amy Newer", body)
+        self.assertNotIn("Zoe Older", body)
+        self.assertNotIn("Done File", body)
+        self.assertIn("Offer Letter", body)
 
     def test_partial_uses_live_search_and_real_step_names(self):
         self._person(
