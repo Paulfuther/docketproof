@@ -56,6 +56,29 @@
 /* ===== Shared HR content styling ===== */
 .mobile-btn { font-size: 14px; padding: 6px 12px; border-radius: 8px; }
 
+/* iOS zooms a focused text field that computes under 16px. These searches
+   already use Bootstrap .form-control (1rem); keep them from dropping below
+   that threshold. scroll-margin clears the fixed navbar if focus scrolls. */
+#user_roles input[name="query"],
+#document_audit input[name="audit_q"] {
+  font-size: max(16px, 1rem);
+  scroll-margin-top: 4.5rem;
+  scroll-margin-bottom: 1.5rem;
+}
+
+/* overflow-x: hidden on html/body computes overflow-y to auto and makes the
+   body a scroll container. That fights the fixed navbar when the keyboard
+   opens. clip still stops sideways scroll without that scroll container. */
+@supports (overflow-x: clip) {
+  html, body {
+    overflow-x: clip;
+  }
+}
+
+html {
+  scroll-padding-top: 4.5rem;
+}
+
 .card-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 @media (min-width: 768px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 992px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }

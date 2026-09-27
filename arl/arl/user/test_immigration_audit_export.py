@@ -1,4 +1,5 @@
 import csv
+import re
 from datetime import timedelta
 from io import StringIO
 
@@ -629,6 +630,18 @@ class ImmigrationAuditExportTests(TestCase):
         self.assertIn('id="imm-list"', body)
         self.assertIn('hx-trigger="input changed delay:300ms, search"', body)
         self.assertIn('hx-target="#imm-list"', body)
+        self.assertIn('class="imm-list-wrap"', body)
+        search_css = re.search(r"\.imm-search input \{([^}]*)\}", body)
+        self.assertIsNotNone(search_css)
+        self.assertIn("font-size: max(16px, 1rem)", search_css.group(1))
+        self.assertNotIn("font-size: 14px", search_css.group(1))
+        sort_css = re.search(r"\.imm-sort select \{([^}]*)\}", body)
+        self.assertIsNotNone(sort_css)
+        self.assertIn("font-size: max(16px, 1rem)", sort_css.group(1))
+        loading_css = re.search(r"\.imm-loading \{([^}]*)\}", body)
+        self.assertIsNotNone(loading_css)
+        self.assertIn("position: absolute", loading_css.group(1))
+        self.assertIn("overflow-anchor: none", body)
         self.assertIn('value="sin" selected', body)
         self.assertIn("No employees found.", body)
         self.assertNotIn("Ada Permanent", body)

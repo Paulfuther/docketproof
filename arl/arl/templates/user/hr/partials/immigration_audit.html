@@ -94,12 +94,13 @@
     </div>
   </form>
 
-  <div id="immigration-loading" class="imm-loading" aria-live="polite">
-    <span class="imm-spinner" aria-hidden="true"></span>
-    Searching…
-  </div>
+  <div class="imm-list-wrap">
+    <div id="immigration-loading" class="imm-loading" aria-live="polite">
+      <span class="imm-spinner" aria-hidden="true"></span>
+      Searching…
+    </div>
 
-  <div class="imm-list" id="imm-list">
+    <div class="imm-list" id="imm-list">
     {% if immigration_rows %}
       <div class="imm-scan imm-scan-head">
         <span class="imm-head-employee"><span class="imm-sr">Employee</span></span>
@@ -273,6 +274,7 @@
     {% else %}
       <div class="imm-empty">No employees found.</div>
     {% endif %}
+    </div>
   </div>
 </div>
 
@@ -336,10 +338,18 @@
   outline: none;
   width: 100%;
   min-width: 0;
+  height: 1.5rem;
+  max-height: 1.5rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
   background: transparent;
   color: #1a1f36;
-  font-size: 14px;
+  /* iOS Safari/Chrome zoom the page when a focused field computes under 16px. */
+  font-size: max(16px, 1rem);
   line-height: 1.2;
+  scroll-margin-top: 4.5rem;
+  scroll-margin-bottom: 1.5rem;
 }
 
 .imm-search input::placeholder {
@@ -379,15 +389,16 @@
 }
 
 .imm-sort select {
-  height: 38px;
+  height: 42px;
   max-width: 100%;
   padding: 0 10px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #fff;
   color: #1f2937;
-  font-size: 14px;
+  font-size: max(16px, 1rem);
   font-weight: 600;
+  scroll-margin-top: 4.5rem;
 }
 
 .imm-col-sort {
@@ -457,13 +468,25 @@
   color: #1e40af;
 }
 
+.imm-list-wrap {
+  position: relative;
+  margin-top: 22px;
+}
+
 .imm-loading {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  right: 4px;
+  transform: translateY(-100%);
   display: none;
   align-items: center;
   gap: 6px;
-  margin: 8px 4px 0;
+  margin: 0;
   font-size: 12px;
+  line-height: 16px;
   color: #6b7280;
+  pointer-events: none;
 }
 
 .imm-loading.htmx-request {
@@ -484,7 +507,8 @@
 }
 
 .imm-list {
-  margin-top: 16px;
+  margin-top: 0;
+  overflow-anchor: none;
   background: #fff;
   border: 1px solid #eef1f6;
   border-radius: 16px;
