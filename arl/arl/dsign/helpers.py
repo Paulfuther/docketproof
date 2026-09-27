@@ -977,3 +977,42 @@ def get_template_signature_validation(template_id):
         return {
             "has_sign_here": False,
         }
+
+
+RESENDABLE_ENVELOPE_STATUSES = frozenset({"sent", "delivered"})
+
+
+def resend_docusign_envelope(sent_envelope):
+    """Email an in-process envelope again.
+
+    Uses EnvelopesApi.update(resend_envelope=true), the same update call
+    this module already uses to change an envelope. It does not create a
+    second envelope. Drafts, completed, declined, and voided envelopes
+    are refused.
+    """
+    status = (getattr(sent_envelope, "status", "") or "").lower()
+    envelope_id = getattr(sent_envelope, "envelope_id", "") or ""
+    if status not in RESENDABLE_ENVELOPE_STATUSES or not envelope_id:
+        raise ValueError(
+            "Only sent or delivered DocuSign envelopes can be resent."
+        )
+
+    account_id = settings.DOCUSIGN_ACCOUNT_ID
+    if not account_id:
+        raise ValueError("DocuSign account is not configured.")
+
+    access_token = get_access_token().access_token
+    api_client = create_api_client(settings.DOCUSIGN_API_CLIENT_HOST, access_token)
+    envelopes_api = EnvelopesApi(api_client)
+    envelopes_api.update(
+        account_id,
+        envelope_id,
+        envelope=Envelope(),
+        resend_envelope="true",
+    )
+    logger.info(
+        "Resent DocuSign envelope %s for user_id=%s",
+        envelope_id,
+        getattr(sent_envelope, "user_id", None),
+    )
+    return {"success": True, "envelope_id": envelope_id}

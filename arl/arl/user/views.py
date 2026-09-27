@@ -26,6 +26,7 @@ from django.http import (
     HttpResponseRedirect,
     JsonResponse,
 )
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -42,7 +43,10 @@ from twilio.rest import Client
 
 from arl.bucket.helpers import download_from_s3
 from arl.documentflow.models import DocumentFlow
-from arl.documentflow.services import build_document_audit
+from arl.documentflow.services import (
+    build_document_audit,
+    resend_employee_flow_documents,
+)
 from arl.documentflow.services_immigration import (
     build_immigration_audit,
     render_immigration_audit_csv,
@@ -1122,11 +1126,13 @@ def hr_dashboard(request):
 
     audit_search = (request.GET.get("audit_q") or "").strip()
     audit_incomplete_only = request.GET.get("audit_incomplete") == "1"
+    audit_sort = request.GET.get("audit_sort", "")
 
     document_audit_context = build_document_audit(
         employer=employer,
         search_query=audit_search,
         incomplete_only=audit_incomplete_only,
+        sort=audit_sort,
     )
     context.update(document_audit_context)
 
@@ -1211,6 +1217,72 @@ def cancel_invite(request, invite_id):
         messages.success(request, f"Invite for {invite.email} has been canceled.")
 
     return HttpResponseRedirect(reverse("hr_dashboard") + "?tab=employees")
+
+
+def _hr_document_resend_notice(employee, result):
+    name = employee.get_full_name() or employee.username
+    resent = result["resent"]
+    errors = result["errors"]
+    if resent and not errors:
+        if len(resent) == 1:
+            text = f"Resent {resent[0]} for {name}."
+        else:
+            text = f"Resent {len(resent)} documents for {name}: {', '.join(resent)}."
+        return {"tone": "ok", "text": text}
+    if resent and errors:
+        return {
+            "tone": "watch",
+            "text": (
+                f"Resent {', '.join(resent)} for {name}. "
+                f"Could not resend {errors[0][:180]}."
+            ),
+        }
+    if errors:
+        return {
+            "tone": "urgent",
+            "text": f"Could not resend documents for {name}. {errors[0][:180]}",
+        }
+    return {
+        "tone": "muted",
+        "text": (
+            f"Nothing to resend for {name}. Resend is only available for "
+            "envelopes DocuSign has already sent that are still outstanding."
+        ),
+    }
+
+
+@login_required
+@require_POST
+def resend_hr_documents(request, user_id):
+    """Resend outstanding DocuSign envelopes shown on the HR Documents list."""
+    if not _user_can_access_hr_dashboard(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    employer = request.user.employer
+    employee = CustomUser.objects.filter(
+        pk=user_id,
+        employer=employer,
+        is_active=True,
+    ).first()
+    if employee is None:
+        return HttpResponse(status=404)
+    result = resend_employee_flow_documents(
+        employer,
+        employee,
+        step_id=request.POST.get("step_id") or None,
+    )
+    context = build_document_audit(
+        employer=employer,
+        search_query=request.POST.get("audit_q", ""),
+        incomplete_only=request.POST.get("audit_incomplete") == "1",
+        sort=request.POST.get("audit_sort", ""),
+    )
+    context["resend_notice"] = _hr_document_resend_notice(employee, result)
+    return render(
+        request,
+        "documentflow/partials/document_audit_log.html",
+        context,
+    )
 
 
 @login_required
