@@ -1,0 +1,12 @@
+<div class="mb-3">
+  <label class="form-label" for="{{ field.id_for_label }}">
+    {{ field.label }}<span class="reg-required text-danger" aria-hidden="true"{% if not field.field.required and not field.field.widget.attrs.required %} hidden{% endif %}> *</span>
+  </label>
+  {{ field }}
+  {% if field.help_text %}
+    <div class="form-text">{{ field.help_text }}</div>
+  {% endif %}
+  {% for error in field.errors %}
+    <div class="invalid-feedback d-block" role="alert">{{ error }}</div>
+  {% endfor %}
+</div>

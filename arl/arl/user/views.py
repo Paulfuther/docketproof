@@ -3,7 +3,6 @@ import io
 import logging
 import mimetypes
 import os
-import traceback
 from functools import wraps
 
 import qrcode
@@ -32,7 +31,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views import View
-from django.views.generic import FormView, ListView
+from django.views.generic import ListView
 from django_celery_results.models import TaskResult
 from django_otp import user_has_device
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -59,166 +58,22 @@ from arl.msg.models import EmailTemplate
 from arl.msg.tasks import send_sms_task
 from arl.setup.helpers import employer_hr_required
 from arl.setup.models import EmployerRequest
-from arl.user.services import set_user_sin
-
 from .forms import (
-    CustomUserCreationForm,
     NewHireInviteForm,
     TwoFactorAuthenticationForm,
 )
 from .helpers import send_new_hire_invite
 from .models import CustomUser, Employer, EmployerSettings, NewHireInvite
+from .registration import RegisterView
 from .tasks import (
     create_newhire_data_email,
     notify_hr_about_departure,
-    save_user_to_db,
     send_new_hire_invite_task,
     send_newhire_template_email_task,
 )
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-
-class RegisterView(FormView):
-    template_name = "user/register.html"
-    form_class = CustomUserCreationForm
-
-    def get_unused_invite(self, token):
-        invite = get_object_or_404(NewHireInvite, token=token, used=False)
-        if invite.is_expired():
-            return None, invite
-        return invite, None
-
-    def expired_invite_response(self, request, invite):
-        return render(
-            request,
-            "user/invite_expired.html",
-            {
-                "invite": invite,
-                "expires_at": invite.expires_at,
-            },
-        )
-
-    def get(self, request, *args, **kwargs):
-        """
-        Displays the registration form only if the token is valid.
-        """
-        token = kwargs.get("token")
-        print(f"🔹 Received Token: {token}")
-        invite, expired = self.get_unused_invite(token)
-        if expired is not None:
-            return self.expired_invite_response(request, expired)
-
-        form = CustomUserCreationForm(
-            initial={
-                "email": invite.email,
-                "employer": invite.employer,
-                "phone_number": "",
-            }
-        )
-        return self.render_form(request, form, invite)
-
-    def form_valid(self, form):
-        try:
-            print(form.data)
-            token = self.kwargs.get("token")
-            invite, expired = self.get_unused_invite(token)
-            if expired is not None:
-                return self.expired_invite_response(self.request, expired)
-            verified_phone_number = self.request.POST.get("phone_number")
-            print("verified :", verified_phone_number)
-            if verified_phone_number is None:
-                raise Http404("Phone number not found in form data.")
-
-            user = form.save(commit=False)
-            user.phone_number = verified_phone_number
-            user.employer = invite.employer
-            user.save()
-
-            # 🔐 Encrypt SIN here (view owns it; form does not)
-            sin_plain = form.cleaned_data.get("sin_input")
-            if sin_plain:
-                set_user_sin(user, sin_plain, validate_luhn=True, save=True)
-
-            # Prepare safe payload (no plaintext SIN or phone verification field)
-            serialized_data = self.serialize_user_data(form.cleaned_data)
-            print(serialized_data)
-            serialized_data.pop("sin_input", None)
-            serialized_data["user_id"] = user.id
-            # Pass the serialized data as kwargs to the Celery task
-            save_user_to_db.delay(**serialized_data)
-            messages.success(
-                self.request,
-                "Thank you for registering. Check your email for a new hire file from Docusign.",
-            )
-            return redirect("home")
-
-        except Exception as e:
-            # Handle exceptions during form processing
-            print(f"An error occurred during registration: {e}")
-            traceback.print_exc()
-            messages.error(self.request, "An error occurred during registration.")
-            return redirect("home")
-
-    def form_invalid(self, form):
-        """
-        If the form is invalid, retain pre-filled values.
-        """
-        print(form.data)
-        token = self.kwargs.get("token")
-        invite, expired = self.get_unused_invite(token)
-        if expired is not None:
-            return self.expired_invite_response(self.request, expired)
-
-        # ✅ Ensure employer and phone_number persist
-        form.data = form.data.copy()  # Make form data mutable
-        form.data["employer"] = invite.employer.id  # Set employer ID
-        form.data["phone_number"] = self.request.POST.get("phone_number", "")
-        form.fields["employer"].queryset = Employer.objects.filter(
-            id=invite.employer.id
-        )
-
-        return self.render_form(self.request, form, invite)
-
-    def render_form(self, request, form, invite):
-        """✅ Fix: Helper function to render the form properly"""
-        return render(request, "user/register.html", {"form": form, "invite": invite})
-
-    def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
-
-    def serialize_user_data(self, form_data):
-        # Convert ForeignKey fields to their primary key values
-        # and serialise certain data to pass to celery.
-        form_data["employer"] = (
-            form_data["employer"].pk
-            if "employer" in form_data and form_data["employer"] is not None
-            else None
-        )
-        form_data["store"] = (
-            form_data["store"].pk
-            if "store" in form_data and form_data["store"] is not None
-            else None
-        )
-        form_data["dob"] = (
-            form_data["dob"].isoformat()
-            if "dob" in form_data and form_data["dob"] is not None
-            else None
-        )
-        form_data["sin_expiration_date"] = (
-            form_data["sin_expiration_date"].isoformat()
-            if form_data.get("sin_expiration_date") is not None
-            else None
-        )
-        form_data["work_permit_expiration_date"] = (
-            form_data["work_permit_expiration_date"].isoformat()
-            if form_data.get("work_permit_expiration_date") is not None
-            else None
-        )
-        if "phone_number" in form_data and form_data["phone_number"]:
-            form_data["phone_number"] = str(form_data["phone_number"])
-        return form_data
 
 
 # signal to trigger events post save of new use.
@@ -368,7 +223,8 @@ def handle_new_hire_registration(sender, instance, created, **kwargs):
             "province": instance.state_province,
             "postal": instance.postal,
             "country": instance.country.code if instance.country else None,
-            "sin_number": instance.sin,
+            # Registration writes the encrypted SIN only. Read it back here.
+            "sin_number": instance.sin_plain or "",
             "dob": serialize_date(instance.dob),
             "sin_expiration_date": serialize_date(instance.sin_expiration_date),
             "work_permit_expiration_date": serialize_date(

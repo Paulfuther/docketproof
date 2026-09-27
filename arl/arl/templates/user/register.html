@@ -1,172 +1,370 @@
 {% extends "../base/base.html" %}
-{% block title %}Index{% endblock %}
+{% block title %}Join Today{% endblock %}
 
 {% block template %}
-{% load static %}
 {% include "../base/navbar.html" %}
-{% load crispy_forms_tags %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Register</title>
-   
+<style>
+  .reg-card input,
+  .reg-card select,
+  .reg-card textarea,
+  .reg-card .form-control {
+    font-size: 16px !important;
+    min-height: 48px;
+  }
+  .reg-card label,
+  .reg-card .form-label {
+    font-weight: 600;
+  }
+  .reg-steps {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 0 0 1.25rem;
+    list-style: none;
+    overflow-x: auto;
+  }
+  .reg-step {
+    flex: 1 0 auto;
+    font-size: 14px;
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: #f1f3f5;
+    text-align: center;
+  }
+  .reg-step-current {
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+  }
+  .reg-step-done a,
+  .reg-step-available a {
+    color: #0a7a32;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .reg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .reg-actions .btn {
+    font-size: 16px;
+    min-height: 48px;
+    flex: 1 1 160px;
+  }
+  .reg-review dt {
+    font-weight: 600;
+    margin-top: 0.75rem;
+  }
+  .reg-review dd {
+    margin-bottom: 0;
+  }
+  /* Same 6rem offset other pages use under the fixed navbar. */
+  .reg-page {
+    margin-top: 3rem;
+    padding-top: 3rem;
+    padding-bottom: 1.5rem;
+  }
+</style>
 
-    <!-- Bootstrap & jQuery -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<div class="container reg-page">
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+      <div class="reg-card card shadow-sm">
+        <div class="card-body p-4">
+          <h1 class="h3 mb-1">Join Today</h1>
+          <p class="text-muted mb-3">New hire registration for {{ invite.employer.name }}</p>
 
-    <style>
-        
-        .input-group { display: flex; align-items: center; }
-        #phone-checkmark { display: none; font-size: 1.5em; color: green; margin-left: 10px; }
-    </style>
-</head>
+          <ol class="reg-steps">
+            {% for item in steps %}
+              <li class="reg-step reg-step-{{ item.state }}" {% if item.state == "current" %}aria-current="step"{% endif %}>
+                {% if item.url %}
+                  <a href="{{ item.url }}">{{ item.number }}. {{ item.label }}</a>
+                {% else %}
+                  <span>{{ item.number }}. {{ item.label }}</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ol>
 
-<body>
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
-                <form id="registration-form" method="post" class="was-validated">
-                    {% csrf_token %}
-                    <legend class="border-bottom mb-4">Join Today</legend>
-                    {{ form|crispy }}
+          <h2 class="h5 mb-3">{{ step_title }}</h2>
 
-                    <!-- ✅ Phone Input Field with Green Checkmark -->
-                    <div class="input-group">
-                        <input class="form-control w-50 me-2 " id="phone" type="tel" name="raw_phone_number" placeholder="Enter phone number then verify" required>
-                        <span id="phone-checkmark" class="align-self-center ms-2 d-none">✔️</span>
-                        <button type="button" class="btn btn-primary rounded-2 ms-2" id="verify-button">Verify</button>
-                    </div>
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags|default:'info' }} " role="status">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
 
-                    <!-- ✅ Hidden Formatted Phone Number Field -->
-                    <input type="hidden" id="formatted-phone" name="phone_number" value="">
-
-                    <!-- ✅ Registration Button (Initially Disabled) -->
-                    <button type="submit" id="register_button" class="btn btn-primary mt-3 mb-1" disabled>Register</button>
-                </form>
+          {% if form and form.errors %}
+            <div class="alert alert-danger" role="alert">
+              <strong>Please fix the following.</strong>
+              <ul class="mb-0 mt-2">
+                {% for field in form %}
+                  {% for error in field.errors %}
+                    <li>{{ field.label }}: {{ error }}</li>
+                  {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
             </div>
-        </div>
-    </div>
+          {% endif %}
 
-   
-
-    <!-- ✅ 2FA Code Entry Modal -->
-    <div id="enter2FAModal" class="modal fade" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Enter Verification Code</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          {% if step == "phone" %}
+            {% if phone_mode == "verified" %}
+              <div class="alert alert-success" role="status">
+                Phone verified for {{ phone_display }}.
+              </div>
+              <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="step" value="phone">
+                <div class="reg-actions">
+                  <button class="btn btn-primary" type="submit" name="action" value="continue">Continue</button>
+                  <button class="btn btn-outline-secondary" type="submit" name="action" value="change_number">Use a different number</button>
                 </div>
-                <div class="modal-body">
-                    <input type="text" id="verification-code" class="form-control" placeholder="Enter Code">
-                    <button type="button" id="submit-code" class="btn btn-success mt-2">Submit</button>
+              </form>
+            {% elif phone_mode == "code" %}
+              <p>We texted a code to <strong>{{ phone_display }}</strong>.</p>
+              <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="step" value="phone">
+                {% include "user/partials/reg_field.html" with field=form.verification_code %}
+                <div class="reg-actions">
+                  <button class="btn btn-primary" type="submit" name="action" value="verify_code">Verify code</button>
+                  <button class="btn btn-outline-secondary" type="submit" name="action" value="send_code">Text a new code</button>
+                  <button class="btn btn-outline-secondary" type="submit" name="action" value="change_number">Use a different number</button>
                 </div>
-            </div>
+              </form>
+            {% else %}
+              <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="step" value="phone">
+                {% include "user/partials/reg_field.html" with field=form.phone_number %}
+                <div class="reg-actions">
+                  <button class="btn btn-primary" type="submit" name="action" value="send_code">Text me a code</button>
+                </div>
+              </form>
+            {% endif %}
+
+          {% elif step == "you" %}
+            <p>Enter your details as they should appear on your file. If you return to this step, type your SIN and password again.</p>
+            <form method="post" novalidate>
+              {% csrf_token %}
+              <input type="hidden" name="step" value="you">
+              <div class="mb-3">
+                <div class="form-label">Email</div>
+                <div class="form-control bg-light">{{ email }}</div>
+                <div class="form-text">This is the address your invite was sent to. Ask HR if it needs to change.</div>
+              </div>
+              {% include "user/partials/reg_field.html" with field=form.first_name %}
+              {% include "user/partials/reg_field.html" with field=form.last_name %}
+              {% include "user/partials/reg_field.html" with field=form.dob %}
+              {% include "user/partials/reg_field.html" with field=form.username %}
+              {% include "user/partials/reg_field.html" with field=form.password1 %}
+              {% include "user/partials/reg_field.html" with field=form.password2 %}
+              {% include "user/partials/reg_field.html" with field=form.address %}
+              {% include "user/partials/reg_field.html" with field=form.address_two %}
+              {% include "user/partials/reg_field.html" with field=form.city %}
+              {% include "user/partials/reg_field.html" with field=form.state_province %}
+              {% include "user/partials/reg_field.html" with field=form.country %}
+              {% include "user/partials/reg_field.html" with field=form.postal %}
+              {% include "user/partials/reg_field.html" with field=form.sin_input %}
+              {% include "user/partials/reg_field.html" with field=form.sin_expiration_date %}
+              {% include "user/partials/reg_field.html" with field=form.work_permit_expiration_date %}
+              <script>
+                (function () {
+                  var sin = document.querySelector("[data-temporary-sin-input]");
+                  var dates = [
+                    {
+                      input: document.querySelector('[data-temporary-sin-date="sin"]'),
+                      message: "{{ form.TEMPORARY_SIN_EXPIRY_ERROR|escapejs }}"
+                    },
+                    {
+                      input: document.querySelector('[data-temporary-sin-date="permit"]'),
+                      message: "{{ form.TEMPORARY_SIN_PERMIT_ERROR|escapejs }}"
+                    }
+                  ];
+                  if (!sin || !dates[0].input || !dates[1].input) return;
+
+                  function digitsOnly(value) {
+                    return String(value || "").replace(/\D/g, "");
+                  }
+
+                  function isTemporary() {
+                    return digitsOnly(sin.value).charAt(0) === "9";
+                  }
+
+                  function marker(input) {
+                    var label = document.querySelector('label[for="' + input.id + '"]');
+                    return label ? label.querySelector(".reg-required") : null;
+                  }
+
+                  function errorNode(input) {
+                    var wrap = input.closest(".mb-3");
+                    if (!wrap) return null;
+                    var node = wrap.querySelector(".reg-temp-sin-error");
+                    if (!node) {
+                      node = document.createElement("div");
+                      node.className = "invalid-feedback d-block reg-temp-sin-error";
+                      node.setAttribute("role", "alert");
+                      node.hidden = true;
+                      wrap.appendChild(node);
+                    }
+                    return node;
+                  }
+
+                  function applyRequired() {
+                    var on = isTemporary();
+                    dates.forEach(function (field) {
+                      if (on) {
+                        field.input.required = true;
+                        field.input.setAttribute("aria-required", "true");
+                      } else {
+                        field.input.required = false;
+                        field.input.removeAttribute("required");
+                        field.input.removeAttribute("aria-required");
+                        field.input.removeAttribute("aria-invalid");
+                      }
+                      var star = marker(field.input);
+                      if (star) star.hidden = !on;
+                      if (!on) {
+                        var node = errorNode(field.input);
+                        if (node) node.hidden = true;
+                      }
+                    });
+                  }
+
+                  function showErrors() {
+                    var on = isTemporary();
+                    var blocked = false;
+                    dates.forEach(function (field) {
+                      var missing = on && !field.input.value;
+                      var node = errorNode(field.input);
+                      var server = field.input.closest(".mb-3").querySelector(
+                        ".invalid-feedback:not(.reg-temp-sin-error)"
+                      );
+                      var alreadyShown = server && server.textContent.indexOf(field.message) !== -1;
+                      if (node) {
+                        node.textContent = field.message;
+                        node.hidden = !missing || alreadyShown;
+                      }
+                      if (missing) {
+                        field.input.setAttribute("aria-invalid", "true");
+                        blocked = true;
+                      }
+                    });
+                    return blocked;
+                  }
+
+                  sin.addEventListener("input", applyRequired);
+                  dates.forEach(function (field) {
+                    field.input.addEventListener("input", function () {
+                      if (field.input.value) {
+                        var node = errorNode(field.input);
+                        if (node) node.hidden = true;
+                        field.input.removeAttribute("aria-invalid");
+                      }
+                    });
+                  });
+                  var form = sin.closest("form");
+                  if (form) {
+                    form.addEventListener("submit", function (event) {
+                      var submitter = event.submitter;
+                      if (submitter && submitter.value && submitter.value !== "save_you") return;
+                      applyRequired();
+                      if (showErrors()) event.preventDefault();
+                    });
+                  }
+                  applyRequired();
+                })();
+              </script>
+              <div class="reg-actions">
+                <button class="btn btn-outline-secondary" type="submit" name="action" value="back">Back</button>
+                <button class="btn btn-primary" type="submit" name="action" value="save_you">Continue</button>
+              </div>
+            </form>
+
+          {% elif step == "work" %}
+            <form method="post" novalidate>
+              {% csrf_token %}
+              <input type="hidden" name="step" value="work">
+              <dl class="reg-review mb-3">
+                <dt>Employer</dt>
+                <dd>{{ invite.employer.name }}</dd>
+                <dt>Role</dt>
+                <dd>{{ role_label }}</dd>
+              </dl>
+              {% if role_needs_store %}
+                {% if not stores_available %}
+                  <div class="alert alert-warning" role="status">
+                    This employer has no active stores yet. Ask HR to add a store, then come back to this invite.
+                  </div>
+                {% endif %}
+                {% include "user/partials/reg_field.html" with field=form.store %}
+              {% else %}
+                <p>You can add stores after you finish registering.</p>
+              {% endif %}
+              <div class="reg-actions">
+                <button class="btn btn-outline-secondary" type="submit" name="action" value="back">Back</button>
+                <button class="btn btn-primary" type="submit" name="action" value="save_work">Continue</button>
+              </div>
+            </form>
+
+          {% elif step == "confirm" and review %}
+            {% if review.store_missing %}
+              <div class="alert alert-warning" role="status">
+                Choose an active store before submitting.
+                <a href="{% url 'register' invite.token %}?step=work">Go to Work</a>
+              </div>
+            {% endif %}
+            <dl class="reg-review">
+              <dt>Phone <a href="{% url 'register' invite.token %}?step=phone">Edit</a></dt>
+              <dd>{{ review.phone }}</dd>
+              <dt>Name <a href="{% url 'register' invite.token %}?step=you">Edit</a></dt>
+              <dd>{{ review.first_name }} {{ review.last_name }}</dd>
+              <dt>Email</dt>
+              <dd>{{ review.email }}</dd>
+              <dt>Username</dt>
+              <dd>{{ review.username }}</dd>
+              <dt>Date of birth</dt>
+              <dd>{{ review.dob }}</dd>
+              <dt>Address</dt>
+              <dd>
+                {{ review.address }}{% if review.address_two %}, {{ review.address_two }}{% endif %}<br>
+                {{ review.city }}, {{ review.state_province }} {{ review.postal }}<br>
+                {{ review.country }}
+              </dd>
+              <dt>SIN</dt>
+              <dd>
+                {{ review.sin_mask }}
+                {% if review.temporary_sin %}
+                  <div class="form-text">Temporary SIN. Expiry {{ review.sin_expiration_date }}. Work permit expiry {{ review.work_permit_expiration_date }}.</div>
+                {% endif %}
+              </dd>
+              <dt>Work <a href="{% url 'register' invite.token %}?step=work">Edit</a></dt>
+              <dd>
+                {{ review.employer }} — {{ review.role }}
+                {% if review.store %}
+                  <div>Store {{ review.store.number }}{% if review.store.address %} — {{ review.store.address }}{% endif %}</div>
+                {% elif not review.needs_store %}
+                  <div>No store yet. You can add one after registering.</div>
+                {% endif %}
+              </dd>
+            </dl>
+            <form method="post" novalidate>
+              {% csrf_token %}
+              <input type="hidden" name="step" value="confirm">
+              <div class="reg-actions">
+                <button class="btn btn-outline-secondary" type="submit" name="action" value="back">Back</button>
+                <button class="btn btn-primary" type="submit" name="action" value="submit">Submit registration</button>
+              </div>
+            </form>
+          {% endif %}
         </div>
+      </div>
     </div>
-</body>
-</html>
-
-<script>
-$(document).ready(function () {
-    let csrfToken = "{{ csrf_token }}";
-
-    // ✅ 1️⃣ Format Phone Number & Check Uniqueness
-    $("#verify-button").click(function () {
-        let rawphoneNumber = $("#phone").val().trim();
-        if (!rawphoneNumber) { alert("⚠️ Please enter a phone number."); return; }
-
-        // ✅ Step 1: Format Phone Number
-        $.ajax({
-            url: "{% url 'phone_format' %}",
-            type: "GET",
-            data: { phone_number: rawphoneNumber },
-            headers: { "X-CSRFToken": csrfToken },
-            success: function (response) {
-                let formattedNumber = response.formatted_phone_number;
-                $("#formatted-phone").val(formattedNumber);  // Store formatted number
-                $("#phone-checkmark").show();  // Show green checkmark
-                checkPhoneNumberUnique(formattedNumber);
-            },
-            error: function () { alert("🚨 Invalid phone number format."); }
-        });
-    });
-
-    // ✅ 2️⃣ Check if Phone Number is Unique
-    function checkPhoneNumberUnique(phoneNumber) {
-        $.ajax({
-            url: "{% url 'check_phone_number_unique' %}",
-            type: "POST",
-            data: { phone_number: phoneNumber },
-            headers: { "X-CSRFToken": csrfToken },
-            success: function (response) {
-                if (response.exists) {
-                    alert("⚠️ This phone number is already registered.");
-                    $("#phone-checkmark").hide(); // Hide checkmark if not unique
-                } else {
-                    $("#request2FAModal").modal("show");  // Show modal
-                    sendVerificationCode(phoneNumber);
-                }
-            },
-            error: function () { alert("🚨 Error checking phone uniqueness."); }
-        });
-    }
-
-    // ✅ 3️⃣ Send Twilio 2FA Verification Code
-    function sendVerificationCode(phoneNumber) {
-        $.ajax({
-            url: "/request-verification/",
-            type: "POST",
-            data: { phone_number: phoneNumber },
-            headers: { "X-CSRFToken": csrfToken },
-            success: function (response) {
-                if (response.success) {
-                    $("#enter2FAModal").modal("show");  // Show verification modal
-                } else {
-                    alert("🚨 Failed to send verification code.");
-                }
-            },
-            error: function () { alert("🚨 Error sending verification code."); }
-        });
-    }
-
-    // ✅ 4️⃣ Check Verification Code via Twilio
-    $("#submit-code").click(function () {
-        let phoneNumber = $("#formatted-phone").val();
-        let code = $("#verification-code").val().trim();
-        console.log("Sending phone number:", phoneNumber);
-        console.log("Sending verification code:", code);
-        if (!code) { alert("⚠️ Please enter the verification code."); return; }
-
-        $.ajax({
-            url: "/check-verification/",
-            type: "POST",
-            data: { phone_number: phoneNumber, verification_code: code },
-            headers: { "X-CSRFToken": csrfToken },
-            success: function (response) {
-                if (response.success) {
-                    alert("✅ Verification successful!");
-                    $("#register_button").prop("disabled", false);  // Enable Register button
-                    $("#enter2FAModal").modal("hide");  // Close modal
-                } else {
-                    alert("🚨 Invalid verification code.");
-                }
-            },
-            error: function () { alert("🚨 Error verifying code."); }
-        });
-    });
-});
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        let employerField = document.querySelector("#id_employer");
-        if (employerField) {
-            employerField.setAttribute("disabled", "disabled"); // Disable selection
-        }
-    });
-</script>
+  </div>
+</div>
 {% endblock %}
