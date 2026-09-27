@@ -279,7 +279,10 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn("font-size: max(16px, 1rem)", body)
         self.assertIn("max-width: 767.98px", body)
         self.assertIn("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)", body)
+        self.assertIn("justify-self: stretch", body)
+        self.assertNotIn("Resend outstanding documents", body)
         self.assertIn(reverse("resend_hr_documents", args=[sent_user.pk]), body)
+        self.assertIn(f'"step_id": "{self.offer_step.id}"', body)
         self.assertNotIn(
             reverse(
                 "resend_hr_documents",
@@ -320,9 +323,17 @@ class HRDocumentsScanTests(TestCase):
         sent = self._envelope(user, self.offer_step, "sent", "env-resend-offer")
         self._envelope(user, self.policy_step, "completed", "env-resend-policy")
         self.client.force_login(self.hr)
-        response = self.client.post(
+        bulk = self.client.post(
             reverse("resend_hr_documents", args=[user.pk]),
             {"audit_q": "", "audit_sort": ""},
+        )
+        self.assertEqual(bulk.status_code, 200)
+        mock_resend.assert_not_called()
+        self.assertContains(bulk, "Nothing to resend")
+
+        response = self.client.post(
+            reverse("resend_hr_documents", args=[user.pk]),
+            {"audit_q": "", "audit_sort": "", "step_id": self.offer_step.id},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_resend.call_count, 1)

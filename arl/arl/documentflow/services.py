@@ -429,12 +429,15 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
 
 
 def resend_employee_flow_documents(employer, employee, step_id=None):
-    """Resend the envelopes this scan list is showing.
+    """Resend one sent or delivered envelope.
 
-    Only sent and delivered envelopes are included. A step that was
-    never sent has no DocuSign envelope to resend.
+    step_id is required. A missing step does not resend every outstanding
+    document for the employee.
     """
     from arl.dsign.helpers import resend_docusign_envelope
+
+    if step_id in (None, ""):
+        return {"resent": [], "errors": []}
 
     audit = build_document_audit(employer)
     steps = []
@@ -443,8 +446,7 @@ def resend_employee_flow_documents(employer, employee, step_id=None):
             steps = row["steps"]
             break
 
-    if step_id not in (None, ""):
-        steps = [step for step in steps if str(step["step_id"]) == str(step_id)]
+    steps = [step for step in steps if str(step["step_id"]) == str(step_id)]
 
     resent = []
     errors = []

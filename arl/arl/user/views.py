@@ -1254,7 +1254,7 @@ def _hr_document_resend_notice(employee, result):
 @login_required
 @require_POST
 def resend_hr_documents(request, user_id):
-    """Resend outstanding DocuSign envelopes shown on the HR Documents list."""
+    """Resend one DocuSign envelope chosen from HR Documents details."""
     if not _user_can_access_hr_dashboard(request.user):
         return HttpResponseForbidden("Not allowed.")
 
