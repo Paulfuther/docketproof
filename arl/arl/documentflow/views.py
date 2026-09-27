@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import render
 
-from .services import build_document_audit
+from .services import build_document_audit, sort_param_or_date_hired
 
 
 def _can_view_hr_documents(user):
@@ -21,7 +21,7 @@ def document_audit_log_partial(request):
         employer=request.user.employer,
         search_query=request.GET.get("audit_q", ""),
         incomplete_only=request.GET.get("audit_incomplete") == "1",
-        sort=request.GET.get("audit_sort", ""),
+        sort=sort_param_or_date_hired(request.GET, "audit_sort"),
     )
     return render(
         request,
