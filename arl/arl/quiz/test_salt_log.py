@@ -430,11 +430,26 @@ class SaltLogPathAndTemplateTests(SimpleTestCase):
         self.assertNotIn("previewsContainer: null", text)
         self.assertNotIn("createImageThumbnails: false", text)
         self.assertIn("thumbnailMethod: \"contain\"", text)
-        self.assertIn("object-fit: contain", text)
+        self.assertIn("thumbnailWidth: 160", text)
+        self.assertIn("object-fit: contain !important", text)
+        self.assertIn('id="salt-photo-lightbox"', text)
+        self.assertIn("data-salt-photo", text)
         self.assertIn(".dz-success-mark", text)
         self.assertNotIn("object-fit: cover", text)
         self.assertNotIn('enctype="multipart/form-data"', text)
         self.assertNotIn("image_folder", text)
+
+    def test_pdf_template_embeds_photos_at_full_aspect(self):
+        template = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "quiz"
+            / "salt_log_form_pdf.html"
+        )
+        text = template.read_text()
+        self.assertIn("height: auto", text)
+        self.assertNotIn("object-fit: cover", text)
+        self.assertNotIn("height: 100px", text)
 
     def test_dead_hardcoded_pdf_view_is_gone(self):
         import arl.quiz.views as quiz_views

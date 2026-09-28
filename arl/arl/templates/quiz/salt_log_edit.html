@@ -54,15 +54,23 @@
     border-radius: 12px;
     background: #f8f9fa;
   }
-  .salt-thumb,
+  .salt-thumb-btn {
+    padding: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    line-height: 0;
+    cursor: zoom-in;
+  }
+  .salt-edit img.salt-thumb,
   .salt-edit .dz-preview .dz-image img {
     width: 160px;
     height: 110px;
-    object-fit: contain;
+    max-width: 160px;
+    object-fit: contain !important;
     object-position: center;
     background: #fff;
     border-radius: 8px;
-    border: 1px solid #dee2e6;
   }
   .salt-edit .dz-preview .dz-image {
     width: 160px;
@@ -75,6 +83,46 @@
     width: 100%;
     height: 100%;
     border: 0;
+  }
+  .salt-edit .dz-preview:hover .dz-image img {
+    transform: none !important;
+    filter: none !important;
+  }
+  .salt-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, .82);
+  }
+  .salt-lightbox[hidden] {
+    display: none !important;
+  }
+  .salt-lightbox img {
+    max-width: min(960px, 92vw);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    object-fit: contain !important;
+    object-position: center;
+    background: #fff;
+    border-radius: 8px;
+  }
+  .salt-lightbox-close {
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
   }
   .salt-edit .dz-success-mark,
   .salt-edit .dz-error-mark {
@@ -207,9 +255,11 @@
         {% if existing_images %}
           <div class="mb-3">
             <div class="form-label">Photos already saved</div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2" id="salt-saved-photos">
               {% for image_url in existing_images %}
-                <img class="salt-thumb" src="{{ image_url }}" alt="Salt log photo">
+                <button type="button" class="salt-thumb-btn" data-salt-photo="{{ image_url }}" aria-label="Open saved photo">
+                  <img class="salt-thumb" src="{{ image_url }}" alt="Salt log photo">
+                </button>
               {% endfor %}
             </div>
           </div>
@@ -230,6 +280,44 @@
     </div>
   </div>
 </div>
+
+{% if existing_images %}
+<div id="salt-photo-lightbox" class="salt-lightbox" hidden>
+  <button type="button" class="salt-lightbox-close" aria-label="Close photo">&times;</button>
+  <img id="salt-lightbox-img" alt="Salt log photo">
+</div>
+<script>
+  (function () {
+    const box = document.getElementById('salt-photo-lightbox');
+    const img = document.getElementById('salt-lightbox-img');
+    if (!box || !img) return;
+
+    function openPhoto(src) {
+      img.src = src;
+      box.hidden = false;
+    }
+
+    function closePhoto() {
+      box.hidden = true;
+      img.removeAttribute('src');
+    }
+
+    document.querySelectorAll('[data-salt-photo]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openPhoto(btn.getAttribute('data-salt-photo'));
+      });
+    });
+    box.addEventListener('click', function (event) {
+      if (event.target === box || event.target.closest('.salt-lightbox-close')) {
+        closePhoto();
+      }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !box.hidden) closePhoto();
+    });
+  })();
+</script>
+{% endif %}
 
 {% if editable %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script>
@@ -395,6 +483,8 @@
           maxFiles: 8,
           acceptedFiles: "image/*",
           headers: { "X-CSRFToken": csrfToken() },
+          thumbnailWidth: 160,
+          thumbnailHeight: 110,
           thumbnailMethod: "contain",
           init: function () {
             this.on("sending", function (file, xhr, formData) {
