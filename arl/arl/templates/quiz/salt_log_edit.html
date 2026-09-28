@@ -1,0 +1,384 @@
+{% extends "../base/base.html" %}
+{% block title %}Salt log{% endblock %}
+
+{% block template %}
+{% include "../base/navbar.html" %}
+
+<style>
+  .salt-edit input,
+  .salt-edit select,
+  .salt-edit textarea,
+  .salt-edit button {
+    font-size: 16px;
+  }
+  .answer-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .answer-pills input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .answer-pills label {
+    margin: 0;
+    min-width: 4.5rem;
+    padding: .55rem 1rem;
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    background: #fff;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+  }
+  .answer-pills input:checked + label[data-value="yes"] {
+    background: #198754;
+    border-color: #198754;
+    color: #fff;
+  }
+  .answer-pills input:checked + label[data-value="no"] {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+  }
+  .salt-exception {
+    border: 1px solid #f1aeb5;
+    background: #fff5f5;
+    border-radius: .5rem;
+    padding: .75rem;
+  }
+  .salt-dropzone {
+    min-height: 140px;
+    border: 2px dashed #0d6efd;
+    border-radius: 12px;
+    background: #f8f9fa;
+  }
+  .salt-thumb {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+  }
+  .field-error {
+    color: #dc3545;
+    font-size: .85rem;
+    font-weight: 600;
+    margin-top: .25rem;
+  }
+</style>
+
+<div class="container salt-edit">
+  <div class="pt-5 mt-4"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6">
+
+      {% if messages %}
+        <div class="mb-2">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div id="autosave-status" class="text-muted small mb-2" style="display:none;"></div>
+      <legend class="mb-2">
+        {% if editable %}Salt log{% else %}Salt log · {{ salt_log.get_status_display }}{% endif %}
+      </legend>
+      <p class="text-muted small mb-2">
+        Started {{ salt_log.hidden_timestamp|date:"Y-m-d H:i" }}
+        {% if salt_log.user %}by {{ salt_log.user.get_full_name|default:salt_log.user }}{% endif %}
+        {% if salt_log.submitted_at %}
+          · Submitted {{ salt_log.submitted_at|date:"Y-m-d H:i" }}
+          {% if salt_log.submitted_by %}by {{ salt_log.submitted_by.get_full_name|default:salt_log.submitted_by }}{% endif %}
+        {% endif %}
+        {% if salt_log.updated_at %}· Updated {{ salt_log.updated_at|date:"Y-m-d H:i" }}{% endif %}
+      </p>
+      {% if salt_log.pdf_path %}
+        <p class="small mb-2"><strong>PDF:</strong> {{ salt_log.pdf_path }}</p>
+      {% endif %}
+
+      <div class="d-flex gap-2 mb-3">
+        <a href="{% url 'salt_log_list' %}" class="btn btn-sm btn-outline-primary">Back to salt logs</a>
+      </div>
+
+      {% if form.errors %}
+        <div class="alert alert-danger" id="salt-log-error-summary" role="alert">
+          <strong>Please fix the errors below.</strong>
+          <ul class="mb-0 mt-2">
+            {% for field in form %}
+              {% for error in field.errors %}
+                <li>{{ field.label }}: {{ error }}</li>
+              {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form id="salt-log-edit-form" method="post" action="{% url 'salt_log_edit' pk=salt_log.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" id="salt-log-form-action" value="save">
+
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.store.id_for_label }}">Store</label>
+          {{ form.store }}
+          {% for error in form.store.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.area_salted.id_for_label }}">Area salted</label>
+          {{ form.area_salted }}
+          {% for error in form.area_salted.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="row">
+          <div class="col-12 col-sm-6 mb-3">
+            <label class="form-label" for="{{ form.date_salted.id_for_label }}">Date salted</label>
+            {{ form.date_salted }}
+            {% for error in form.date_salted.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-12 col-sm-6 mb-3">
+            <label class="form-label" for="{{ form.time_salted.id_for_label }}">Time salted</label>
+            {{ form.time_salted }}
+            {% for error in form.time_salted.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="form-label">Were salt levels OK?</div>
+          <div class="answer-pills" id="levels-pills">
+            {% for radio in form.levels_ok %}
+              {{ radio.tag }}
+              <label for="{{ radio.id_for_label }}" data-value="{{ radio.choice_value }}">{{ radio.choice_label }}</label>
+            {% endfor %}
+          </div>
+          {% for error in form.levels_ok.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div id="salt-exception" class="salt-exception mb-3 {% if not show_exception %}d-none{% endif %}">
+          <div class="fw-semibold mb-2">Exception — levels were not OK</div>
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.exception_what.id_for_label }}">What was wrong</label>
+            {{ form.exception_what }}
+            {% for error in form.exception_what.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.exception_who.id_for_label }}">Who was told</label>
+            {{ form.exception_who }}
+            {% for error in form.exception_who.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="mb-0">
+            <label class="form-label" for="{{ form.exception_when.id_for_label }}">When it was reported</label>
+            {{ form.exception_when }}
+            {% for error in form.exception_when.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {% if existing_images %}
+          <div class="mb-3">
+            <div class="form-label">Photos already saved</div>
+            <div class="d-flex flex-wrap gap-2">
+              {% for image_url in existing_images %}
+                <img class="salt-thumb" src="{{ image_url }}" alt="Salt log photo">
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if editable %}
+          <div class="mb-3">
+            <div class="form-label">Evidence photos</div>
+            <p class="text-muted small mb-2">Pictures only. Photos upload on their own, then the form can be saved.</p>
+            <div class="salt-dropzone" id="salt-dropzone"></div>
+          </div>
+          <div class="d-grid gap-2 mb-4">
+            <button type="submit" class="btn btn-outline-primary" name="action" value="save" data-action="save">Save draft</button>
+            <button type="submit" class="btn btn-primary" name="action" value="submit" data-action="submit">Submit salt log</button>
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if editable %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script>
+<script>
+  (function () {
+    const form = document.getElementById('salt-log-edit-form');
+    if (!form) return;
+
+    const actionInput = document.getElementById('salt-log-form-action');
+    const statusEl = document.getElementById('autosave-status');
+    const actionUrl = form.getAttribute('action') || window.location.href;
+    const AUTOSAVE_URL = actionUrl + (actionUrl.includes('?') ? '&' : '?') + 'autosave=1';
+    let saveTimer = null;
+    let inflight = false;
+    let pending = false;
+    let nativeFallback = false;
+
+    function csrfToken() {
+      const el = form.querySelector('[name="csrfmiddlewaretoken"]');
+      if (el && el.value) return el.value;
+      const cookies = (document.cookie || '').split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.indexOf('csrftoken=') === 0) {
+          return decodeURIComponent(cookie.substring('csrftoken='.length));
+        }
+      }
+      return null;
+    }
+
+    function saltLogFormData(actionValue) {
+      const fd = new FormData(form);
+      fd.delete('action');
+      fd.set('action', actionValue || (actionInput && actionInput.value) || 'save');
+      if (typeof File !== 'undefined') {
+        const keys = [];
+        fd.forEach((value, key) => {
+          if (value instanceof File) keys.push(key);
+        });
+        keys.forEach((key) => fd.delete(key));
+      }
+      return fd;
+    }
+
+    function syncException() {
+      const selected = form.querySelector('input[name="levels_ok"]:checked');
+      const panel = document.getElementById('salt-exception');
+      if (!panel) return;
+      panel.classList.toggle('d-none', !(selected && selected.value === 'no'));
+    }
+    form.querySelectorAll('input[name="levels_ok"]').forEach((el) => {
+      el.addEventListener('change', syncException);
+    });
+
+    function showSavedAt(ts) {
+      if (!statusEl) return;
+      statusEl.style.display = '';
+      statusEl.textContent = 'Draft auto-saved ' + new Date(ts).toLocaleTimeString();
+    }
+
+    async function doAutosave() {
+      if (inflight) {
+        pending = true;
+        return;
+      }
+      inflight = true;
+      pending = false;
+      try {
+        const token = csrfToken();
+        const headers = {
+          'X-Requested-With': 'XMLHttpRequest',
+          ...(token ? {'X-CSRFToken': token} : {})
+        };
+        const resp = await fetch(AUTOSAVE_URL, {
+          method: 'POST',
+          body: saltLogFormData('save'),
+          headers,
+          credentials: 'same-origin',
+          redirect: 'manual'
+        });
+        if (resp.ok) {
+          const data = await resp.json().catch(() => null);
+          if (data && data.ok) showSavedAt(data.saved_at || Date.now());
+        }
+      } catch (e) {
+        // A missed autosave can be retried. Submit still posts the form.
+      } finally {
+        inflight = false;
+        if (pending) doAutosave();
+      }
+    }
+
+    const onChange = () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(doAutosave, 1500);
+    };
+    form.querySelectorAll('input, textarea, select').forEach((el) => {
+      el.addEventListener('input', onChange, { passive: true });
+      el.addEventListener('change', onChange, { passive: true });
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') doAutosave();
+    });
+    window.addEventListener('pagehide', () => doAutosave());
+
+    form.querySelectorAll('button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (actionInput) actionInput.value = btn.dataset.action || 'save';
+      });
+    });
+
+    form.addEventListener('submit', async (event) => {
+      if (nativeFallback) return;
+      event.preventDefault();
+      clearTimeout(saveTimer);
+      const submitter = event.submitter;
+      const actionValue =
+        (submitter && submitter.getAttribute('data-action')) ||
+        (actionInput && actionInput.value) ||
+        'save';
+      if (actionInput) actionInput.value = actionValue;
+      const token = csrfToken();
+      form.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.disabled = true;
+      });
+      try {
+        const resp = await fetch(actionUrl, {
+          method: 'POST',
+          body: saltLogFormData(actionValue),
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? {'X-CSRFToken': token} : {})
+          },
+          credentials: 'same-origin',
+          redirect: 'follow'
+        });
+        const dest = resp.url || actionUrl;
+        const here = window.location.href.split('#')[0];
+        if (dest.split('#')[0] !== here) {
+          window.location.href = dest;
+          return;
+        }
+        const html = await resp.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (e) {
+        nativeFallback = true;
+        form.querySelectorAll('button[data-action]').forEach((btn) => {
+          btn.disabled = false;
+        });
+        form.submit();
+      }
+    });
+
+    if (window.Dropzone) {
+      Dropzone.autoDiscover = false;
+      const zone = document.getElementById('salt-dropzone');
+      if (zone) {
+        new Dropzone(zone, {
+          url: "{% url 'salt_log_upload' %}",
+          maxFilesize: 8,
+          maxFiles: 8,
+          acceptedFiles: "image/*",
+          headers: { "X-CSRFToken": csrfToken() },
+          init: function () {
+            this.on("sending", function (file, xhr, formData) {
+              formData.append("salt_log", "{{ salt_log.pk }}");
+            });
+          }
+        });
+      }
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

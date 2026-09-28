@@ -3,9 +3,6 @@ from django.urls import path
 from . import views
 from .views import (
     ProcessSaltLogImagesView,
-    SaltLogCreateView,
-    SaltLogListView,
-    SaltLogUpdateView,
     UploadChecklistItemPhotoView,
 )
 
@@ -13,9 +10,13 @@ urlpatterns = [
     path("list/", views.quiz_list, name="quiz_list"),
     path("create/", views.create_quiz, name="create_quiz"),
     path("take/<int:quiz_id>/", views.take_quiz, name="take_quiz"),
-    path("create-salt-log/", SaltLogCreateView.as_view(), name="create_salt_log"),
-    path("incident/<int:pk>/", SaltLogUpdateView.as_view(), name="salt_log_update"),
-    path("salt-log-list/", SaltLogListView.as_view(), name="salt_log_list"),
+    path("salt-logs/", views.salt_log_dashboard, name="salt_log_list"),
+    path("salt-logs/start/", views.salt_log_start, name="create_salt_log"),
+    path("salt-logs/<int:pk>/edit/", views.salt_log_edit, name="salt_log_edit"),
+    # Older bookmarks. Same employer-scoped edit page.
+    path("create-salt-log/", views.salt_log_start, name="create_salt_log_legacy"),
+    path("salt-log-list/", views.salt_log_dashboard, name="salt_log_list_legacy"),
+    path("incident/<int:pk>/", views.salt_log_edit, name="salt_log_update"),
     path(
         "log-process-images/",
         ProcessSaltLogImagesView.as_view(),
@@ -52,6 +53,4 @@ urlpatterns = [
         views.checklist_report_html,
         name="checklist_report_html",
     ),
-    # path('saltlog-pdf/', views.generate_salt_log_pdf,
-    #     name='generate_saltlog_pdf'),
 ]

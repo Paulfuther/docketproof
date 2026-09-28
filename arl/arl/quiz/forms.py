@@ -1,13 +1,8 @@
 import json
-import random
-import string
 
-import pytz
 from django import forms
 from django.forms import inlineformset_factory
 from django.forms.models import BaseInlineFormSet
-from django.utils import timezone
-from django.utils.text import slugify
 
 # checks/forms.py
 from .models import (
@@ -59,54 +54,168 @@ AnswerFormSet = inlineformset_factory(
 
 
 class SaltLogForm(forms.ModelForm):
-    image_folder = forms.CharField(
-        widget=forms.TextInput(attrs={"style": "display:none;"})
-    )
+    """One create/edit form. Draft saves skip submit rules.
 
-    date_salted = forms.DateField(
-        widget=forms.DateInput(attrs={"type": "date"}), disabled=True
-    )
-    time_salted = forms.TimeField(
-        widget=forms.TimeInput(attrs={"type": "time"}), disabled=True
-    )
+    Store choices are limited to the signed-in user's employer.
+    User and employer are not form fields, so a post cannot reassign them.
+    """
 
     class Meta:
         model = SaltLog
-        fields = "__all__"
+        fields = [
+            "store",
+            "area_salted",
+            "date_salted",
+            "time_salted",
+            "levels_ok",
+            "exception_what",
+            "exception_who",
+            "exception_when",
+        ]
+        widgets = {
+            "area_salted": forms.TextInput(attrs={"class": "form-control"}),
+            "exception_what": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "form-control",
+                    "placeholder": "What was wrong with the salt level?",
+                }
+            ),
+            "exception_who": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Who was told?",
+                }
+            ),
+        }
 
-    def generate_random_folder(self):
-        return "".join(random.choices(string.ascii_letters + string.digits, k=10))
-
-    def create_folder(self, instance):
-        if not instance.image_folder:
-            slug = slugify(instance.area_salted)[:50]
-            random_string = self.generate_random_folder()
-            folder_name = f"{slug}-{random_string}"
-            instance.image_folder = folder_name
-
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None)
+    def __init__(self, *args, user=None, validate_submit=False, **kwargs):
+        self.user = user
+        self.validate_submit = validate_submit
         super().__init__(*args, **kwargs)
 
-        # Set date_salted and time_salted to the current date and time, and disable them
-        if self.instance.pk is None:  # Only set these for new entries
-            current_datetime = timezone.now().astimezone(
-                pytz.timezone("America/New_York")
-            )
-            self.fields["date_salted"].initial = current_datetime.date()
-            self.fields["time_salted"].initial = current_datetime.time()
+        employer = getattr(user, "employer", None)
+        if employer is None:
+            store_qs = Store.objects.none()
+        else:
+            store_qs = Store.objects.filter(employer=employer).order_by("number")
+        self.fields["store"].queryset = store_qs
+        self.fields["store"].required = False
+        self.fields["store"].empty_label = "Select a store…"
+        self.fields["store"].widget.attrs.setdefault("class", "form-select")
 
-            # Set initial value for image_folder if it’s a new entry
-            self.create_folder(self.instance)
-            self.fields["image_folder"].initial = self.instance.image_folder
-            self.instance.user = user  # Set user on instance directly
+        self.fields["area_salted"].required = False
+        self.fields["area_salted"].label = "Area salted"
 
-        if user:
-            self.fields["user_employer"].initial = self.get_user_employer(user)
-            self.fields["user_employer"].disabled = True
+        self.fields["date_salted"].required = False
+        self.fields["date_salted"].label = "Date salted"
+        self.fields["date_salted"].widget = forms.DateInput(
+            attrs={"type": "date", "class": "form-control"},
+            format="%Y-%m-%d",
+        )
+        self.fields["date_salted"].input_formats = ["%Y-%m-%d"]
 
-    def get_user_employer(self, user):
-        return user.employer
+        self.fields["time_salted"].required = False
+        self.fields["time_salted"].label = "Time salted"
+        self.fields["time_salted"].widget = forms.TimeInput(
+            attrs={"type": "time", "class": "form-control"},
+            format="%H:%M",
+        )
+        self.fields["time_salted"].input_formats = ["%H:%M", "%H:%M:%S"]
+
+        current = ""
+        if self.instance is not None and getattr(self.instance, "pk", None):
+            if self.instance.levels_ok is True:
+                current = "yes"
+            elif self.instance.levels_ok is False:
+                current = "no"
+        self.fields["levels_ok"] = forms.ChoiceField(
+            label="Were salt levels OK?",
+            choices=(("yes", "Yes"), ("no", "No")),
+            widget=forms.RadioSelect(attrs={"class": "levels-radio"}),
+            required=False,
+            initial=current,
+        )
+        # ModelForm copied the boolean onto form.initial before this field
+        # existed. The radios need "yes" / "no" / "".
+        self.initial["levels_ok"] = current
+
+        self.fields["exception_what"].required = False
+        self.fields["exception_what"].label = "What was wrong"
+        self.fields["exception_who"].required = False
+        self.fields["exception_who"].label = "Who was told"
+        self.fields["exception_when"].required = False
+        self.fields["exception_when"].label = "When it was reported"
+        self.fields["exception_when"].widget = forms.DateTimeInput(
+            attrs={
+                "type": "datetime-local",
+                "class": "form-control",
+                "step": "60",
+            },
+            format="%Y-%m-%dT%H:%M",
+        )
+        self.fields["exception_when"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+        ]
+
+    def clean_area_salted(self):
+        return (self.cleaned_data.get("area_salted") or "").strip()
+
+    def clean_exception_what(self):
+        return (self.cleaned_data.get("exception_what") or "").strip()
+
+    def clean_exception_who(self):
+        return (self.cleaned_data.get("exception_who") or "").strip()
+
+    def clean_levels_ok(self):
+        value = self.cleaned_data.get("levels_ok")
+        if value in ("", None):
+            return None
+        if value == "yes":
+            return True
+        if value == "no":
+            return False
+        raise forms.ValidationError("Choose yes or no.")
+
+    def clean_store(self):
+        store = self.cleaned_data.get("store")
+        employer = getattr(self.user, "employer", None)
+        if (
+            store is not None
+            and employer is not None
+            and store.employer_id != employer.id
+        ):
+            raise forms.ValidationError("Select a store for your company.")
+        return store
+
+    def clean(self):
+        cleaned = super().clean()
+        if not self.validate_submit:
+            return cleaned
+        if "store" not in self.errors and not cleaned.get("store"):
+            self.add_error("store", "Select a store.")
+        if "area_salted" not in self.errors and not cleaned.get("area_salted"):
+            self.add_error("area_salted", "Enter the area salted.")
+        if "date_salted" not in self.errors and not cleaned.get("date_salted"):
+            self.add_error("date_salted", "Enter the date salted.")
+        if "time_salted" not in self.errors and not cleaned.get("time_salted"):
+            self.add_error("time_salted", "Enter the time salted.")
+        if "levels_ok" not in self.errors and cleaned.get("levels_ok") is None:
+            self.add_error("levels_ok", "Say whether salt levels were OK.")
+        elif cleaned.get("levels_ok") is False:
+            if "exception_what" not in self.errors and not cleaned.get(
+                "exception_what"
+            ):
+                self.add_error("exception_what", "Say what was wrong.")
+            if "exception_who" not in self.errors and not cleaned.get("exception_who"):
+                self.add_error("exception_who", "Say who was told.")
+            if "exception_when" not in self.errors and not cleaned.get(
+                "exception_when"
+            ):
+                self.add_error("exception_when", "Say when it was reported.")
+        return cleaned
 
 
 class ChecklistTemplateForm(forms.ModelForm):

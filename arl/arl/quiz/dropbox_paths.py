@@ -34,3 +34,24 @@ def build_checklist_dropbox_path(checklist, store_segment, when=None):
         f"/{year}/{month}"
     )
     return f"{folder_path}/{filename}", checklist_folder
+
+
+def build_salt_log_dropbox_path(salt_log, store_segment, when=None):
+    """
+    /SALTLOGS/{company}/salt-log/{store}/{year}/{month}/{filename}.pdf
+
+    Same shape as checklists, under SALTLOGS. Does not move older PDFs
+    that were stored as /SALTLOGS/{company}/{year}/{month}/{store}/….
+    """
+    company_name = (
+        slugify(getattr(getattr(salt_log, "user_employer", None), "name", "") or "")
+        or "no-company"
+    )
+    when = when or datetime.now()
+    year = when.strftime("%Y")
+    month = when.strftime("%m-%B")
+    folder = "salt-log"
+    filename = f"{store_segment}_salt-log-{salt_log.pk}.pdf"
+    return (
+        f"/SALTLOGS/{company_name}/{folder}/{store_segment}/{year}/{month}/{filename}"
+    )
