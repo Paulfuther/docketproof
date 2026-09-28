@@ -582,13 +582,17 @@ class SaltLogAdmin(admin.ModelAdmin):
     list_display = (
         "store",
         "user",
+        "user_employer",
         "area_salted",
+        "status",
         "date_salted",
         "time_salted",
         "hidden_timestamp",
+        "submitted_at",
     )
-    list_filter = ("store", "date_salted")
-    search_fields = ("store__name", "area_salted")
+    list_filter = ("status", "user_employer", "date_salted")
+    search_fields = ("area_salted", "user__username", "user__first_name", "pdf_path")
+    readonly_fields = ("hidden_timestamp", "updated_at", "pdf_path")
 
 
 @admin.register(CarwashStatus)

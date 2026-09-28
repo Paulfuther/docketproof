@@ -25,7 +25,10 @@ from arl.quiz.action_plan_delivery import (
     checklist_splits_action_plan,
     email_pdf_to_employer_group,
 )
-from arl.quiz.dropbox_paths import build_checklist_dropbox_path
+from arl.quiz.dropbox_paths import (
+    build_checklist_dropbox_path,
+    build_salt_log_dropbox_path,
+)
 from arl.quiz.models import Checklist, SaltLog
 from arl.quiz.store_address import store_report_context
 from arl.user.models import CustomUser, Employer, Store
@@ -57,8 +60,14 @@ def save_salt_log(**kwargs):
         kwargs["store"] = store_instance
         kwargs["user_employer"] = user_employer_instance
         kwargs["user"] = user_instance
-        # Save the form data to the database
+        # In-flight jobs from the old create page are finished logs, not drafts.
+        kwargs.setdefault("status", SaltLog.STATUS_SUBMITTED)
         saltlog = SaltLog.objects.create(**kwargs)
+        if saltlog.status != SaltLog.STATUS_DRAFT:
+            try:
+                generate_salt_log_pdf_task.delay(saltlog.id)
+            except Exception as exc:
+                logger.error("Could not queue salt log PDF: %s", exc)
 
         return {
             "incident_store": saltlog.id,
@@ -93,8 +102,18 @@ def generate_salt_log_pdf_task(incident_id):
             incident.image_folder, incident.user_employer
         )
 
-        # Prepare the context for rendering the PDF
-        context = {"incident": incident, "images": images}
+        if incident.levels_ok is True:
+            levels_label = "Yes"
+        elif incident.levels_ok is False:
+            levels_label = "No"
+        else:
+            levels_label = "—"
+        context = {
+            "incident": incident,
+            "images": images,
+            "levels_label": levels_label,
+            "levels_exception": incident.levels_ok is False,
+        }
         html_content = render_to_string("quiz/salt_log_form_pdf.html", context)
 
         # Generate the PDF using pdfkit
@@ -106,33 +125,11 @@ def generate_salt_log_pdf_task(incident_id):
         pdf = pdfkit.from_string(html_content, False, pdf_options)
         pdf_buffer = BytesIO(pdf)  # Create a BytesIO object to store the PDF content
 
-        # Generate a unique filename
-        store_number = incident.store.number
-        date_salted_str = (
-            incident.date_salted.strftime("%Y-%m-%d")
-            if incident.date_salted
-            else "no-date"
-        )
-        time_str = (
-            incident.time_salted.strftime("%H%M") if incident.time_salted else "no-time"
-        )
-        image_folder = incident.image_folder
-        pdf_filename = (
-            f"{store_number}_{slugify(date_salted_str)}_"
-            f"{time_str}_{image_folder}_salt_log_report.pdf"
-        )
-
-        # Define folder structure parameters
-        company_name = slugify(incident.user_employer.name)
-        store_name = slugify(incident.store.number)
-        current_year = datetime.now().strftime("%Y")
-        current_month = datetime.now().strftime("%m-%B")
-        folder_path = (
-            f"/SALTLOGS/{company_name}/" f"{current_year}/{current_month}/{store_name}"
-        )
-
-        # Define the full file path
-        full_file_path = f"{folder_path}/{pdf_filename}"
+        store_label = None
+        if getattr(incident, "store", None):
+            store_label = getattr(incident.store, "number", None)
+        store_segment = slugify(str(store_label or "no-store")) or "no-store"
+        full_file_path = build_salt_log_dropbox_path(incident, store_segment)
 
         # Upload the file using the helper function
         upload_result = master_upload_file_to_dropbox(
@@ -141,14 +138,20 @@ def generate_salt_log_pdf_task(incident_id):
 
         pdf_buffer.seek(0)  # Reset buffer position
 
-        # Log or return the upload result
-        if upload_result[0]:
-            return {
-                "status": "success",
-                "message": "PDF generated and uploaded successfully",
-            }
-        else:
+        if not upload_result[0]:
             raise Exception(upload_result[1])
+
+        incident.pdf_path = full_file_path
+        update_fields = ["pdf_path"]
+        if incident.status == SaltLog.STATUS_SUBMITTED:
+            incident.status = SaltLog.STATUS_COMPLETED
+            update_fields.append("status")
+        incident.save(update_fields=update_fields)
+        return {
+            "status": "success",
+            "message": "PDF generated and uploaded successfully",
+            "path": full_file_path,
+        }
 
     except SaltLog.DoesNotExist:
         error_msg = f"SaltLog with ID {incident_id} does not exist."

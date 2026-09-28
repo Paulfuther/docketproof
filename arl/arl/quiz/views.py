@@ -4,11 +4,13 @@ import uuid
 from io import BytesIO
 from uuid import uuid4
 
+import pytz
 from arl.helpers import (
     get_s3_images_for_salt_log,
     get_signed_url_for_key,
     upload_to_linode_object_storage,
 )
+from arl.user.models import Store
 from arl.utils.images import normalize_to_jpeg
 from celery.result import AsyncResult
 from django.contrib import messages
@@ -17,16 +19,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views import View
-from django.views.generic import CreateView, UpdateView, View
-from django.views.generic.list import ListView
 from PIL import Image, ImageOps, UnidentifiedImageError
 from waffle import flag_is_active
 
@@ -47,7 +44,6 @@ from .tasks import (
     generate_checklist_pdf_task,
     generate_fresh_checklist_pdf,
     generate_salt_log_pdf_task,
-    save_salt_log,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,65 +143,8 @@ def take_quiz(request, quiz_id):
     )
 
 
-class SaltLogCreateView(LoginRequiredMixin, CreateView):
-    model = SaltLog
-    form_class = SaltLogForm
-    template_name = "quiz/salt_log_form.html"
-    success_url = reverse_lazy("home")
-
-    def dispatch(self, request, *args, **kwargs):
-        print("Dispatch method called.")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        # Pass the user to the form to initialize certain fields
-        kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user
-        return kwargs
-
-    def get(self, request, *args, **kwargs):
-        # Initialize the form with the user instance passed to the form
-        form = self.form_class(user=self.request.user)
-        return self.render_to_response({"form": form})
-
-    def form_valid(self, form):
-        # Set the user and user_employer fields for the form instance
-        form.instance.user = self.request.user
-        form.instance.user_employer = self.request.user.employer
-        print(form.instance.user, form.instance.user_employer)
-        # Serialize form data to pass to the Celery task
-        form_data = self.serialize_form_data(form.cleaned_data)
-
-        # Trigger the Celery task to save form data
-        save_salt_log.delay(**form_data)
-
-        # Show a success message
-        messages.success(self.request, "Salt Log Added.")
-
-        return redirect("home")
-
-    def form_invalid(self, form):
-        # Render the form again with validation errors
-        print(form.errors)
-        return self.render_to_response({"form": form})
-
-    def serialize_form_data(self, form_data):
-        # Convert ForeignKey fields to their primary key values
-        form_data["store"] = (
-            form_data["store"].pk
-            if "store" in form_data and form_data["store"] is not None
-            else None
-        )
-        form_data["user_employer"] = (
-            form_data["user_employer"].pk
-            if "user_employer" in form_data and form_data["user_employer"] is not None
-            else None
-        )
-        form_data["user"] = self.request.user.pk  # Add the user's ID for task
-        return form_data
-
-
-# Accept only basic image mimes that browsers/cameras send commonly
+# Photos stay under the historical Linode prefix SALTLOG/{employer}/{folder}/.
+# Dropzone posts salt_log (the row pk). The client folder name is ignored.
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
     "image/jpg",
@@ -213,38 +152,240 @@ ALLOWED_CONTENT_TYPES = {
     "image/heic",
     "image/heif",
     "image/webp",
+    "application/octet-stream",
+    "",
 }
+MAX_SALT_IMAGE_BYTES = 8 * 1024 * 1024
+EASTERN = pytz.timezone("America/New_York")
 
 
-def _sanitize_folder(s: str) -> str:
-    # keep it simple: strip spaces, remove path traversal, collapse weird chars
-    s = (s or "").strip().strip("/").replace("..", "")
-    # optional: further restrict to safe chars
-    return "".join(ch for ch in s if ch.isalnum() or ch in ("-", "_", "/"))
+def _sanitize_folder(value: str) -> str:
+    value = (value or "").strip().strip("/").replace("..", "")
+    return "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_", "/"))
+
+
+def salt_logs_for_user(user):
+    employer = getattr(user, "employer", None)
+    if employer is None:
+        return SaltLog.objects.none()
+    return SaltLog.objects.filter(user_employer=employer)
+
+
+def _stores_for_user(user):
+    employer = getattr(user, "employer", None)
+    if employer is None:
+        return Store.objects.none()
+    return Store.objects.filter(employer=employer).order_by("number")
+
+
+def _eastern_now():
+    current = timezone.now().astimezone(EASTERN)
+    return current.date(), current.time().replace(microsecond=0)
+
+
+@login_required
+def salt_log_dashboard(request):
+    """Open drafts, submitted, and completed salt logs for this employer."""
+    q = (request.GET.get("q") or "").strip()
+    store_filter = (request.GET.get("store") or "").strip()
+    logs = salt_logs_for_user(request.user).select_related(
+        "store", "user", "submitted_by"
+    )
+    if q:
+        text = Q(area_salted__icontains=q)
+        if q.isdigit():
+            text |= Q(store__number=int(q))
+        logs = logs.filter(text)
+    if store_filter.isdigit():
+        logs = logs.filter(store_id=int(store_filter))
+
+    return render(
+        request,
+        "quiz/salt_log_list.html",
+        {
+            "q": q,
+            "store_filter": store_filter,
+            "stores": _stores_for_user(request.user),
+            "drafts": logs.filter(status=SaltLog.STATUS_DRAFT),
+            "submitted": logs.filter(status=SaltLog.STATUS_SUBMITTED),
+            "completed": logs.filter(status=SaltLog.STATUS_COMPLETED),
+        },
+    )
+
+
+@login_required
+def salt_log_start(request):
+    """Create the draft in this request so photos have a row to attach to."""
+    employer = getattr(request.user, "employer", None)
+    if employer is None:
+        messages.error(
+            request, "Your account has no company. Ask an admin to set one."
+        )
+        return redirect("salt_log_list")
+
+    date_salted, time_salted = _eastern_now()
+    salt_log = SaltLog(
+        user=request.user,
+        user_employer=employer,
+        status=SaltLog.STATUS_DRAFT,
+        date_salted=date_salted,
+        time_salted=time_salted,
+    )
+    salt_log.ensure_image_folder()
+    salt_log.save()
+    return redirect("salt_log_edit", pk=salt_log.pk)
+
+
+def _salt_log_images(salt_log):
+    if not salt_log.image_folder or not salt_log.user_employer_id:
+        return []
+    return (
+        get_s3_images_for_salt_log(salt_log.image_folder, salt_log.user_employer) or []
+    )
+
+
+def _lock_salt_form(form):
+    for field in form.fields.values():
+        field.disabled = True
+
+
+@login_required
+def salt_log_edit(request, pk):
+    salt_log = get_object_or_404(salt_logs_for_user(request.user), pk=pk)
+    editable = salt_log.status == SaltLog.STATUS_DRAFT
+
+    if request.method == "POST":
+        is_autosave = request.GET.get("autosave") == "1"
+        action = "save" if is_autosave else (request.POST.get("action") or "save")
+        if not editable:
+            if is_autosave:
+                return JsonResponse(
+                    {"ok": False, "error": "Already submitted"}, status=409
+                )
+            messages.error(request, "This salt log is already submitted.")
+            return redirect("salt_log_list")
+
+        form = SaltLogForm(
+            request.POST,
+            instance=salt_log,
+            user=request.user,
+            validate_submit=(not is_autosave) and action == "submit",
+        )
+        if form.is_valid():
+            saved = form.save(commit=False)
+            if not saved.user_id:
+                saved.user = request.user
+            saved.user_employer = request.user.employer
+            saved.ensure_image_folder()
+            if action == "submit":
+                saved.status = SaltLog.STATUS_SUBMITTED
+                saved.submitted_by = request.user
+                saved.submitted_at = timezone.now()
+            saved.save()
+
+            if is_autosave:
+                return JsonResponse(
+                    {"ok": True, "saved_at": timezone.now().isoformat()}
+                )
+
+            if action == "submit":
+                try:
+                    generate_salt_log_pdf_task.delay(saved.id)
+                    messages.success(
+                        request, "Salt log submitted. PDF generation started."
+                    )
+                except Exception as exc:
+                    messages.error(
+                        request,
+                        f"Salt log submitted, but PDF task failed to queue: {exc}",
+                    )
+                return redirect("salt_log_list")
+
+            messages.success(request, "Draft saved.")
+            return redirect("salt_log_edit", pk=saved.pk)
+
+        if is_autosave:
+            return JsonResponse({"ok": False, "errors": form.errors}, status=422)
+    else:
+        form = SaltLogForm(instance=salt_log, user=request.user)
+
+    if not editable:
+        _lock_salt_form(form)
+
+    levels_value = form["levels_ok"].value()
+    show_exception = levels_value in ("no", False) or bool(
+        form["exception_what"].errors
+        or form["exception_who"].errors
+        or form["exception_when"].errors
+    )
+    return render(
+        request,
+        "quiz/salt_log_edit.html",
+        {
+            "salt_log": salt_log,
+            "form": form,
+            "editable": editable,
+            "existing_images": _salt_log_images(salt_log),
+            "show_exception": show_exception,
+        },
+    )
 
 
 class ProcessSaltLogImagesView(LoginRequiredMixin, View):
+    """Dropzone endpoint. The salt log row must already exist."""
+
     login_url = "/login/"
 
     def post(self, request, *args, **kwargs):
-        user = request.user
-        employer = user.employer
+        employer = getattr(request.user, "employer", None)
+        if employer is None:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Account misconfigured. Please contact support.",
+                },
+                status=403,
+            )
 
-        # Dropzone sends 'file' (one per request by default; can be many if uploadMultiple=true)
         uploaded_files = request.FILES.getlist("file")
         if not uploaded_files:
             return JsonResponse({"ok": False, "error": "No files received"}, status=400)
 
-        raw_folder = request.POST.get("image_folder", "")
-        image_folder = _sanitize_folder(raw_folder) or "misc"
-        base_prefix = f"SALTLOG/{employer}/{image_folder}"
+        salt_log_id = request.POST.get("salt_log") or request.POST.get("salt_log_id")
+        if not salt_log_id:
+            return JsonResponse({"ok": False, "error": "Missing salt log"}, status=400)
+
+        salt_log = salt_logs_for_user(request.user).filter(pk=salt_log_id).first()
+        if salt_log is None:
+            return JsonResponse({"ok": False, "error": "Not found"}, status=404)
+        if salt_log.status != SaltLog.STATUS_DRAFT:
+            return JsonResponse(
+                {"ok": False, "error": "Salt log is not a draft"}, status=409
+            )
+
+        if not salt_log.image_folder:
+            salt_log.ensure_image_folder()
+            salt_log.save(update_fields=["image_folder"])
+
+        folder = _sanitize_folder(salt_log.image_folder) or "misc"
+        # Same prefix get_s3_images_for_salt_log lists, so older photos stay visible.
+        base_prefix = f"SALTLOG/{salt_log.user_employer}/{folder}"
 
         results = []
         for uploaded in uploaded_files:
             try:
-                # Basic content-type guard (client-supplied but useful)
+                if getattr(uploaded, "size", 0) > MAX_SALT_IMAGE_BYTES:
+                    results.append(
+                        {
+                            "name": uploaded.name,
+                            "ok": False,
+                            "error": "File too large (max 8MB).",
+                        }
+                    )
+                    continue
+
                 ctype = (uploaded.content_type or "").lower()
-                if ctype and ctype not in ALLOWED_CONTENT_TYPES:
+                if ctype not in ALLOWED_CONTENT_TYPES:
                     results.append(
                         {
                             "name": uploaded.name,
@@ -254,152 +395,39 @@ class ProcessSaltLogImagesView(LoginRequiredMixin, View):
                     )
                     continue
 
-                # Open and normalize
                 img = Image.open(uploaded)
-
-                # Autorotate by EXIF orientation (no-op if none)
                 try:
                     img = ImageOps.exif_transpose(img)
                 except Exception:
-                    # ignore EXIF issues — keep going
                     pass
-
-                # Convert to RGB so we can save as JPEG
                 if img.mode not in ("RGB", "L"):
                     img = img.convert("RGB")
-
-                # Resize in-place keeping aspect ratio (max 1500px)
                 img.thumbnail((1500, 1500), Image.LANCZOS)
 
-                # Encode as JPEG (progressive helps size; tune quality as you like)
                 buf = BytesIO()
                 img.save(
                     buf, format="JPEG", quality=85, optimize=True, progressive=True
                 )
                 buf.seek(0)
-
-                # Always use a unique filename and .jpg extension (since we encoded JPEG)
-                unique_name = f"{uuid4().hex}.jpg"
-                key = f"{base_prefix}/{unique_name}"
-
-                # Your helper likely takes a file-like and a key
+                key = f"{base_prefix}/{uuid4().hex}.jpg"
                 upload_to_linode_object_storage(buf, key)
-
                 results.append({"name": uploaded.name, "ok": True, "key": key})
                 buf.close()
                 img.close()
-            except Exception as e:
+            except Exception as exc:
                 results.append(
                     {
                         "name": getattr(uploaded, "name", "?"),
                         "ok": False,
-                        "error": str(e),
+                        "error": str(exc),
                     }
                 )
 
-        # Consider overall success only if at least one succeeded
-        any_success = any(r.get("ok") for r in results)
+        any_success = any(item.get("ok") for item in results)
         status_code = 200 if any_success else 400
-        return JsonResponse({"ok": any_success, "results": results}, status=status_code)
-
-
-class SaltLogListView(LoginRequiredMixin, ListView):
-    model = SaltLog
-    template_name = "quiz/salt_log_list.html"
-    context_object_name = "saltlogs"
-
-    def get_queryset(self):
-        # Filter salt logs by the current user's employer
-        return SaltLog.objects.filter(user_employer=self.request.user.employer)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["defer_render"] = True
-        return context
-
-
-class SaltLogUpdateView(LoginRequiredMixin, UpdateView):
-    model = SaltLog
-    login_url = "/login/"
-    form_class = SaltLogForm
-    template_name = "quiz/salt_log_form_update.html"
-    success_url = reverse_lazy("salt_log_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        try:
-            # Your print statement for debugging
-            print("Dispatch method called.")
-            return super().dispatch(request, *args, **kwargs)
-        except Exception as e:
-            print(f"Exception occurred: {e}")
-            raise
-
-    def get(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        user = self.request.user
-        employer = user.employer
-        existing_images = []
-
-        # Check if image_folder exists and get available images from S3
-        if self.object.image_folder:
-            existing_images = get_s3_images_for_salt_log(
-                self.object.image_folder, user.employer
-            )
-        print(existing_images)
-        form = self.form_class(
-            instance=self.object, initial={"existing_images": existing_images}
+        return JsonResponse(
+            {"ok": any_success, "results": results}, status=status_code
         )
-        form.fields["user_employer"].initial = employer
-
-        return self.render_to_response(
-            self.get_context_data(
-                form=form, existing_images=existing_images, user_employer=employer
-            )
-        )
-
-    def form_valid(self, form):
-        # print(form)
-        form.instance.user_employer = self.request.user.employer
-        return super().form_valid(form)
-
-    def form_invalid(self, form):
-        return self.render_to_response(self.get_context_data(form=form))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["user"] = self.request.user
-        return context
-
-
-# this route is turned off in the urls.
-
-
-def generate_salt_log_pdf(request):
-    # Fetch the SaltLog with incident_id = 1
-    incident = get_object_or_404(SaltLog, pk=23)
-    images = get_s3_images_for_salt_log(incident.image_folder, incident.user_employer)
-
-    # Attempt to trigger the PDF generation task
-    try:
-        generate_salt_log_pdf_task.delay(incident.id)
-        messages.success(request, "PDF generation task initiated successfully.")
-    except Exception as e:
-        messages.error(request, f"An error occurred while generating the PDF: {e}")
-
-    context = {
-        "incident": incident,
-        "images": images,
-    }
-    return render(request, "quiz/salt_log_form_pdf.html", context)
-
-
-@receiver(post_save, sender=SaltLog)
-def handle_new_incident_form_creation(sender, instance, created, **kwargs):
-    if created:
-        try:
-            generate_salt_log_pdf_task.delay(instance.id)
-        except Exception as e:
-            print(f"An error occurred: {e}")
 
 
 @login_required
