@@ -49,6 +49,61 @@ class ActionPlanSplitRulesTests(SimpleTestCase):
             self.assertTrue(checklist_splits_action_plan(checklist), name)
             self.assertFalse(checklist_pdf_shows_action_plan(checklist), name)
 
+    def test_security_assessment_title_splits(self):
+        """Live Site Security template is named Security Assessment."""
+        for name in (
+            "Security Assessment",
+            "security-assessment",
+            "SECURITY_ASSESSMENT",
+        ):
+            checklist = self._checklist(name, title="Store 12 walk")
+            self.assertTrue(checklist_splits_action_plan(checklist), name)
+            self.assertFalse(checklist_pdf_shows_action_plan(checklist), name)
+
+        by_title = self._checklist("Weekly walk", title="Security Assessment")
+        self.assertTrue(checklist_splits_action_plan(by_title))
+
+        by_document = self._checklist("Weekly walk", document_id="ENMCCL007")
+        self.assertTrue(checklist_splits_action_plan(by_document))
+        by_document_slug = self._checklist("Weekly walk", document_id="enmccl007")
+        self.assertTrue(checklist_splits_action_plan(by_document_slug))
+
+    def test_template_flag_and_template_items_split_without_submitted_rows(self):
+        flagged = SimpleNamespace(
+            name="Fall Winter Exterior Checklist",
+            document_id="",
+            split_action_plan_delivery=True,
+            items=[],
+        )
+        self.assertTrue(
+            checklist_splits_action_plan(
+                SimpleNamespace(title="Walk", template=flagged, items=[])
+            )
+        )
+
+        from_template_items = SimpleNamespace(
+            name="Custom walk",
+            document_id="",
+            split_action_plan_delivery=False,
+            items=[SimpleNamespace(action_plan_form="ENMCDS840-6.4")],
+        )
+        self.assertTrue(
+            checklist_splits_action_plan(
+                SimpleNamespace(title="Walk", template=from_template_items, items=[])
+            )
+        )
+        other_form = SimpleNamespace(
+            name="Custom walk",
+            document_id="",
+            split_action_plan_delivery=False,
+            items=[SimpleNamespace(action_plan_form="LOCAL-6.4")],
+        )
+        self.assertTrue(
+            checklist_splits_action_plan(
+                SimpleNamespace(title="Walk", template=other_form, items=[])
+            )
+        )
+
     def test_document_id_and_6_4_form_id_split_even_with_a_generic_name(self):
         by_document = self._checklist("Custom walk", document_id="enmcds840-6.3")
         self.assertTrue(checklist_splits_action_plan(by_document))
@@ -559,3 +614,36 @@ class ChecklistEmployerEmailTests(SimpleTestCase):
             )
         self.assertFalse(sent)
         send.assert_not_called()
+
+
+class SplitActionPlanFlagMigrationTests(TestCase):
+    def test_marks_security_assessment_and_workplace_inspection(self):
+        import importlib
+
+        from django.apps import apps
+
+        migration = importlib.import_module(
+            "arl.quiz.migrations.0008_checklisttemplate_split_action_plan_delivery"
+        )
+
+        security = ChecklistTemplate.objects.create(name="Security Assessment")
+        by_document = ChecklistTemplate.objects.create(
+            name="Weekly walk",
+            document_id="ENMCCL007",
+        )
+        inspection = ChecklistTemplate.objects.create(
+            name="Workplace Inspection Checklist (BC & ON)",
+        )
+        other = ChecklistTemplate.objects.create(name="Fall Winter Exterior Checklist")
+        ChecklistTemplate.objects.update(split_action_plan_delivery=False)
+
+        migration.enable_split_action_plan_delivery(apps, None)
+
+        security.refresh_from_db()
+        by_document.refresh_from_db()
+        inspection.refresh_from_db()
+        other.refresh_from_db()
+        self.assertTrue(security.split_action_plan_delivery)
+        self.assertTrue(by_document.split_action_plan_delivery)
+        self.assertTrue(inspection.split_action_plan_delivery)
+        self.assertFalse(other.split_action_plan_delivery)

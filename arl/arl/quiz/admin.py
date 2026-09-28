@@ -118,10 +118,12 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
     list_display = (
         "name",
         "document_id",
+        "split_action_plan_delivery",
         "is_active",
         "created_by",
         "created_at",
     )
+    list_filter = ("split_action_plan_delivery", "is_active")
     search_fields = ("name", "document_id", "parent_sop")
     inlines = [ChecklistTemplateItemInline]
     change_list_template = "admin/quiz/checklisttemplate/change_list.html"

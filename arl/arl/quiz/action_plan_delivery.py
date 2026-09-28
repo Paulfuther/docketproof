@@ -1,15 +1,16 @@
 """Split 6.4 action-plan delivery from the checklist PDF.
 
-Site Security, Workplace Security, and the related BC/ON workplace
-inspection keep today's checklist email and Dropbox upload. The action
-plan is a second PDF, a second upload beside that file, and a second
-email to the action_plan_email role.
+Site Security, the live Security Assessment template, Workplace Security,
+and the BC/ON workplace inspection keep today's checklist email and
+Dropbox upload. The action plan is a second PDF, a second upload beside
+that file, and a second email to the action_plan_email role.
 """
 
 import logging
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils.text import slugify
 
 from arl.quiz.dropbox_paths import (
     build_checklist_dropbox_path,
@@ -26,31 +27,77 @@ CHECKLIST_SENDGRID_TEMPLATE = "d-7e7eb87381b04ef59bc39abc16550ead"
 MAX_ATTACH_BYTES = 15_500_000
 
 # ENMCDS840-6.3 is the Workplace Inspection Checklist (BC & ON).
-# Its items point at the 6.4 Site Security Action Plan Form.
-SPLIT_DOCUMENT_IDS = {"ENMCDS840-6.3"}
+# ENMCCL007 is the live Security Assessment (Site Security) document.
+# Their items point at the 6.4 Site Security Action Plan Form.
+SPLIT_DOCUMENT_IDS = {"ENMCDS840-6.3", "ENMCCL007"}
 SPLIT_FORM_IDS = {"ENMCDS840-6.4"}
 SPLIT_NAME_MARKERS = (
     "site security",
     "workplace security",
     "workplace inspection",
+    "security assessment",
 )
 
 
+def _slug_key(value) -> str:
+    """Slug used for name and document matches. Underscores become spaces first."""
+    return slugify(str(value or "").replace("_", " "))
+
+
+def _name_requests_split(name) -> bool:
+    """Match a marker in the raw name or in its slug (security-assessment)."""
+    folded = (name or "").casefold()
+    slugged = _slug_key(name)
+    for marker in SPLIT_NAME_MARKERS:
+        if marker in folded:
+            return True
+        marker_slug = _slug_key(marker)
+        if marker_slug and marker_slug in slugged:
+            return True
+    return False
+
+
+def _document_id_requests_split(document_id) -> bool:
+    raw = (document_id or "").strip().upper()
+    if raw in SPLIT_DOCUMENT_IDS:
+        return True
+    slugged = _slug_key(document_id)
+    return bool(slugged) and slugged in {_slug_key(doc) for doc in SPLIT_DOCUMENT_IDS}
+
+
+def _form_id_requests_split(form_id) -> bool:
+    form_id = (form_id or "").strip().upper()
+    return bool(form_id) and (form_id in SPLIT_FORM_IDS or form_id.endswith("-6.4"))
+
+
+def _related_rows(value):
+    if value is None:
+        return []
+    if hasattr(value, "all"):
+        return value.all()
+    return value
+
+
 def checklist_splits_action_plan(checklist) -> bool:
-    """True when submit should deliver a separate 6.4 action-plan PDF."""
+    """True when submit should deliver a separate 6.4 action-plan PDF.
+
+    The template flag wins when it is on. Otherwise the name, document id,
+    template items, and submitted rows can still request a split.
+    """
     template = getattr(checklist, "template", None)
+    if template is not None and getattr(template, "split_action_plan_delivery", False):
+        return True
     names = (
         (getattr(template, "name", None) or ""),
         (getattr(checklist, "title", None) or ""),
     )
-    for name in names:
-        folded = name.casefold()
-        if any(marker in folded for marker in SPLIT_NAME_MARKERS):
-            return True
-    document_id = (getattr(template, "document_id", None) or "").strip().upper()
-    if document_id in SPLIT_DOCUMENT_IDS:
+    if any(_name_requests_split(name) for name in names):
         return True
-    return _items_use_action_plan_form(checklist)
+    if _document_id_requests_split(getattr(template, "document_id", None)):
+        return True
+    if _template_items_use_action_plan_form(template):
+        return True
+    return _submitted_items_use_action_plan_form(checklist)
 
 
 def checklist_pdf_shows_action_plan(checklist) -> bool:
@@ -58,17 +105,25 @@ def checklist_pdf_shows_action_plan(checklist) -> bool:
     return not checklist_splits_action_plan(checklist)
 
 
-def _items_use_action_plan_form(checklist) -> bool:
+def _template_items_use_action_plan_form(template) -> bool:
+    """6.4 on the template definition, even when this submission has no rows."""
+    if template is None:
+        return False
+    for item in _related_rows(getattr(template, "items", None)):
+        if _form_id_requests_split(getattr(item, "action_plan_form", None)):
+            return True
+    return False
+
+
+def _submitted_items_use_action_plan_form(checklist) -> bool:
     items = getattr(checklist, "items", None)
     if items is None:
         return False
     if hasattr(items, "select_related"):
         items = items.select_related("template_item")
-    for item in items:
+    for item in _related_rows(items):
         template_item = getattr(item, "template_item", None)
-        form_id = (getattr(template_item, "action_plan_form", None) or "").strip()
-        form_id = form_id.upper()
-        if form_id in SPLIT_FORM_IDS or form_id.endswith("-6.4"):
+        if _form_id_requests_split(getattr(template_item, "action_plan_form", None)):
             return True
     return False
 
