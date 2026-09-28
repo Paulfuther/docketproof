@@ -154,7 +154,7 @@
           <div class="answer-pills" id="levels-pills">
             {% for radio in form.levels_ok %}
               {{ radio.tag }}
-              <label for="{{ radio.id_for_label }}" data-value="{{ radio.choice_value }}">{{ radio.choice_label }}</label>
+              <label for="{{ radio.id_for_label }}" data-value="{{ radio.data.value }}">{{ radio.choice_label }}</label>
             {% endfor %}
           </div>
           {% for error in form.levels_ok.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
@@ -370,6 +370,8 @@
           maxFiles: 8,
           acceptedFiles: "image/*",
           headers: { "X-CSRFToken": csrfToken() },
+          previewsContainer: null,
+          createImageThumbnails: false,
           init: function () {
             this.on("sending", function (file, xhr, formData) {
               formData.append("salt_log", "{{ salt_log.pk }}");

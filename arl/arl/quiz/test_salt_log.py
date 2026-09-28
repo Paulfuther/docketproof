@@ -426,6 +426,9 @@ class SaltLogPathAndTemplateTests(SimpleTestCase):
         self.assertIn("data.ok", text)
         self.assertIn("salt_log_upload", text)
         self.assertIn('formData.append("salt_log"', text)
+        self.assertIn('data-value="{{ radio.data.value }}"', text)
+        self.assertIn("previewsContainer: null", text)
+        self.assertIn("createImageThumbnails: false", text)
         self.assertNotIn('enctype="multipart/form-data"', text)
         self.assertNotIn("image_folder", text)
 
