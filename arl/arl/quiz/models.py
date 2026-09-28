@@ -41,19 +41,79 @@ class Answer(models.Model):
 
 
 class SaltLog(models.Model):
+    """Salt application log.
+
+    Drafts are saved in the request that opens the edit page so photos can
+    upload before submit. Existing rows stay on their Linode folder names.
+    """
+
+    STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
+    STATUS_COMPLETED = "completed"
+    STATUS = (
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_SUBMITTED, "Submitted"),
+        (STATUS_COMPLETED, "Completed (PDF generated)"),
+    )
+
     user = models.ForeignKey(
         CustomUser, null=True, on_delete=models.CASCADE, related_name="salt_log"
     )
-    store = models.ForeignKey("user.Store", on_delete=models.CASCADE)
-    area_salted = models.CharField(max_length=255)
-    date_salted = models.DateField(null=True)
-    time_salted = models.TimeField(null=True)  # Add time field
+    store = models.ForeignKey(
+        "user.Store", on_delete=models.CASCADE, null=True, blank=True
+    )
+    area_salted = models.CharField(max_length=255, blank=True)
+    date_salted = models.DateField(null=True, blank=True)
+    time_salted = models.TimeField(null=True, blank=True)
     hidden_timestamp = models.DateTimeField(auto_now_add=True)
-    image_folder = models.CharField(max_length=255, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    image_folder = models.CharField(max_length=255, null=True, blank=True)
     user_employer = models.ForeignKey(Employer, on_delete=models.SET_NULL, null=True)
+    status = models.CharField(
+        max_length=20, choices=STATUS, default=STATUS_DRAFT, db_index=True
+    )
+    submitted_by = models.ForeignKey(
+        CustomUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submitted_salt_logs",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    levels_ok = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            "True when salt levels were acceptable. "
+            "False opens the exception path (what, who, when)."
+        ),
+    )
+    exception_what = models.TextField(blank=True)
+    exception_who = models.CharField(max_length=255, blank=True)
+    exception_when = models.DateTimeField(null=True, blank=True)
+    pdf_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Dropbox path of the submitted PDF. Older PDFs stay where they were.",
+    )
+
+    class Meta:
+        ordering = ["-hidden_timestamp"]
 
     def __str__(self):
-        return f"Salt Log {self.pk} for {self.user.first_name} {self.user.last_name}"
+        who = "unknown"
+        if self.user_id:
+            name = f"{self.user.first_name} {self.user.last_name}".strip()
+            who = name or str(self.user)
+        return f"Salt Log {self.pk} for {who}"
+
+    def ensure_image_folder(self):
+        """Keep an existing Linode folder. Only new drafts get a folder name."""
+        if self.image_folder:
+            return self.image_folder
+        slug = slugify(self.area_salted or "")[:40] or "salt"
+        self.image_folder = f"{slug}-{uuid.uuid4().hex[:10]}"
+        return self.image_folder
 
 
 def checklist_photo_upload_to(instance, filename):

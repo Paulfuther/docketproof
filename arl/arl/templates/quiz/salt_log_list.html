@@ -1,84 +1,91 @@
 {% extends "../base/base.html" %}
-{% block title %}Index{% endblock %}
+{% block title %}Salt logs{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
-{% load crispy_forms_tags %}
-{{ form|as_crispy_errors }}
 
-<head>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" type="text/css"
-        href="https://cdn.datatables.net/v/dt/jq-3.6.0/jszip-2.5.0/dt-1.12.1/b-2.2.3/b-html5-2.2.3/b-print-2.2.3/r-2.3.0/datatables.min.css" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/pdfmake.min.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/vfs_fonts.js"></script>
-    <script type="text/javascript"
-        src="https://cdn.datatables.net/v/dt/jq-3.6.0/jszip-2.5.0/dt-1.12.1/b-2.2.3/b-html5-2.2.3/b-print-2.2.3/r-2.3.0/datatables.min.js"></script>
+<style>
+  .salt-menu input,
+  .salt-menu select,
+  .salt-menu button {
+    font-size: 16px;
+  }
+</style>
 
-</head>
+<div class="container salt-menu">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
 
-<body>
-    <div class="container mb-2" style="height: 95vh;">
-        <div class="row justify-content-center pt-5 mt-5"></div>
-        <div class="row justify-content-center">
-            <div class="col-12 col-sm-10 col-md-8 col-lg-8 col-xl-8 mt-2">
-                <table id="table_id" class="display">
-                    <thead>
-                        <tr>
-
-                            <th>Store</th>
-                            <th>Date</th>
-                            <th>Edit</th>
-                            
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for saltlog in saltlogs %}
-                        <tr>
-                            
-                            <td>{{ saltlog.store.number }}</td>
-                        
-                            <td>{{ saltlog.date_salted|date:"Y-m-d" }}</td>
-                            <td>
-                                <a href="{% url 'salt_log_update' pk=saltlog.id %}" id="edit-button" class="fa fa-edit"
-                                    style="font-size:22px;color:blue"></a>
-                            </td>
-                            
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+      {% if messages %}
+        <div class="mt-3">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
+          {% endfor %}
         </div>
+      {% endif %}
+
+      <legend class="mb-3">Salt logs</legend>
+
+      <form method="post" action="{% url 'create_salt_log' %}" class="mb-3">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary w-100">Start salt log</button>
+      </form>
+
+      <form method="get" class="row g-2 mb-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label" for="salt-store-filter">Store</label>
+          <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
+            <option value="">All stores</option>
+            {% for store in stores %}
+              <option value="{{ store.pk }}" {% if store_filter == store.pk|stringformat:"s" %}selected{% endif %}>
+                Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label" for="salt-q">Area</label>
+          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Search area">
+        </div>
+      </form>
+
+      <ul class="nav nav-tabs flex-wrap text-center" id="saltLogTabs">
+        <li class="nav-item">
+          <a class="nav-link active" data-bs-toggle="tab" href="#drafts">
+            Drafts <br>
+            <span class="badge bg-light text-dark">{{ drafts|length }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" data-bs-toggle="tab" href="#submitted">
+            Submitted <br>
+            <span class="badge bg-light text-dark">{{ submitted|length }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" data-bs-toggle="tab" href="#completed">
+            Completed <br>
+            <span class="badge bg-light text-dark">{{ completed|length }}</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="tab-content border border-top-0 p-3 bg-white">
+        <div class="tab-pane fade show active" id="drafts">
+          {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" %}
+        </div>
+        <div class="tab-pane fade" id="submitted">
+          {% include "quiz/salt_log_rows.html" with rows=submitted action_label="View" when_label="Submitted" when_attr="submitted_at" %}
+        </div>
+        <div class="tab-pane fade" id="completed">
+          {% include "quiz/salt_log_rows.html" with rows=completed action_label="View" when_label="Submitted" when_attr="submitted_at" %}
+        </div>
+      </div>
     </div>
-</body>
-
-<script>
-
-
-    $(document).ready(function () {
-        $('#table_id').DataTable({
-            language: { search: "" },
-            responsive: true,
-            "pageLength": 10,
-            order: [[2, 'desc']]
-        })
-
-        // Set the placeholder without the word "Search"
-        $('.dataTables_filter input[type="search"]').attr('placeholder', 'Search...');
-
-        // Apply custom CSS styles to align the search box to the left
-        $('.dataTables_filter input[type="search"]').css({
-            'text-align': 'left', // Align the text to the left
-            'border-radius': '10px', // Adjust the border-radius as needed
-            'padding-left': '10px' // Add padding to the left for the text
-        });
-
-    });
-
-
-</script>
-
+  </div>
+</div>
 {% endblock %}

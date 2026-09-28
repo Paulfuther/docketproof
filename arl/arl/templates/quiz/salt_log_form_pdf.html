@@ -28,10 +28,10 @@
             margin: 5px 0;
         }
         .images-section img {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
+            width: 180px;
+            height: auto;
             margin: 5px;
+            vertical-align: top;
         }
         .bordered {
             border: 1px solid #ddd;
@@ -56,6 +56,15 @@
             <p><strong>Time Salted:</strong> {{ incident.time_salted }}</p>
             <p><strong>Store:</strong> {{ incident.store }}</p>
             <p><strong>Area Salted:</strong> {{ incident.area_salted }}</p>
+            <p><strong>Salt levels OK:</strong> {{ levels_label }}</p>
+            {% if levels_exception %}
+            <p><strong>What was wrong:</strong> {{ incident.exception_what }}</p>
+            <p><strong>Who was told:</strong> {{ incident.exception_who }}</p>
+            <p><strong>When reported:</strong> {{ incident.exception_when }}</p>
+            {% endif %}
+            {% if incident.submitted_at %}
+            <p><strong>Submitted:</strong> {{ incident.submitted_at }}{% if incident.submitted_by %} by {{ incident.submitted_by }}{% endif %}</p>
+            {% endif %}
         </div>
 
         <!-- Display associated images -->
