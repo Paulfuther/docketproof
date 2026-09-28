@@ -182,13 +182,34 @@ def _eastern_now():
     return current.date(), current.time().replace(microsecond=0)
 
 
+# Same page size as the SMS activity list. Checklist lists use 20.
+SALT_LOG_PAGE_SIZE = 25
+SALT_LOG_TABS = ("drafts", "submitted", "completed")
+
+
+def _salt_log_page(request, queryset, page_param):
+    """One page of salt logs. Invalid pages fall back to the nearest real page."""
+    paginator = Paginator(queryset, SALT_LOG_PAGE_SIZE)
+    return paginator.get_page(request.GET.get(page_param) or 1)
+
+
 @login_required
 def salt_log_dashboard(request):
-    """Open drafts, submitted, and completed salt logs for this employer."""
+    """Open drafts, submitted, and completed salt logs for this employer.
+
+    Each tab is its own page of rows. Counts stay on the badges; the tables
+    only load the current page.
+    """
     q = (request.GET.get("q") or "").strip()
     store_filter = (request.GET.get("store") or "").strip()
-    logs = salt_logs_for_user(request.user).select_related(
-        "store", "user", "submitted_by"
+    active_tab = (request.GET.get("tab") or "drafts").strip()
+    if active_tab not in SALT_LOG_TABS:
+        active_tab = "drafts"
+
+    logs = (
+        salt_logs_for_user(request.user)
+        .select_related("store", "user", "submitted_by")
+        .order_by("-hidden_timestamp", "-pk")
     )
     if q:
         text = Q(area_salted__icontains=q)
@@ -204,10 +225,21 @@ def salt_log_dashboard(request):
         {
             "q": q,
             "store_filter": store_filter,
+            "active_tab": active_tab,
             "stores": _stores_for_user(request.user),
-            "drafts": logs.filter(status=SaltLog.STATUS_DRAFT),
-            "submitted": logs.filter(status=SaltLog.STATUS_SUBMITTED),
-            "completed": logs.filter(status=SaltLog.STATUS_COMPLETED),
+            "drafts": _salt_log_page(
+                request, logs.filter(status=SaltLog.STATUS_DRAFT), "drafts_page"
+            ),
+            "submitted": _salt_log_page(
+                request,
+                logs.filter(status=SaltLog.STATUS_SUBMITTED),
+                "submitted_page",
+            ),
+            "completed": _salt_log_page(
+                request,
+                logs.filter(status=SaltLog.STATUS_COMPLETED),
+                "completed_page",
+            ),
         },
     )
 
