@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>6.4 Site Security Action Plan Form</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      color: #111;
+      margin: 0;
+    }
+    .brand {
+      background: #c8102e;
+      color: #fff;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+      padding: 8px 12px;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 14px 0 2px;
+    }
+    .subtitle {
+      margin: 0 0 12px;
+      color: #333;
+      font-size: 13px;
+    }
+    .source {
+      margin: 0 0 12px;
+      color: #555;
+      font-size: 11px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    .meta td {
+      border: 1px solid #222;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+    .meta .label {
+      width: 28%;
+      font-weight: 700;
+      background: #f4f4f4;
+    }
+    .grid { margin-top: 14px; }
+    .grid th, .grid td {
+      border: 1px solid #222;
+      padding: 6px 6px;
+      vertical-align: top;
+      text-align: left;
+      word-wrap: break-word;
+    }
+    .grid th {
+      background: #f4f4f4;
+      font-size: 11px;
+      letter-spacing: 0.3px;
+    }
+    .col-item { width: 22%; }
+    .col-required { width: 30%; }
+    .col-when { width: 12%; }
+    .col-who { width: 16%; }
+    .col-check { width: 6%; text-align: center; }
+    .col-done { width: 14%; }
+    .check {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 1px solid #111;
+      line-height: 14px;
+      text-align: center;
+      font-size: 12px;
+    }
+    .empty { color: #444; font-style: italic; }
+    @page { margin: 14mm 12mm; size: Letter; }
+  </style>
+</head>
+<body>
+  <div class="brand">Petro-Canada</div>
+  <h1>{{ form_title }}</h1>
+  <p class="subtitle">{{ form_subtitle }}</p>
+  {% if source_title %}
+    <p class="source">Source checklist: {{ source_title }}{% if document_id %} ({{ document_id }}){% endif %}</p>
+  {% endif %}
+
+  <table class="meta">
+    <tr>
+      <td class="label">Site Number &amp; Location</td>
+      <td>{{ site_location }}</td>
+    </tr>
+    <tr>
+      <td class="label">Completed By</td>
+      <td>{{ completed_by }}</td>
+    </tr>
+    <tr>
+      <td class="label">Position</td>
+      <td>{{ position }}</td>
+    </tr>
+    <tr>
+      <td class="label">Completed on</td>
+      <td>{{ completed_on }}</td>
+    </tr>
+  </table>
+
+  <table class="grid">
+    <thead>
+      <tr>
+        <th class="col-item">ACTION ITEM</th>
+        <th class="col-required">ACTION REQUIRED</th>
+        <th class="col-when">WHEN</th>
+        <th class="col-who">WHO</th>
+        <th class="col-check">✓</th>
+        <th class="col-done">COMPLETION DATE</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.action_item }}</td>
+        <td>{{ row.action_required }}</td>
+        <td>{% if row.when %}{{ row.when|date:"Y-m-d" }}{% endif %}</td>
+        <td>{{ row.who }}</td>
+        <td class="col-check"><span class="check">{% if row.done %}✓{% endif %}</span></td>
+        <td>{% if row.completion_date %}{{ row.completion_date|date:"Y-m-d" }}{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td class="empty" colspan="6">No action items.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
