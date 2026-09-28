@@ -185,7 +185,10 @@ class ChecklistFormTests(TestCase):
         self.assertIn("who", form.errors)
         self.assertIn("target_date", form.errors)
         self.assertTrue(
-            any("action plan" in str(message) for message in form.errors["action_required"])
+            any(
+                "action plan" in str(message)
+                for message in form.errors["action_required"]
+            )
         )
         self.assertIn("is-invalid", form["action_required"].as_widget())
         self.assertIn("is-invalid", form["who"].as_widget())
@@ -444,9 +447,7 @@ class StoreReportContextTests(SimpleTestCase):
             city="London",
             province="ON",
         )
-        self.assertEqual(
-            format_store_address_line(store), "123 Main St, London, ON"
-        )
+        self.assertEqual(format_store_address_line(store), "123 Main St, London, ON")
 
 
 class DropboxChecklistPathTests(SimpleTestCase):
@@ -459,9 +460,7 @@ class DropboxChecklistPathTests(SimpleTestCase):
             slug="store-12-inspection-ab12cd34",
             title="Store 12 inspection",
             template=SimpleNamespace(name="Workplace Inspection Checklist (BC & ON)"),
-            created_by=SimpleNamespace(
-                employer=SimpleNamespace(name="Petro Canada")
-            ),
+            created_by=SimpleNamespace(employer=SimpleNamespace(name="Petro Canada")),
         )
         path, folder = build_checklist_dropbox_path(checklist, "12", when=when)
         pdf_filename = path.rsplit("/", 1)[-1]
@@ -493,6 +492,36 @@ class DropboxChecklistPathTests(SimpleTestCase):
             )
         )
 
+    def test_company_uses_submitter_then_store_when_creator_has_no_employer(self):
+        from .dropbox_paths import (
+            build_checklist_dropbox_path,
+            resolve_checklist_employer,
+        )
+
+        when = datetime(2026, 9, 20)
+        creator = SimpleNamespace(employer=None)
+        submitter_employer = SimpleNamespace(name="Submitter Co", id=2)
+        store_employer = SimpleNamespace(name="Store Co", id=3)
+        checklist = SimpleNamespace(
+            id=9,
+            slug="site-security-abcd1234",
+            title="Site Security",
+            template=SimpleNamespace(name="Site Security"),
+            created_by=creator,
+            submitted_by=SimpleNamespace(employer=submitter_employer),
+            store=SimpleNamespace(employer=store_employer),
+        )
+        self.assertIs(resolve_checklist_employer(checklist), submitter_employer)
+        path, _folder = build_checklist_dropbox_path(checklist, "12", when=when)
+        self.assertTrue(path.startswith("/CHECKLISTS/submitter-co/"))
+        self.assertNotIn("/no-company/", path)
+
+        checklist.submitted_by = SimpleNamespace(employer=None)
+        self.assertIs(resolve_checklist_employer(checklist), store_employer)
+        path, _folder = build_checklist_dropbox_path(checklist, "12", when=when)
+        self.assertTrue(path.startswith("/CHECKLISTS/store-co/site-security/"))
+        self.assertNotIn("/no-company/", path)
+
 
 class ChecklistEditTemplateTests(SimpleTestCase):
     def test_edit_template_has_per_item_error_hooks(self):
@@ -503,7 +532,7 @@ class ChecklistEditTemplateTests(SimpleTestCase):
             / "checklist_edit.html"
         )
         text = template.read_text()
-        self.assertIn("id=\"checklist-error-summary\"", text)
+        self.assertIn('id="checklist-error-summary"', text)
         self.assertIn("has-item-errors", text)
         self.assertIn("data-item-error", text)
         self.assertIn("focusFirstChecklistError", text)
@@ -513,11 +542,11 @@ class ChecklistEditTemplateTests(SimpleTestCase):
         self.assertIn("function applyLiveItemErrors", text)
         self.assertIn("function refreshErrorSummary", text)
         self.assertIn("data-error-kind", text)
-        self.assertIn("id=\"checklist-edit-form\"", text)
+        self.assertIn('id="checklist-edit-form"', text)
         self.assertNotIn('enctype="multipart/form-data"', text)
         self.assertIn("function checklistFormData", text)
-        self.assertIn("data-action=\"submit\"", text)
-        self.assertIn("id=\"checklist-form-action\"", text)
+        self.assertIn('data-action="submit"', text)
+        self.assertIn('id="checklist-form-action"', text)
         self.assertIn("fd.delete('action')", text)
         self.assertIn("data.ok", text)
         self.assertIn("creates.includes(answerCode)", text)
@@ -572,9 +601,7 @@ class ChecklistMobileSubmitTests(TestCase):
             )
         self.client.force_login(self.user)
         self.url = reverse("checklist_edit", kwargs={"slug": self.checklist.slug})
-        self.pdf_patch = patch(
-            "arl.quiz.views.generate_checklist_pdf_task.delay"
-        )
+        self.pdf_patch = patch("arl.quiz.views.generate_checklist_pdf_task.delay")
         self.pdf_patch.start()
         self.addCleanup(self.pdf_patch.stop)
 
@@ -623,9 +650,7 @@ class ChecklistMobileSubmitTests(TestCase):
         self.assertEqual(self.checklist.status, "submitted")
 
     def test_submit_omitting_action_fields_for_yes_is_not_400(self):
-        resp = self.client.post(
-            self.url, self._post_data(include_action_fields=False)
-        )
+        resp = self.client.post(self.url, self._post_data(include_action_fields=False))
         self.assertNotEqual(resp.status_code, 400)
         self.assertEqual(resp.status_code, 302)
 
@@ -798,5 +823,3 @@ class ChecklistAutosaveTests(TestCase):
         self.assertFalse(
             ChecklistActionItem.objects.filter(checklist_item=item).exists()
         )
-
-

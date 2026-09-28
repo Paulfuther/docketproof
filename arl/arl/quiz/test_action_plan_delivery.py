@@ -17,6 +17,7 @@ from arl.quiz.action_plan_delivery import (
     build_action_plan_dropbox_path,
     checklist_pdf_shows_action_plan,
     checklist_splits_action_plan,
+    email_pdf_to_employer_group,
 )
 from arl.quiz.models import (
     Checklist,
@@ -513,3 +514,48 @@ class SplitDeliveryTaskTests(TestCase):
         self.assertNotIn(
             self.checklist_recipient.email, email.call_args.kwargs["to_email"]
         )
+
+    def test_store_employer_is_used_when_creator_and_submitter_have_none(self):
+        self.inspector.employer = None
+        self.inspector.save(update_fields=["employer"])
+        patches = self._patches()
+        with patches[0], patches[1], patches[2], patches[3] as upload, patches[
+            4
+        ], patches[5] as email:
+            result = generate_checklist_pdf_task.run(self.checklist.id)
+
+        self.assertEqual(result["status"], "success")
+        paths = [call.args[1] for call in upload.call_args_list]
+        self.assertEqual(len(paths), 2)
+        for path in paths:
+            self.assertIn("/CHECKLISTS/petro-canada/", path)
+            self.assertNotIn("/no-company/", path)
+        self.assertEqual(email.call_count, 2)
+        self.assertEqual(
+            email.call_args_list[0].kwargs["to_email"],
+            [self.checklist_recipient.email],
+        )
+        self.assertEqual(
+            email.call_args_list[1].kwargs["to_email"],
+            [self.plan_recipient.email],
+        )
+
+
+class ChecklistEmployerEmailTests(SimpleTestCase):
+    def test_skips_email_only_when_creator_submitter_and_store_have_no_employer(self):
+        checklist = SimpleNamespace(
+            created_by=None,
+            submitted_by=SimpleNamespace(employer=None),
+            store=None,
+        )
+        with patch("arl.msg.helpers.create_master_email") as send:
+            sent = email_pdf_to_employer_group(
+                checklist=checklist,
+                pdf_bytes=b"%PDF",
+                filename="checklist.pdf",
+                group_name=CHECKLIST_EMAIL_GROUP,
+                subject="Checklist",
+                log_label="Checklist Email Task",
+            )
+        self.assertFalse(sent)
+        send.assert_not_called()

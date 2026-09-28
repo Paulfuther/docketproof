@@ -11,7 +11,10 @@ import logging
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 
-from arl.quiz.dropbox_paths import build_checklist_dropbox_path
+from arl.quiz.dropbox_paths import (
+    build_checklist_dropbox_path,
+    resolve_checklist_employer,
+)
 from arl.quiz.models import ChecklistActionItem
 from arl.quiz.store_address import format_store_address_line
 
@@ -233,10 +236,12 @@ def email_pdf_to_employer_group(
     from arl.setup.models import TenantApiKeys
 
     logger.info("[%s] Using template ID: %s", log_label, CHECKLIST_SENDGRID_TEMPLATE)
-    employer_id = getattr(getattr(checklist.created_by, "employer", None), "id", None)
+    employer = resolve_checklist_employer(checklist)
+    employer_id = getattr(employer, "id", None)
     if not employer_id:
         logger.warning(
-            "[%s] No employer on checklist.created_by; skipping email.",
+            "[%s] No employer on checklist.created_by, submitted_by, or store; "
+            "skipping email.",
             log_label,
         )
         return False
