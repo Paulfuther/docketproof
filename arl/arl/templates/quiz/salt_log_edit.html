@@ -54,12 +54,37 @@
     border-radius: 12px;
     background: #f8f9fa;
   }
-  .salt-thumb {
-    width: 96px;
-    height: 96px;
-    object-fit: cover;
+  .salt-thumb,
+  .salt-edit .dz-preview .dz-image img {
+    width: 160px;
+    height: 110px;
+    object-fit: contain;
+    object-position: center;
+    background: #fff;
     border-radius: 8px;
     border: 1px solid #dee2e6;
+  }
+  .salt-edit .dz-preview .dz-image {
+    width: 160px;
+    height: 110px;
+    overflow: hidden;
+    background: #fff;
+    border-radius: 8px;
+  }
+  .salt-edit .dz-preview .dz-image img {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+  .salt-edit .dz-success-mark,
+  .salt-edit .dz-error-mark {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+  }
+  .salt-edit .dz-preview.dz-error .dz-error-mark {
+    display: block !important;
+    opacity: 1 !important;
   }
   .field-error {
     color: #dc3545;
@@ -370,8 +395,7 @@
           maxFiles: 8,
           acceptedFiles: "image/*",
           headers: { "X-CSRFToken": csrfToken() },
-          previewsContainer: null,
-          createImageThumbnails: false,
+          thumbnailMethod: "contain",
           init: function () {
             this.on("sending", function (file, xhr, formData) {
               formData.append("salt_log", "{{ salt_log.pk }}");
