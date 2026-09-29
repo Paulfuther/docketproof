@@ -874,8 +874,9 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       "who who"
+      "overall overall"
       "sin permit"
-      "proof overall"
+      "proof ."
       "details details";
     column-gap: 8px;
     row-gap: 8px;
@@ -898,6 +899,13 @@
     width: auto;
     max-width: 100%;
     min-width: 0;
+  }
+
+  /* Status pill sits on its own row under the name. Other chips stay in the meta grid. */
+  .imm-row .imm-chip-overall {
+    justify-self: start;
+    width: max-content;
+    max-width: 100%;
   }
 
   .imm-details-toggle {
