@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,12 +6,15 @@ from unittest import TestCase as SimpleTestCase
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
 from arl.quiz.models import SaltLog
+from arl.quiz.views import SALT_LOG_PAGE_SIZE
 from arl.user.models import CustomUser, Employer, Store
 
 
@@ -457,3 +460,173 @@ class SaltLogPathAndTemplateTests(SimpleTestCase):
         self.assertFalse(hasattr(quiz_views, "generate_salt_log_pdf"))
         self.assertFalse(hasattr(quiz_views, "SaltLogUpdateView"))
         self.assertFalse(hasattr(quiz_views, "handle_new_incident_form_creation"))
+
+
+@override_settings(SECRET_KEY="ci-test-secret-key-not-for-production")
+class SaltLogListPaginationTests(TestCase):
+    def setUp(self):
+        self.employer = Employer.objects.create(name="Petro Pages")
+        self.other_employer = Employer.objects.create(name="Other Pages")
+        self.user = CustomUser.objects.create_user(
+            username="salt-pages",
+            email="salt-pages@example.com",
+            password="pass12345",
+            phone_number="+15196707490",
+            employer=self.employer,
+        )
+        self.store = Store.objects.create(
+            number=21,
+            employer=self.employer,
+            address="21 Main St",
+            city="London",
+            province="ON",
+        )
+        self.other_store = Store.objects.create(
+            number=22,
+            employer=self.employer,
+            address="22 Main St",
+            city="Windsor",
+            province="ON",
+        )
+        self.client.force_login(self.user)
+
+    def _log(self, *, area, status, minutes_ago, store=None):
+        when = timezone.now() - timedelta(minutes=minutes_ago)
+        log = SaltLog.objects.create(
+            user=self.user,
+            user_employer=self.employer,
+            store=store or self.store,
+            area_salted=area,
+            status=status,
+            image_folder=f"page-{status}-{minutes_ago}-{area}",
+        )
+        SaltLog.objects.filter(pk=log.pk).update(
+            hidden_timestamp=when,
+            submitted_at=when if status != SaltLog.STATUS_DRAFT else None,
+        )
+        return log
+
+    def _fill(self, status, count, area_prefix="Pad", store=None):
+        for i in range(count):
+            self._log(
+                area=f"{area_prefix} {i:04d}",
+                status=status,
+                minutes_ago=i,
+                store=store,
+            )
+
+    def test_page_size_limits_each_tab(self):
+        total = SALT_LOG_PAGE_SIZE + 5
+        self._fill(SaltLog.STATUS_DRAFT, total, area_prefix="Draft")
+        self._fill(SaltLog.STATUS_SUBMITTED, total, area_prefix="Submitted")
+        self._fill(SaltLog.STATUS_COMPLETED, total, area_prefix="Done")
+
+        page = self.client.get(reverse("salt_log_list"), {"tab": "submitted"})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Submitted 0000")
+        self.assertContains(page, f"Submitted {SALT_LOG_PAGE_SIZE - 1:04d}")
+        self.assertNotContains(page, f"Submitted {SALT_LOG_PAGE_SIZE:04d}")
+        self.assertContains(page, f"Showing 1–{SALT_LOG_PAGE_SIZE} of {total}")
+        self.assertContains(page, "Page 1 of 2")
+        self.assertContains(page, f">{total}<", count=3)
+        self.assertContains(page, "drafts_page=2")
+        self.assertContains(page, "submitted_page=2")
+        self.assertContains(page, "completed_page=2")
+
+    def test_second_page_keeps_filters_and_newest_first_order(self):
+        total = SALT_LOG_PAGE_SIZE + 3
+        self._fill(SaltLog.STATUS_SUBMITTED, total, area_prefix="Walk")
+        self._log(
+            area="Other store walk",
+            status=SaltLog.STATUS_SUBMITTED,
+            minutes_ago=1,
+            store=self.other_store,
+        )
+
+        query = {"tab": "submitted", "q": "Walk", "store": str(self.store.pk)}
+        page1 = self.client.get(reverse("salt_log_list"), query)
+        self.assertContains(page1, "Walk 0000")
+        self.assertNotContains(page1, "Other store walk")
+        self.assertNotContains(page1, f"Walk {SALT_LOG_PAGE_SIZE:04d}")
+        next_link = (
+            f"tab=submitted&submitted_page=2&q=Walk&store={self.store.pk}"
+        )
+        self.assertContains(page1, next_link)
+
+        page2 = self.client.get(
+            reverse("salt_log_list"), {**query, "submitted_page": 2}
+        )
+        self.assertContains(page2, f"Walk {SALT_LOG_PAGE_SIZE:04d}")
+        self.assertContains(page2, f"Walk {total - 1:04d}")
+        self.assertNotContains(page2, "Walk 0000")
+        self.assertNotContains(page2, "Other store walk")
+        self.assertContains(
+            page2, 'class="tab-pane fade show active" id="submitted"'
+        )
+        self.assertContains(
+            page2,
+            f"Showing {SALT_LOG_PAGE_SIZE + 1}–{total} of {total}",
+        )
+        self.assertContains(page2, "Page 2 of 2")
+
+    def test_empty_page_and_out_of_range_page(self):
+        empty = self.client.get(
+            reverse("salt_log_list"), {"tab": "submitted", "submitted_page": 4}
+        )
+        self.assertEqual(empty.status_code, 200)
+        self.assertContains(empty, "Nothing here.", count=3)
+        self.assertContains(empty, ">0<", count=3)
+        self.assertNotContains(empty, "Previous")
+        self.assertNotContains(empty, "Page 1 of")
+
+        self._fill(SaltLog.STATUS_SUBMITTED, SALT_LOG_PAGE_SIZE + 1, area_prefix="Lot")
+        not_a_number = self.client.get(
+            reverse("salt_log_list"),
+            {"tab": "submitted", "submitted_page": "nope"},
+        )
+        self.assertEqual(not_a_number.status_code, 200)
+        self.assertContains(not_a_number, "Lot 0000")
+        self.assertContains(not_a_number, "Page 1 of 2")
+
+        past_end = self.client.get(
+            reverse("salt_log_list"),
+            {"tab": "submitted", "submitted_page": 99},
+        )
+        self.assertEqual(past_end.status_code, 200)
+        self.assertContains(past_end, f"Lot {SALT_LOG_PAGE_SIZE:04d}")
+        self.assertNotContains(past_end, "Lot 0000")
+        self.assertContains(past_end, "Page 2 of 2")
+        self.assertContains(
+            past_end, 'class="tab-pane fade show active" id="submitted"'
+        )
+
+        empty_completed = self.client.get(
+            reverse("salt_log_list"),
+            {"tab": "completed", "completed_page": 99},
+        )
+        self.assertEqual(empty_completed.status_code, 200)
+        self.assertContains(empty_completed, "Nothing here.")
+
+    def test_queries_fetch_only_the_current_page(self):
+        self._fill(SaltLog.STATUS_SUBMITTED, SALT_LOG_PAGE_SIZE + 15, area_prefix="Ice")
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.get(
+                reverse("salt_log_list"), {"tab": "submitted"}
+            )
+        self.assertEqual(response.status_code, 200)
+        salt_sql = [
+            query["sql"]
+            for query in captured.captured_queries
+            if "quiz_saltlog" in query["sql"]
+        ]
+        counts = [
+            sql
+            for sql in salt_sql
+            if sql.lstrip().upper().startswith("SELECT COUNT")
+        ]
+        pages = [sql for sql in salt_sql if sql not in counts]
+        self.assertGreaterEqual(len(counts), 3)
+        self.assertTrue(pages)
+        for sql in pages:
+            self.assertIn("LIMIT", sql.upper())
+            self.assertIn(str(SALT_LOG_PAGE_SIZE), sql)
