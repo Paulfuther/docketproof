@@ -901,14 +901,14 @@
   .imm-row .imm-scan {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "name days"
-      "pill days"
+      "name name"
       "meta meta"
+      "pill days"
       "chips chips"
       "details details";
     column-gap: 12px;
-    row-gap: 4px;
-    align-items: center;
+    row-gap: 2px;
+    align-items: end;
     min-width: 0;
     width: auto;
     padding: 14px 14px 12px;
@@ -916,7 +916,7 @@
 
   .imm-row .imm-scan:not(:has(.imm-who-meta)) {
     grid-template-areas:
-      "name days"
+      "name name"
       "pill days"
       "chips chips"
       "details details";
@@ -928,14 +928,14 @@
 
   .imm-name {
     grid-area: name;
-    align-self: end;
+    align-self: start;
     min-width: 0;
   }
 
   .imm-who-meta {
     grid-area: meta;
     min-width: 0;
-    margin-top: 6px;
+    margin-top: 1px;
   }
 
   .imm-chip-overall { grid-area: pill; }
@@ -946,26 +946,28 @@
     min-width: 0;
   }
 
-  /* Name, then the status pill. Permit countdown sits to the right of that block. */
+  /* Email and store stay under the name. Status and days left share the next row. */
   .imm-row .imm-chip-overall {
     justify-self: start;
-    align-self: start;
+    align-self: end;
     width: max-content;
     max-width: 100%;
+    margin-top: 10px;
   }
 
   .imm-days {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    justify-content: center;
+    justify-content: flex-end;
     grid-area: days;
-    align-self: center;
+    align-self: end;
     justify-self: end;
     gap: 2px;
     width: max-content;
     min-width: max-content;
     max-width: none;
+    margin-top: 10px;
   }
 
   .imm-days-kicker {
