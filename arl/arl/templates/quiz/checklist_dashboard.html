@@ -17,21 +17,21 @@
 
 <ul class="nav nav-tabs flex-wrap text-center" id="checklistTabs">
   <li class="nav-item">
-    <a class="nav-link active" data-bs-toggle="tab" href="#available">
+    <a class="nav-link{% if active_tab == 'available' %} active{% endif %}" data-bs-toggle="tab" href="#available">
       Available <br>
       <span class="badge bg-light text-dark">{{ templates|length }}</span>
     </a>
   </li>
   <li class="nav-item">
-    <a class="nav-link" data-bs-toggle="tab" href="#inprogress">
+    <a class="nav-link{% if active_tab == 'inprogress' %} active{% endif %}" data-bs-toggle="tab" href="#inprogress">
       In Progress <br>
-      <span class="badge bg-light text-dark">{{ drafts|length }}</span>
+      <span class="badge bg-light text-dark">{{ drafts.paginator.count }}</span>
     </a>
   </li>
   <li class="nav-item">
-    <a class="nav-link" data-bs-toggle="tab" href="#submitted">
+    <a class="nav-link{% if active_tab == 'submitted' %} active{% endif %}" data-bs-toggle="tab" href="#submitted">
       Submitted <br>
-      <span class="badge bg-light text-dark">{{ submitted|length }}</span>
+      <span class="badge bg-light text-dark">{{ submitted.paginator.count }}</span>
     </a>
   </li>
 </ul>
@@ -41,7 +41,7 @@
 
  
    <!-- Available -->
-<div class="tab-pane fade show active" id="available" role="tabpanel" aria-labelledby="available-tab">
+<div class="tab-pane fade{% if active_tab == 'available' %} show active{% endif %}" id="available" role="tabpanel" aria-labelledby="available-tab">
   <div class="table-responsive">
     <table class="table table-sm align-middle">
       
@@ -79,7 +79,7 @@
 </div>
 
     <!-- In Progress -->
-<div class="tab-pane fade" id="inprogress" role="tabpanel">
+<div class="tab-pane fade{% if active_tab == 'inprogress' %} show active{% endif %}" id="inprogress" role="tabpanel">
   <div class="table-responsive">
     <table class="table table-sm align-middle">
       <!-- Show headers on md+; hide on mobile -->
@@ -141,10 +141,11 @@
       </tbody>
     </table>
   </div>
+  {% include "quiz/checklist_page_nav.html" with rows=drafts page_param="inprogress_page" tab="inprogress" %}
 </div>
 
         <!-- Submitted -->
-<div class="tab-pane fade" id="submitted" role="tabpanel">
+<div class="tab-pane fade{% if active_tab == 'submitted' %} show active{% endif %}" id="submitted" role="tabpanel">
   <div class="table-responsive">
     <table class="table table-sm align-middle">
       <thead class="table-light d-none d-md-table-header-group">
@@ -205,6 +206,7 @@
       </tbody>
     </table>
   </div>
+  {% include "quiz/checklist_page_nav.html" with rows=submitted page_param="submitted_page" tab="submitted" %}
 </div>
   </div>
 

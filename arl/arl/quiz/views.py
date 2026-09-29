@@ -704,6 +704,17 @@ def checklist_detail(request, slug):
     )
 
 
+# checklist_list already pages 20 rows. Salt logs use 25.
+CHECKLIST_PAGE_SIZE = 20
+CHECKLIST_DASHBOARD_TABS = ("available", "inprogress", "submitted")
+
+
+def _checklist_page(request, queryset, page_param):
+    """One page of checklists. Invalid pages fall back to the nearest real page."""
+    paginator = Paginator(queryset, CHECKLIST_PAGE_SIZE)
+    return paginator.get_page(request.GET.get(page_param) or 1)
+
+
 @login_required
 def checklist_list(request):
     """
@@ -725,7 +736,7 @@ def checklist_list(request):
     if mine == "1":
         qs = qs.filter(created_by=request.user)
 
-    paginator = Paginator(qs, 20)
+    paginator = Paginator(qs, CHECKLIST_PAGE_SIZE)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
 
@@ -755,9 +766,15 @@ def checklist_edit_by_id(request, pk: int):
 def checklist_dashboard(request):
     """
     Dashboard with: available templates, in-progress (draft), and submitted.
+
+    In Progress and Submitted each load one page. Badge counts stay on the
+    full filtered total.
     """
     q = (request.GET.get("q") or "").strip()
     mine = request.GET.get("mine") == "1"
+    active_tab = (request.GET.get("tab") or "available").strip()
+    if active_tab not in CHECKLIST_DASHBOARD_TABS:
+        active_tab = "available"
 
     templates = ChecklistTemplate.objects.filter(is_active=True)
     if q:
@@ -770,9 +787,10 @@ def checklist_dashboard(request):
     # completed = Checklist.objects.filter(status="completed")
 
     if q:
-        drafts = drafts.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-        submitted = submitted.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-        # completed = completed.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+        text = Q(title__icontains=q) | Q(notes__icontains=q)
+        drafts = drafts.filter(text)
+        submitted = submitted.filter(text)
+        # completed = completed.filter(text)
 
     if mine:
         drafts = drafts.filter(created_by=request.user)
@@ -781,18 +799,21 @@ def checklist_dashboard(request):
         )
         # completed = completed.filter(Q(created_by=request.user) | Q(submitted_by=request.user))
 
-    drafts = drafts.select_related("created_by").order_by("-created_at")
-    submitted = submitted.select_related("submitted_by").order_by(
-        "-submitted_at", "-created_at"
+    drafts = drafts.select_related("created_by", "store").order_by(
+        "-created_at", "-pk"
+    )
+    submitted = submitted.select_related("submitted_by", "store").order_by(
+        "-submitted_at", "-created_at", "-pk"
     )
     # completed = completed.order_by("-submitted_at", "-created_at")
 
     ctx = {
         "q": q,
         "mine": "1" if mine else "",
+        "active_tab": active_tab,
         "templates": templates,
-        "drafts": drafts,
-        "submitted": submitted,
+        "drafts": _checklist_page(request, drafts, "inprogress_page"),
+        "submitted": _checklist_page(request, submitted, "submitted_page"),
         # "completed": completed,
     }
     return render(request, "quiz/checklist_dashboard.html", ctx)
