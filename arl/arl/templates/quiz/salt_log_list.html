@@ -36,6 +36,7 @@
       </form>
 
       <form method="get" class="row g-2 mb-3">
+        <input type="hidden" name="tab" id="salt-tab" value="{{ active_tab }}">
         <div class="col-12 col-md-6">
           <label class="form-label" for="salt-store-filter">Store</label>
           <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
@@ -55,37 +56,48 @@
 
       <ul class="nav nav-tabs flex-wrap text-center" id="saltLogTabs">
         <li class="nav-item">
-          <a class="nav-link active" data-bs-toggle="tab" href="#drafts">
+          <a class="nav-link{% if active_tab == 'drafts' %} active{% endif %}" data-bs-toggle="tab" href="#drafts">
             Drafts <br>
-            <span class="badge bg-light text-dark">{{ drafts|length }}</span>
+            <span class="badge bg-light text-dark">{{ drafts.paginator.count }}</span>
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" data-bs-toggle="tab" href="#submitted">
+          <a class="nav-link{% if active_tab == 'submitted' %} active{% endif %}" data-bs-toggle="tab" href="#submitted">
             Submitted <br>
-            <span class="badge bg-light text-dark">{{ submitted|length }}</span>
+            <span class="badge bg-light text-dark">{{ submitted.paginator.count }}</span>
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" data-bs-toggle="tab" href="#completed">
+          <a class="nav-link{% if active_tab == 'completed' %} active{% endif %}" data-bs-toggle="tab" href="#completed">
             Completed <br>
-            <span class="badge bg-light text-dark">{{ completed|length }}</span>
+            <span class="badge bg-light text-dark">{{ completed.paginator.count }}</span>
           </a>
         </li>
       </ul>
 
       <div class="tab-content border border-top-0 p-3 bg-white">
-        <div class="tab-pane fade show active" id="drafts">
-          {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" %}
+        <div class="tab-pane fade{% if active_tab == 'drafts' %} show active{% endif %}" id="drafts">
+          {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" page_param="drafts_page" tab="drafts" %}
         </div>
-        <div class="tab-pane fade" id="submitted">
-          {% include "quiz/salt_log_rows.html" with rows=submitted action_label="View" when_label="Submitted" when_attr="submitted_at" %}
+        <div class="tab-pane fade{% if active_tab == 'submitted' %} show active{% endif %}" id="submitted">
+          {% include "quiz/salt_log_rows.html" with rows=submitted action_label="View" when_label="Submitted" when_attr="submitted_at" page_param="submitted_page" tab="submitted" %}
         </div>
-        <div class="tab-pane fade" id="completed">
-          {% include "quiz/salt_log_rows.html" with rows=completed action_label="View" when_label="Submitted" when_attr="submitted_at" %}
+        <div class="tab-pane fade{% if active_tab == 'completed' %} show active{% endif %}" id="completed">
+          {% include "quiz/salt_log_rows.html" with rows=completed action_label="View" when_label="Submitted" when_attr="submitted_at" page_param="completed_page" tab="completed" %}
         </div>
       </div>
     </div>
   </div>
 </div>
+<script>
+  (function () {
+    var tabs = document.getElementById("saltLogTabs");
+    var input = document.getElementById("salt-tab");
+    if (!tabs || !input) return;
+    tabs.addEventListener("shown.bs.tab", function (event) {
+      var pane = (event.target.getAttribute("href") || "").replace("#", "");
+      if (pane) input.value = pane;
+    });
+  })();
+</script>
 {% endblock %}

@@ -50,3 +50,34 @@
     </tbody>
   </table>
 </div>
+{% if rows.paginator.count %}
+  <div class="small text-muted text-center mt-2">
+    Showing {{ rows.start_index }}–{{ rows.end_index }} of {{ rows.paginator.count }}
+    {% if rows.paginator.num_pages > 1 %}
+      · Page {{ rows.number }} of {{ rows.paginator.num_pages }}
+    {% endif %}
+  </div>
+{% endif %}
+{% if rows.paginator.num_pages > 1 %}
+  <nav class="mt-2" aria-label="Salt log pages">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+      {% if rows.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?tab={{ tab }}&{{ page_param }}={{ rows.previous_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Previous</a>
+        </li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+      {% endif %}
+      <li class="page-item disabled">
+        <span class="page-link">Page {{ rows.number }} of {{ rows.paginator.num_pages }}</span>
+      </li>
+      {% if rows.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?tab={{ tab }}&{{ page_param }}={{ rows.next_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Next</a>
+        </li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">Next</span></li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}
