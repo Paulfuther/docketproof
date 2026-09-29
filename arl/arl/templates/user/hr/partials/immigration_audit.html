@@ -139,10 +139,10 @@
                 {% if employee.email or employee.store_id %}
                   <div class="imm-who-meta">
                     {% if employee.email %}
-                      <div class="imm-meta">{{ employee.email }}</div>
+                      <div class="imm-meta imm-meta-email">{{ employee.email }}</div>
                     {% endif %}
                     {% if employee.store_id %}
-                      <div class="imm-meta">Store {{ employee.store.number }}</div>
+                      <div class="imm-meta imm-meta-store">Store {{ employee.store.number }}</div>
                     {% endif %}
                   </div>
                 {% endif %}
@@ -899,43 +899,66 @@
   }
 
   .imm-row .imm-scan {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       "name name"
-      "meta meta"
+      "email kicker"
+      "store store"
       "pill days"
       "chips chips"
       "details details";
-    column-gap: 12px;
+    column-gap: 8px;
     row-gap: 2px;
-    align-items: end;
+    align-items: center;
     min-width: 0;
     width: auto;
     padding: 14px 14px 12px;
   }
 
-  .imm-row .imm-scan:not(:has(.imm-who-meta)) {
+  .imm-row .imm-scan:has(.imm-meta-email):not(:has(.imm-meta-store)) {
     grid-template-areas:
       "name name"
+      "email kicker"
       "pill days"
       "chips chips"
       "details details";
   }
 
-  .imm-who {
+  .imm-row .imm-scan:not(:has(.imm-meta-email)):has(.imm-meta-store) {
+    grid-template-areas:
+      "name name"
+      "store kicker"
+      "pill days"
+      "chips chips"
+      "details details";
+  }
+
+  .imm-row .imm-scan:not(:has(.imm-who-meta)) {
+    grid-template-areas:
+      "name kicker"
+      "pill days"
+      "chips chips"
+      "details details";
+  }
+
+  .imm-who,
+  .imm-who-meta,
+  .imm-days {
     display: contents;
   }
 
   .imm-name {
     grid-area: name;
-    align-self: start;
+    align-self: center;
     min-width: 0;
   }
 
-  .imm-who-meta {
-    grid-area: meta;
+  .imm-meta-email { grid-area: email; }
+  .imm-meta-store { grid-area: store; }
+
+  .imm-meta-email,
+  .imm-meta-store {
     min-width: 0;
-    margin-top: 1px;
   }
 
   .imm-chip-overall { grid-area: pill; }
@@ -946,32 +969,27 @@
     min-width: 0;
   }
 
-  /* Email and store stay under the name. Status and days left share the next row. */
-  .imm-row .imm-chip-overall {
-    justify-self: start;
-    align-self: end;
-    width: max-content;
+  /* Email, then store. Status pill and days-left value share the next row at equal width. */
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit,
+  .imm-pair .imm-chip {
+    justify-self: stretch;
+    align-self: center;
+    width: 100%;
     max-width: 100%;
-    margin-top: 10px;
+    min-width: 0;
   }
 
-  .imm-days {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: flex-end;
-    grid-area: days;
-    align-self: end;
-    justify-self: end;
-    gap: 2px;
-    width: max-content;
-    min-width: max-content;
-    max-width: none;
-    margin-top: 10px;
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit {
+    margin-top: 8px;
   }
 
   .imm-days-kicker {
     display: block;
+    grid-area: kicker;
+    justify-self: end;
+    align-self: center;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -982,10 +1000,7 @@
   }
 
   .imm-days .imm-chip-permit {
-    grid-area: auto;
-    width: max-content;
-    min-width: max-content;
-    max-width: none;
+    grid-area: days;
   }
 
   .imm-pair {
@@ -999,7 +1014,6 @@
 
   .imm-pair .imm-chip {
     grid-area: auto;
-    width: auto;
   }
 
   .imm-details-toggle {
