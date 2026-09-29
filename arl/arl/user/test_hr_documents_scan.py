@@ -454,6 +454,36 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn("Sam Sent", flagged_body)
         self.assertNotIn("Mia Missing", flagged_body)
 
+    def test_hr_side_menu_tooltips_name_each_destination(self):
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("hr_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+
+        for label in (
+            "Document templates",
+            "Invite a new hire",
+            "User roles",
+            "Employee documents",
+            "HR Documents",
+        ):
+            self.assertEqual(body.count(f'data-title="{label}"'), 2)
+            self.assertEqual(body.count(f'title="{label}"'), 2)
+            self.assertEqual(body.count(f'aria-label="{label}"'), 2)
+
+        self.assertNotIn('data-title="Immigration"', body)
+        self.assertNotIn('data-title="Templates"', body)
+        self.assertIn("bootstrap.Tooltip", body)
+        self.assertIn("(hover: hover) and (pointer: fine)", body)
+
+        immigration, _ = Group.objects.get_or_create(name="immigration_audit")
+        self.hr.groups.add(immigration)
+        allowed = self.client.get(reverse("hr_dashboard"))
+        allowed_body = allowed.content.decode()
+        self.assertEqual(allowed_body.count('data-title="Immigration Audit"'), 2)
+        self.assertEqual(allowed_body.count('title="Immigration Audit"'), 2)
+        self.assertEqual(allowed_body.count('aria-label="Immigration Audit"'), 2)
+
     def test_partial_forbidden_without_hr_group(self):
         outsider = self._person(
             "no.hr",
