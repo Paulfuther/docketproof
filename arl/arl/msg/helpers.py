@@ -345,6 +345,26 @@ def send_linkshortened_sms(
         return f"❌ Error sending SMS: {str(e)}"
 
 
+# Same opt-out line the compliance SMS templates already append.
+SMS_OPT_OUT_FOOTER = "Reply STOP to opt out."
+
+
+def with_sms_opt_out(body):
+    """Final Communications SMS text, including the opt-out line.
+
+    Compliance templates already end with SMS_OPT_OUT_FOOTER. Compose uses
+    the same line so the preview matches what the recipient receives.
+    An empty body is left empty. A message that already contains the line
+    is not given a second copy.
+    """
+    text = (body or "").strip()
+    if not text:
+        return ""
+    if SMS_OPT_OUT_FOOTER.casefold() in text.casefold():
+        return text
+    return f"{text}\n{SMS_OPT_OUT_FOOTER}"
+
+
 # This function function is APPROVED for multip tenant.
 # It gets its arguments from the task
 def send_bulk_sms(

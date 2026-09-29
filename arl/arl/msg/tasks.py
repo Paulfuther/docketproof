@@ -47,6 +47,7 @@ from arl.setup.models import TenantApiKeys
 from arl.user.models import SMSOptOut, EmployerSMSTask, NewHireInvite
 
 from .helpers import (
+    SMS_OPT_OUT_FOOTER,
     client,
     create_master_email,
     create_single_csv_email,
@@ -57,6 +58,7 @@ from .helpers import (
     send_whats_app_template,
     send_whats_app_template_autoreply,
     sync_contacts_with_sendgrid,
+    with_sms_opt_out,
 )
 
 logger = get_task_logger(__name__)
@@ -459,8 +461,7 @@ def send_bulk_shortened_sms_link_task(self):
                 "Hello, this is Terry from Petro Canada. Each week, we share reminders for employees "
                 "about regulated products. Please review this week’s message: "
                 "https://paulfuther.eu-central-1.linodeobjects.com/compliance/4dcc0432-05f8-4e5e-b462-7c31bd7c59bd_compliance/rules.pdf "
-                "Reply STOP to opt out."
-            )
+            ) + SMS_OPT_OUT_FOOTER
             # Send individually to each user so link gets shortened per-message
             for phone in phone_numbers:
                 result = send_linkshortened_sms(
@@ -549,8 +550,7 @@ def lotto_theft_sms_link_task(self):
                 "Remove all 100 and 30 dollar lotto tickets. Do not activate anymore of these and lock up the ones you have."
                 "Please review an image of the suspect: "
                 "https://paulfuther.eu-central-1.linodeobjects.com/compliance/83d38dc5-4198-4d47-a710-97017e2173c6_compliance/f738598d-b7e8-497b-9da1-5393e8c74625.jpeg "
-                "Reply STOP to opt out."
-            )
+            ) + SMS_OPT_OUT_FOOTER
             # Send individually to each user so link gets shortened per-message
             for phone in phone_numbers:
                 result = send_linkshortened_sms(
@@ -657,7 +657,7 @@ def send_one_off_bulk_sms_task(group_id, message, user_id):
 # NEW: Send SMS to selected individual users (not group)
 @app.task(name="one_off_user_sms")
 def send_sms_to_selected_users_task(user_ids, message, sender_id):
-    message_body = message
+    message_body = with_sms_opt_out(message)
     User = get_user_model()
     try:
         sender = User.objects.get(id=sender_id)
@@ -687,7 +687,7 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
     try:
         send_bulk_sms(
             phone_numbers,
-            message,
+            message_body,
             twilio_keys["account_sid"],
             twilio_keys["auth_token"],
             twilio_keys["notify_service_sid"],

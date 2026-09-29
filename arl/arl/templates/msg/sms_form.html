@@ -129,6 +129,17 @@
     {% if sms_form.message.errors %}
       <div class="text-danger small">{{ sms_form.message.errors.0 }}</div>
     {% endif %}
+
+    <div class="mt-3" id="sms-preview-wrap">
+      <div class="fw-semibold small mb-1">Preview</div>
+      <div id="sms-preview"
+           class="border rounded bg-white p-2 small text-muted"
+           data-opt-out-footer="Reply STOP to opt out."
+           style="min-height: 80px; max-height: 200px; overflow:auto; white-space: pre-wrap;">Your message will appear here.</div>
+      <div class="text-muted small mt-1">
+        Recipients receive this text. Reply STOP to opt out. is added unless the message already includes it.
+      </div>
+    </div>
   </div>
 
   <!-- Group Dropdown -->
@@ -254,8 +265,42 @@
   function insertSmsAi() {
   console.log("Insert button clicked");
   const aiText = document.getElementById("sms-ai-body").value;
-  document.getElementById("id_sms_message").value = aiText;
+  const field = document.getElementById("id_sms_message");
+  if (!field) return;
+  field.value = aiText;
+  updateSmsPreview();
 }
+
+  function updateSmsPreview() {
+    const field = document.getElementById("id_sms_message");
+    const preview = document.getElementById("sms-preview");
+    if (!field || !preview) return;
+    const footer = (preview.getAttribute("data-opt-out-footer") || "").trim();
+    const text = field.value.trim();
+    let finalText = "";
+    if (!text) {
+      preview.textContent = footer
+        ? "Your message will appear here.\n" + footer
+        : "Your message will appear here.";
+      preview.classList.add("text-muted");
+      return;
+    }
+    if (footer && text.toLowerCase().indexOf(footer.toLowerCase()) !== -1) {
+      finalText = text;
+    } else if (footer) {
+      finalText = text + "\n" + footer;
+    } else {
+      finalText = text;
+    }
+    preview.textContent = finalText;
+    preview.classList.remove("text-muted");
+  }
+
+  const smsMessageField = document.getElementById("id_sms_message");
+  if (smsMessageField) {
+    smsMessageField.addEventListener("input", updateSmsPreview);
+    updateSmsPreview();
+  }
 
  
 </script>

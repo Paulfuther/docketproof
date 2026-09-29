@@ -53,7 +53,7 @@ from arl.msg.email_utils import (
     sendgrid_id_for_template,
     wrap_in_app_email_html,
 )
-from arl.msg.helpers import (client, get_all_contact_lists,
+from arl.msg.helpers import (SMS_OPT_OUT_FOOTER, client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
                              is_member_of_comms_group,
                              is_member_of_docusign_group,
@@ -1652,8 +1652,7 @@ def test_sms_with_short_link(request):
         "Hello, this is Terry from Petro Canada. Each week, we share reminders for employees "
         "about regulated products. Please review this week’s message: "
         "https://paulfuther.eu-central-1.linodeobjects.com/compliance/4dcc0432-05f8-4e5e-b462-7c31bd7c59bd_compliance/rules.pdf "
-        "Reply STOP to opt out."
-    )
+    ) + SMS_OPT_OUT_FOOTER
 
     result = send_linkshortened_sms(
         to_number=test_number,
