@@ -50,11 +50,39 @@
 }
 
 /* ===== Mobile nav ===== */
+#hrNavMobile {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  padding-left: 0;
+  padding-right: 0;
+  overflow-x: auto;
+}
 #hrNavMobile .hr-nav-link {
-  padding: .5rem;
+  flex: 1 1 0;
+  /* Floor keeps "Immigration" on one line at .65rem. */
+  min-width: 3.95rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .15rem;
+  padding: .35rem 0;
   border-radius: .5rem;
   text-decoration: none;
+  text-align: center;
   color: inherit;
+  line-height: 1.1;
+}
+#hrNavMobile .hr-nav-link .material-symbols-outlined {
+  flex-shrink: 0;
+}
+#hrNavMobile .hr-nav-label {
+  display: block;
+  max-width: 100%;
+  font-size: .65rem;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: normal;
 }
 #hrNavMobile .hr-nav-link.active,
 #hrNavMobile .hr-nav-link:hover {
@@ -217,6 +245,7 @@ html {
          title="Document templates"
          aria-label="Document templates">
         <i class="material-symbols-outlined" aria-hidden="true">draw</i>
+        <span class="hr-nav-label">Document templates</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'employees' %}active{% endif %}"
@@ -227,6 +256,7 @@ html {
          title="Invite a new hire"
          aria-label="Invite a new hire">
         <i class="material-symbols-outlined" aria-hidden="true">person_add</i>
+        <span class="hr-nav-label">Invite a new hire</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'user_roles' %}active{% endif %}"
@@ -237,6 +267,7 @@ html {
          title="User roles"
          aria-label="User roles">
         <i class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</i>
+        <span class="hr-nav-label">User roles</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'employee_docs' %}active{% endif %}"
@@ -247,6 +278,7 @@ html {
          title="Employee documents"
          aria-label="Employee documents">
         <i class="material-symbols-outlined" aria-hidden="true">folder_open</i>
+        <span class="hr-nav-label">Employee documents</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'document_audit' %}active{% endif %}"
@@ -257,6 +289,7 @@ html {
          title="HR Documents"
          aria-label="HR Documents">
         <i class="material-symbols-outlined" aria-hidden="true">history</i>
+        <span class="hr-nav-label">HR Documents</span>
       </a>
       {% if can_view_immigration %}
       <a class="hr-nav-link {% if active_tab == 'immigration_audit' %}active{% endif %}"
@@ -267,6 +300,7 @@ html {
         title="Immigration Audit"
         aria-label="Immigration Audit">
         <i class="material-symbols-outlined" aria-hidden="true">badge</i>
+        <span class="hr-nav-label">Immigration Audit</span>
       </a>
       {% endif %}
     </div>
