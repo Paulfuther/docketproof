@@ -380,10 +380,20 @@ def sms_compose_greeting(employer):
 
 
 def compose_outbound_sms(body, employer=None):
-    """Greeting, the user's typed body, then the STOP opt-out line."""
+    """Greeting, the user's typed body, then the STOP opt-out line.
+
+    Safe to call more than once. A body that already starts with this
+    employer's greeting is not given a second copy, and a body that already
+    contains the STOP line is not given a second footer.
+    """
     greeting = sms_compose_greeting(employer)
     text = (body or "").strip()
-    combined = f"{greeting}\n{text}" if text else greeting
+    if text.casefold().startswith(greeting.casefold()):
+        combined = text
+    elif text:
+        combined = f"{greeting}\n{text}"
+    else:
+        combined = greeting
     return with_sms_opt_out(combined)
 
 

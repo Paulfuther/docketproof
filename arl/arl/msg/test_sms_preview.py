@@ -60,6 +60,8 @@ class SmsOptOutFooterTests(TestCase):
             compose_outbound_sms("", None),
             f"Hello, this is your contact from our company.\n{SMS_OPT_OUT_FOOTER}",
         )
+        once = compose_outbound_sms("Shift starts at 9.", employer)
+        self.assertEqual(compose_outbound_sms(once, employer), once)
 
     def test_sms_form_preview_includes_greeting_and_stop_footer(self):
         html = (
@@ -226,3 +228,136 @@ class SmsOptOutFooterTests(TestCase):
         self.assertEqual(log.level, "INFO")
         self.assertIn(sent_body, log.message)
         self.assertNotIn("message_body", {field.name for field in SmsLog._meta.fields})
+
+    def _employer_sender_recipient(self, username_prefix, senior="", company="Acme Co"):
+        employer = Employer.objects.create(
+            name=company, senior_contact_name=senior
+        )
+        sender = CustomUser.objects.create_user(
+            username=f"{username_prefix}.sender",
+            email=f"{username_prefix}.sender@example.com",
+            password="pass12345",
+            phone_number="+15195550110",
+            employer=employer,
+        )
+        recipient = CustomUser.objects.create_user(
+            username=f"{username_prefix}.recipient",
+            email=f"{username_prefix}.recipient@example.com",
+            password="pass12345",
+            phone_number="+15195550111",
+            employer=employer,
+        )
+        TenantApiKeys.objects.create(
+            employer=employer,
+            account_sid="AC123",
+            auth_token="token",
+            notify_service_sid="IS123",
+            is_active=True,
+        )
+        return employer, sender, recipient
+
+    @patch("arl.msg.helpers.Client")
+    def test_selected_users_notify_body_starts_with_greeting_and_ends_with_stop(
+        self, mock_client_cls
+    ):
+        notifications = (
+            mock_client_cls.return_value.notify.services.return_value.notifications
+        )
+        notifications.create.return_value = object()
+        employer, sender, recipient = self._employer_sender_recipient(
+            "notify.users", senior="Pat Manager"
+        )
+
+        send_sms_to_selected_users_task.run(
+            [recipient.pk],
+            "Shift starts at 9.",
+            sender.pk,
+        )
+
+        body = notifications.create.call_args.kwargs["body"]
+        self.assertTrue(body.startswith("Hello, this is Pat Manager from Acme Co."))
+        self.assertIn("Shift starts at 9.", body)
+        self.assertTrue(body.endswith(SMS_OPT_OUT_FOOTER))
+        self.assertEqual(body.count(SMS_OPT_OUT_FOOTER), 1)
+        self.assertEqual(body.count("Hello, this is"), 1)
+        self.assertEqual(employer.name, "Acme Co")
+
+    @patch("arl.msg.helpers.Client")
+    def test_group_send_notify_body_starts_with_greeting_and_ends_with_stop(
+        self, mock_client_cls
+    ):
+        notifications = (
+            mock_client_cls.return_value.notify.services.return_value.notifications
+        )
+        notifications.create.return_value = object()
+        _employer, sender, recipient = self._employer_sender_recipient(
+            "notify.group", senior="", company="Acme Co"
+        )
+        group = Group.objects.create(name="Crew")
+        recipient.groups.add(group)
+
+        send_one_off_bulk_sms_task.run(group.pk, "Shift starts at 9.", sender.pk)
+
+        body = notifications.create.call_args.kwargs["body"]
+        self.assertTrue(body.startswith("Hello, this is your contact from Acme Co."))
+        self.assertIn("Shift starts at 9.", body)
+        self.assertTrue(body.endswith(SMS_OPT_OUT_FOOTER))
+
+    @patch("arl.msg.views.send_sms_to_selected_users_task")
+    def test_comms_view_queues_greeting_for_users_and_group(self, mock_task):
+        employer = Employer.objects.create(
+            name="Acme Co", senior_contact_name="Pat Manager"
+        )
+        user = CustomUser.objects.create_user(
+            username="sms.view.sender",
+            email="view.sender@example.com",
+            password="pass12345",
+            phone_number="+15195550120",
+            employer=employer,
+        )
+        recipient = CustomUser.objects.create_user(
+            username="sms.view.recipient",
+            email="view.recipient@example.com",
+            password="pass12345",
+            phone_number="+15195550121",
+            employer=employer,
+        )
+        for name in ("SendCOMMS", "SendSMS"):
+            user.groups.add(Group.objects.get_or_create(name=name)[0])
+        group = Group.objects.create(name="Night Crew")
+        recipient.groups.add(group)
+        self.client.force_login(user)
+
+        expected = (
+            "Hello, this is Pat Manager from Acme Co.\n"
+            f"Shift starts at 9.\n{SMS_OPT_OUT_FOOTER}"
+        )
+
+        user_response = self.client.post(
+            reverse("comms") + "?tab=sms",
+            {
+                "form_type": "sms",
+                "sms_message": "Shift starts at 9.",
+                "selected_users": [str(recipient.pk)],
+            },
+        )
+        self.assertEqual(user_response.status_code, 302)
+        queued = mock_task.delay.call_args.args[1]
+        self.assertEqual(queued, expected)
+        self.assertTrue(queued.startswith("Hello, this is"))
+        self.assertTrue(queued.endswith(SMS_OPT_OUT_FOOTER))
+
+        mock_task.delay.reset_mock()
+        group_response = self.client.post(
+            reverse("comms") + "?tab=sms",
+            {
+                "form_type": "sms",
+                "sms_message": "Shift starts at 9.",
+                "selected_group": str(group.pk),
+            },
+        )
+        self.assertEqual(group_response.status_code, 302)
+        queued_group = mock_task.delay.call_args.args[1]
+        self.assertEqual(queued_group, expected)
+        self.assertTrue(queued_group.startswith("Hello, this is"))
+        self.assertTrue(queued_group.endswith(SMS_OPT_OUT_FOOTER))

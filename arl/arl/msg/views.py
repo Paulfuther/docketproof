@@ -53,7 +53,8 @@ from arl.msg.email_utils import (
     sendgrid_id_for_template,
     wrap_in_app_email_html,
 )
-from arl.msg.helpers import (SMS_OPT_OUT_FOOTER, client, get_all_contact_lists,
+from arl.msg.helpers import (SMS_OPT_OUT_FOOTER, client, compose_outbound_sms,
+                             get_all_contact_lists,
                              get_uploaded_urls_from_request,
                              is_member_of_comms_group,
                              is_member_of_docusign_group,
@@ -605,6 +606,11 @@ def communications(request):
                 selected_group = sms_form.cleaned_data["selected_group"]
                 selected_users = sms_form.cleaned_data["selected_users"]
                 sms_message = sms_form.cleaned_data["sms_message"]
+                # Queue the final text. Selected users and groups both use this
+                # task, and the task composes again before Twilio Notify.
+                outbound_sms = compose_outbound_sms(
+                    sms_message, employer=getattr(user, "employer", None)
+                )
 
                 recipients = prepare_sms_recipient_data(
                     user, selected_group, selected_users
@@ -619,7 +625,7 @@ def communications(request):
                 # Pass list of user IDs to the task
                 recipient_ids = [r["id"] for r in recipients]
                 send_sms_to_selected_users_task.delay(
-                    recipient_ids, sms_message, user.id
+                    recipient_ids, outbound_sms, user.id
                 )
 
                 messages.success(request, "SMS is being sent.")

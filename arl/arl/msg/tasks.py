@@ -636,8 +636,9 @@ def send_one_off_bulk_sms_task(group_id, message, user_id):
         return
 
     try:
-        # Greeting + typed body + STOP. send_bulk_sms also enforces the footer.
-        message_body = compose_outbound_sms(message, employer)
+        # Group sends must not hand Twilio the typed text alone.
+        # send_bulk_sms only appends STOP.
+        message_body = compose_outbound_sms(message, employer=employer)
         send_bulk_sms(
             phone_numbers,
             message_body,
@@ -669,8 +670,6 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
         logger.error(f"🚨 Sender user {sender_id} not found.")
         return
 
-    message_body = compose_outbound_sms(message, employer)
-
     # ✅ Fetch active target users
     users = User.objects.filter(id__in=user_ids, is_active=True, employer=employer)
     phone_numbers = [u.phone_number for u in users if u.phone_number]
@@ -690,6 +689,9 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
         return
 
     try:
+        # Compose even when the queued arg is only the typed message.
+        # send_bulk_sms only appends STOP.
+        message_body = compose_outbound_sms(message, employer=employer)
         send_bulk_sms(
             phone_numbers,
             message_body,
