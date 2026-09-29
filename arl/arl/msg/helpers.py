@@ -350,7 +350,7 @@ SMS_OPT_OUT_FOOTER = "Reply STOP to opt out."
 
 
 def with_sms_opt_out(body):
-    """Final Communications SMS text, including the opt-out line.
+    """Append the opt-out line when it is not already in the message.
 
     Compliance templates already end with SMS_OPT_OUT_FOOTER. Compose uses
     the same line so the preview matches what the recipient receives.
@@ -363,6 +363,28 @@ def with_sms_opt_out(body):
     if SMS_OPT_OUT_FOOTER.casefold() in text.casefold():
         return text
     return f"{text}\n{SMS_OPT_OUT_FOOTER}"
+
+
+def sms_compose_greeting(employer):
+    """Opening line for Communications SMS.
+
+    Uses the same employer tokens as in-app email: senior_contact_name and
+    company name (employer.name). A blank senior contact becomes
+    "your contact"; a blank company becomes "our company".
+    """
+    senior = (getattr(employer, "senior_contact_name", None) or "").strip()
+    company = (getattr(employer, "name", None) or "").strip()
+    senior = senior or "your contact"
+    company = company or "our company"
+    return f"Hello, this is {senior} from {company}."
+
+
+def compose_outbound_sms(body, employer=None):
+    """Greeting, the user's typed body, then the STOP opt-out line."""
+    greeting = sms_compose_greeting(employer)
+    text = (body or "").strip()
+    combined = f"{greeting}\n{text}" if text else greeting
+    return with_sms_opt_out(combined)
 
 
 # This function function is APPROVED for multip tenant.
@@ -400,6 +422,9 @@ def send_bulk_sms(
         ]
 
         print("=====> To Bindings :>", bindings, "<: =====")
+
+        # Every bulk/compose SMS includes the opt-out line, even if a caller skipped it.
+        body = with_sms_opt_out(body)
 
         # ✅ Use the employer's Twilio Account SID & Auth Token
         client = Client(twilio_account_sid, twilio_auth_token)

@@ -8,6 +8,7 @@ from django.db.models import CharField, IntegerField, Value
 from django.forms import RadioSelect
 from django.forms.widgets import Select
 
+from arl.msg.helpers import sms_compose_greeting
 from arl.msg.models import EmailTemplate, WhatsAppTemplate
 from arl.user.models import CustomUser, Store
 
@@ -43,6 +44,8 @@ class SMSForm(forms.Form):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        employer = getattr(user, "employer", None) if user else None
+        self.preview_greeting = sms_compose_greeting(employer)
 
         if user and user.employer:
             employer = user.employer

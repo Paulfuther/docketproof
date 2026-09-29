@@ -135,9 +135,10 @@
       <div id="sms-preview"
            class="border rounded bg-white p-2 small text-muted"
            data-opt-out-footer="Reply STOP to opt out."
+           data-sms-greeting="{{ sms_form.preview_greeting }}"
            style="min-height: 80px; max-height: 200px; overflow:auto; white-space: pre-wrap;">Your message will appear here.</div>
       <div class="text-muted small mt-1">
-        Recipients receive this text. Reply STOP to opt out. is added unless the message already includes it.
+        Recipients receive the greeting, your message, and Reply STOP to opt out.
       </div>
     </div>
   </div>
@@ -276,21 +277,20 @@
     const preview = document.getElementById("sms-preview");
     if (!field || !preview) return;
     const footer = (preview.getAttribute("data-opt-out-footer") || "").trim();
+    const greeting = (preview.getAttribute("data-sms-greeting") || "").trim();
     const text = field.value.trim();
-    let finalText = "";
     if (!text) {
-      preview.textContent = footer
-        ? "Your message will appear here.\n" + footer
-        : "Your message will appear here.";
+      const parts = [];
+      if (greeting) parts.push(greeting);
+      parts.push("Your message will appear here.");
+      if (footer) parts.push(footer);
+      preview.textContent = parts.join("\n");
       preview.classList.add("text-muted");
       return;
     }
-    if (footer && text.toLowerCase().indexOf(footer.toLowerCase()) !== -1) {
-      finalText = text;
-    } else if (footer) {
-      finalText = text + "\n" + footer;
-    } else {
-      finalText = text;
+    let finalText = greeting ? greeting + "\n" + text : text;
+    if (footer && finalText.toLowerCase().indexOf(footer.toLowerCase()) === -1) {
+      finalText = finalText + "\n" + footer;
     }
     preview.textContent = finalText;
     preview.classList.remove("text-muted");

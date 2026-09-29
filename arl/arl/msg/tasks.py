@@ -57,8 +57,8 @@ from .helpers import (
     send_store_phonecall_reminder,
     send_whats_app_template,
     send_whats_app_template_autoreply,
+    compose_outbound_sms,
     sync_contacts_with_sendgrid,
-    with_sms_opt_out,
 )
 
 logger = get_task_logger(__name__)
@@ -636,16 +636,20 @@ def send_one_off_bulk_sms_task(group_id, message, user_id):
         return
 
     try:
-        # ✅ Send bulk SMS, now including employer info
+        # Greeting + typed body + STOP. send_bulk_sms also enforces the footer.
+        message_body = compose_outbound_sms(message, employer)
         send_bulk_sms(
             phone_numbers,
-            message,
+            message_body,
             twilio_account_sid,
             twilio_auth_token,
             twilio_notify_sid,
         )
 
-        log_message = f"📢 Bulk SMS sent by {employer.name} to {group.name} ({len(phone_numbers)} recipients)"
+        log_message = (
+            f"📢 Bulk SMS sent by {employer.name} to {group.name} "
+            f"({len(phone_numbers)} recipients)\n{message_body}"
+        )
         logger.info(log_message)
 
         SmsLog.objects.create(level="INFO", message=log_message)
@@ -657,7 +661,6 @@ def send_one_off_bulk_sms_task(group_id, message, user_id):
 # NEW: Send SMS to selected individual users (not group)
 @app.task(name="one_off_user_sms")
 def send_sms_to_selected_users_task(user_ids, message, sender_id):
-    message_body = with_sms_opt_out(message)
     User = get_user_model()
     try:
         sender = User.objects.get(id=sender_id)
@@ -665,6 +668,8 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
     except User.DoesNotExist:
         logger.error(f"🚨 Sender user {sender_id} not found.")
         return
+
+    message_body = compose_outbound_sms(message, employer)
 
     # ✅ Fetch active target users
     users = User.objects.filter(id__in=user_ids, is_active=True, employer=employer)
