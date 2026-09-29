@@ -344,12 +344,17 @@ document.addEventListener("DOMContentLoaded", function () {
     var tip = new Tooltip(el, {
       title: label,
       placement: el.closest("#hrNav") ? "right" : "bottom",
-      trigger: "hover focus",
+      trigger: "manual",
       container: "body",
       customClass: "hr-nav-tooltip",
-      fallbackPlacements: ["right", "bottom", "top", "left"],
-      delay: { show: 120, hide: 0 }
+      fallbackPlacements: ["right", "bottom", "top", "left"]
     });
+    el.addEventListener("mouseenter", function () { tip.show(); });
+    el.addEventListener("mouseleave", function () { tip.hide(); });
+    el.addEventListener("focus", function () {
+      if (el.matches(":focus-visible")) tip.show();
+    });
+    el.addEventListener("blur", function () { tip.hide(); });
     el.addEventListener("click", function () { tip.hide(); });
   });
 });
