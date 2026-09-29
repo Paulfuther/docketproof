@@ -454,6 +454,62 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn("Sam Sent", flagged_body)
         self.assertNotIn("Mia Missing", flagged_body)
 
+    def _hr_nav_markup(self, body):
+        after_desktop = body.split('id="hrNav"', 1)[1]
+        desktop_nav, after_mobile = after_desktop.split('id="hrNavMobile"', 1)
+        mobile_nav = after_mobile.split('id="hrTabContent"', 1)[0]
+        return desktop_nav, mobile_nav
+
+    def test_hr_side_menu_tooltips_name_each_destination(self):
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("hr_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+
+        for label in (
+            "Document templates",
+            "Invite a new hire",
+            "User roles",
+            "Employee documents",
+            "HR Documents",
+        ):
+            self.assertEqual(body.count(f'data-title="{label}"'), 2)
+            self.assertEqual(body.count(f'title="{label}"'), 2)
+            self.assertEqual(body.count(f'aria-label="{label}"'), 2)
+
+        desktop_nav, mobile_nav = self._hr_nav_markup(body)
+        self.assertNotIn("hr-nav-label", desktop_nav)
+        self.assertIn("font-size: .65rem", body)
+        self.assertIn("line-height: 1.1", body)
+        for label in (
+            "Document templates",
+            "Invite a new hire",
+            "User roles",
+            "Employee documents",
+            "HR Documents",
+        ):
+            self.assertEqual(mobile_nav.count(f'class="hr-nav-label">{label}</span>'), 1)
+        self.assertNotIn("Immigration Audit", mobile_nav)
+
+        self.assertNotIn('data-title="Immigration"', body)
+        self.assertNotIn('data-title="Templates"', body)
+        self.assertIn("bootstrap.Tooltip", body)
+        self.assertIn("(hover: hover) and (pointer: fine)", body)
+
+        immigration, _ = Group.objects.get_or_create(name="immigration_audit")
+        self.hr.groups.add(immigration)
+        allowed = self.client.get(reverse("hr_dashboard"))
+        allowed_body = allowed.content.decode()
+        self.assertEqual(allowed_body.count('data-title="Immigration Audit"'), 2)
+        self.assertEqual(allowed_body.count('title="Immigration Audit"'), 2)
+        self.assertEqual(allowed_body.count('aria-label="Immigration Audit"'), 2)
+        allowed_desktop, allowed_mobile = self._hr_nav_markup(allowed_body)
+        self.assertNotIn("hr-nav-label", allowed_desktop)
+        self.assertEqual(
+            allowed_mobile.count('class="hr-nav-label">Immigration Audit</span>'),
+            1,
+        )
+
     def test_partial_forbidden_without_hr_group(self):
         outsider = self._person(
             "no.hr",

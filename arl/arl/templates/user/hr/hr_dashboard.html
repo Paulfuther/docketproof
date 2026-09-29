@@ -40,12 +40,49 @@
   background: #f1f5ff;
 }
 
+/* Tooltip is appended to body so the narrow sidebar does not clip it.
+   pointer-events: none keeps the bubble off the next icon. */
+.hr-nav-tooltip {
+  pointer-events: none;
+}
+.hr-nav-tooltip .tooltip-inner {
+  font-size: .8125rem;
+}
+
 /* ===== Mobile nav ===== */
+#hrNavMobile {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  padding-left: 0;
+  padding-right: 0;
+  overflow-x: auto;
+}
 #hrNavMobile .hr-nav-link {
-  padding: .5rem;
+  flex: 1 1 0;
+  /* Floor keeps "Immigration" on one line at .65rem. */
+  min-width: 3.95rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .15rem;
+  padding: .35rem 0;
   border-radius: .5rem;
   text-decoration: none;
+  text-align: center;
   color: inherit;
+  line-height: 1.1;
+}
+#hrNavMobile .hr-nav-link .material-symbols-outlined {
+  flex-shrink: 0;
+}
+#hrNavMobile .hr-nav-label {
+  display: block;
+  max-width: 100%;
+  font-size: .65rem;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: normal;
 }
 #hrNavMobile .hr-nav-link.active,
 #hrNavMobile .hr-nav-link:hover {
@@ -136,48 +173,60 @@ html {
              data-bs-toggle="tab"
              href="#docusign"
              role="tab"
-             data-title="Templates">
-            <i class="material-symbols-outlined">draw</i>
+             data-title="Document templates"
+             title="Document templates"
+             aria-label="Document templates">
+            <i class="material-symbols-outlined" aria-hidden="true">draw</i>
           </a>
 
           <a class="hr-nav-link {% if active_tab == 'employees' %}active{% endif %}"
              data-bs-toggle="tab"
              href="#employees"
              role="tab"
-             data-title="Invite">
-            <i class="material-symbols-outlined">person_add</i>
+             data-title="Invite a new hire"
+             title="Invite a new hire"
+             aria-label="Invite a new hire">
+            <i class="material-symbols-outlined" aria-hidden="true">person_add</i>
           </a>
 
           <a class="hr-nav-link {% if active_tab == 'user_roles' %}active{% endif %}"
              data-bs-toggle="tab"
              href="#user_roles"
              role="tab"
-             data-title="Roles">
-            <i class="material-symbols-outlined">admin_panel_settings</i>
+             data-title="User roles"
+             title="User roles"
+             aria-label="User roles">
+            <i class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</i>
           </a>
 
           <a class="hr-nav-link {% if active_tab == 'employee_docs' %}active{% endif %}"
              data-bs-toggle="tab"
              href="#employee_docs"
              role="tab"
-             data-title="Documents">
-            <i class="material-symbols-outlined">folder_open</i>
+             data-title="Employee documents"
+             title="Employee documents"
+             aria-label="Employee documents">
+            <i class="material-symbols-outlined" aria-hidden="true">folder_open</i>
           </a>
 
           <a class="hr-nav-link {% if active_tab == 'document_audit' %}active{% endif %}"
              data-bs-toggle="tab"
              href="#document_audit"
              role="tab"
-             data-title="HR Documents">
-            <i class="material-symbols-outlined">history</i>
+             data-title="HR Documents"
+             title="HR Documents"
+             aria-label="HR Documents">
+            <i class="material-symbols-outlined" aria-hidden="true">history</i>
           </a>
           {% if can_view_immigration %}
           <a class="hr-nav-link {% if active_tab == 'immigration_audit' %}active{% endif %}"
             data-bs-toggle="tab"
             href="#immigration_audit"
             role="tab"
-            data-title="Immigration">
-            <i class="material-symbols-outlined">badge</i>
+            data-title="Immigration Audit"
+            title="Immigration Audit"
+            aria-label="Immigration Audit">
+            <i class="material-symbols-outlined" aria-hidden="true">badge</i>
           </a>
           {% endif %}
         </nav>
@@ -191,44 +240,67 @@ html {
       <a class="hr-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#docusign"
-         role="tab">
-        <i class="material-symbols-outlined">draw</i>
+         role="tab"
+         data-title="Document templates"
+         title="Document templates"
+         aria-label="Document templates">
+        <i class="material-symbols-outlined" aria-hidden="true">draw</i>
+        <span class="hr-nav-label">Document templates</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'employees' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#employees"
-         role="tab">
-        <i class="material-symbols-outlined">person_add</i>
+         role="tab"
+         data-title="Invite a new hire"
+         title="Invite a new hire"
+         aria-label="Invite a new hire">
+        <i class="material-symbols-outlined" aria-hidden="true">person_add</i>
+        <span class="hr-nav-label">Invite a new hire</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'user_roles' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#user_roles"
-         role="tab">
-        <i class="material-symbols-outlined">admin_panel_settings</i>
+         role="tab"
+         data-title="User roles"
+         title="User roles"
+         aria-label="User roles">
+        <i class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</i>
+        <span class="hr-nav-label">User roles</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'employee_docs' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#employee_docs"
-         role="tab">
-        <i class="material-symbols-outlined">folder_open</i>
+         role="tab"
+         data-title="Employee documents"
+         title="Employee documents"
+         aria-label="Employee documents">
+        <i class="material-symbols-outlined" aria-hidden="true">folder_open</i>
+        <span class="hr-nav-label">Employee documents</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'document_audit' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#document_audit"
-         role="tab">
-        <i class="material-symbols-outlined">history</i>
+         role="tab"
+         data-title="HR Documents"
+         title="HR Documents"
+         aria-label="HR Documents">
+        <i class="material-symbols-outlined" aria-hidden="true">history</i>
+        <span class="hr-nav-label">HR Documents</span>
       </a>
       {% if can_view_immigration %}
       <a class="hr-nav-link {% if active_tab == 'immigration_audit' %}active{% endif %}"
         data-bs-toggle="tab"
         href="#immigration_audit"
         role="tab"
-        data-title="Immigration">
-        <i class="material-symbols-outlined">badge</i>
+        data-title="Immigration Audit"
+        title="Immigration Audit"
+        aria-label="Immigration Audit">
+        <i class="material-symbols-outlined" aria-hidden="true">badge</i>
+        <span class="hr-nav-label">Immigration Audit</span>
       </a>
       {% endif %}
     </div>
@@ -276,6 +348,51 @@ html {
   </div>
 </div>
 
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var links = document.querySelectorAll(
+    "#hrNav .hr-nav-link[data-title], #hrNavMobile .hr-nav-link[data-title]"
+  );
+  if (!links.length) return;
+
+  // Hover tooltips only where a pointer can hover. On touch, a title
+  // attribute can swallow the first tap, so those links keep aria-label only.
+  var finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var Tooltip = window.bootstrap && window.bootstrap.Tooltip;
+
+  links.forEach(function (el) {
+    var label = (el.getAttribute("data-title") || "").trim();
+    if (!label) return;
+    if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", label);
+
+    if (!finePointer) {
+      el.removeAttribute("title");
+      return;
+    }
+    if (typeof Tooltip !== "function") {
+      if (!el.getAttribute("title")) el.setAttribute("title", label);
+      return;
+    }
+    if (Tooltip.getInstance(el)) return;
+
+    var tip = new Tooltip(el, {
+      title: label,
+      placement: el.closest("#hrNav") ? "right" : "bottom",
+      trigger: "manual",
+      container: "body",
+      customClass: "hr-nav-tooltip",
+      fallbackPlacements: ["right", "bottom", "top", "left"]
+    });
+    el.addEventListener("mouseenter", function () { tip.show(); });
+    el.addEventListener("mouseleave", function () { tip.hide(); });
+    el.addEventListener("focus", function () {
+      if (el.matches(":focus-visible")) tip.show();
+    });
+    el.addEventListener("blur", function () { tip.hide(); });
+    el.addEventListener("click", function () { tip.hide(); });
+  });
+});
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tabEl) {
