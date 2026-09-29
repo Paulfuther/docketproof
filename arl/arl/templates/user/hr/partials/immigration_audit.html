@@ -136,30 +136,41 @@
             <div class="imm-scan">
               <div class="imm-who">
                 <div class="imm-name">{{ employee.get_full_name|default:employee.username }}</div>
-                {% if employee.email %}
-                  <div class="imm-meta">{{ employee.email }}</div>
-                {% endif %}
-                {% if employee.store_id %}
-                  <div class="imm-meta">Store {{ employee.store.number }}</div>
+                {% if employee.email or employee.store_id %}
+                  <div class="imm-who-meta">
+                    {% if employee.email %}
+                      <div class="imm-meta imm-meta-email">{{ employee.email }}</div>
+                    {% endif %}
+                    {% if employee.store_id %}
+                      <div class="imm-meta imm-meta-store">Store {{ employee.store.number }}</div>
+                    {% endif %}
+                  </div>
                 {% endif %}
               </div>
 
-              <span class="imm-chip imm-chip-sin is-{{ row.sin_chip.tone }}" title="{{ row.sin_chip.title }}">
-                <span class="imm-dot" aria-hidden="true"></span>
-                <span class="imm-chip-label">{{ row.sin_chip.label }}</span>
-              </span>
-              <span class="imm-chip imm-chip-permit is-{{ row.permit_chip.tone }}" title="{{ row.permit_chip.title }}">
-                <span class="imm-dot" aria-hidden="true"></span>
-                <span class="imm-chip-label">{{ row.permit_chip.label }}</span>
-              </span>
-              <span class="imm-chip imm-chip-proof is-{{ row.proof_chip.tone }}" title="{{ row.proof_chip.title }}">
-                <span class="imm-dot" aria-hidden="true"></span>
-                <span class="imm-chip-label">{{ row.proof_chip.label }}</span>
-              </span>
               <span class="imm-chip imm-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
                 <span class="imm-dot" aria-hidden="true"></span>
                 <span class="imm-chip-label">{{ row.overall_chip.label }}</span>
               </span>
+
+              <div class="imm-days">
+                <span class="imm-days-kicker">Days left</span>
+                <span class="imm-chip imm-chip-permit is-{{ row.permit_chip.tone }}" title="{{ row.permit_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.permit_chip.label }}</span>
+                </span>
+              </div>
+
+              <div class="imm-pair">
+                <span class="imm-chip imm-chip-sin is-{{ row.sin_chip.tone }}" title="{{ row.sin_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.sin_chip.label }}</span>
+                </span>
+                <span class="imm-chip imm-chip-proof is-{{ row.proof_chip.tone }}" title="{{ row.proof_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.proof_chip.label }}</span>
+                </span>
+              </div>
 
               <label class="imm-details-toggle" for="imm-fold-{{ employee.pk }}">
                 <span class="imm-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
@@ -554,13 +565,30 @@
 }
 
 .imm-row .imm-scan {
+  grid-template-areas: "who sin permit proof overall details";
   padding-top: 14px;
   padding-bottom: 14px;
 }
 
 .imm-who {
+  grid-area: who;
   min-width: 0;
 }
+
+.imm-days,
+.imm-pair {
+  display: contents;
+}
+
+.imm-days-kicker {
+  display: none;
+}
+
+.imm-chip-sin { grid-area: sin; }
+.imm-chip-permit { grid-area: permit; }
+.imm-chip-proof { grid-area: proof; }
+.imm-chip-overall { grid-area: overall; }
+.imm-details-toggle { grid-area: details; }
 
 .imm-name {
   font-size: 15px;
@@ -873,31 +901,119 @@
   .imm-row .imm-scan {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "who who"
-      "sin permit"
-      "proof overall"
+      "name name"
+      "email kicker"
+      "store store"
+      "pill days"
+      "chips chips"
       "details details";
     column-gap: 8px;
-    row-gap: 8px;
+    row-gap: 2px;
     align-items: center;
     min-width: 0;
     width: auto;
     padding: 14px 14px 12px;
   }
 
-  .imm-who {
-    grid-area: who;
+  .imm-row .imm-scan:has(.imm-meta-email):not(:has(.imm-meta-store)) {
+    grid-template-areas:
+      "name name"
+      "email kicker"
+      "pill days"
+      "chips chips"
+      "details details";
   }
 
-  .imm-chip-sin { grid-area: sin; }
-  .imm-chip-permit { grid-area: permit; }
-  .imm-chip-proof { grid-area: proof; }
-  .imm-chip-overall { grid-area: overall; }
+  .imm-row .imm-scan:not(:has(.imm-meta-email)):has(.imm-meta-store) {
+    grid-template-areas:
+      "name name"
+      "store kicker"
+      "pill days"
+      "chips chips"
+      "details details";
+  }
+
+  .imm-row .imm-scan:not(:has(.imm-who-meta)) {
+    grid-template-areas:
+      "name kicker"
+      "pill days"
+      "chips chips"
+      "details details";
+  }
+
+  .imm-who,
+  .imm-who-meta,
+  .imm-days {
+    display: contents;
+  }
+
+  .imm-name {
+    grid-area: name;
+    align-self: center;
+    min-width: 0;
+  }
+
+  .imm-meta-email { grid-area: email; }
+  .imm-meta-store { grid-area: store; }
+
+  .imm-meta-email,
+  .imm-meta-store {
+    min-width: 0;
+  }
+
+  .imm-chip-overall { grid-area: pill; }
 
   .imm-chip {
     width: auto;
     max-width: 100%;
     min-width: 0;
+  }
+
+  /* Email, then store. Status pill and days-left value share the next row at equal width. */
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit,
+  .imm-pair .imm-chip {
+    justify-self: stretch;
+    align-self: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit {
+    margin-top: 8px;
+  }
+
+  .imm-days-kicker {
+    display: block;
+    grid-area: kicker;
+    justify-self: end;
+    align-self: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #98a2b3;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .imm-days .imm-chip-permit {
+    grid-area: days;
+  }
+
+  .imm-pair {
+    display: grid;
+    grid-area: chips;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 8px;
+    margin-top: 8px;
+    min-width: 0;
+  }
+
+  .imm-pair .imm-chip {
+    grid-area: auto;
   }
 
   .imm-details-toggle {
