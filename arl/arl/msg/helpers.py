@@ -951,18 +951,12 @@ def collect_attachments(request, max_files=5):
 
 def prepare_recipient_data(user, selected_group, selected_users):
     recipients = []
-    employer = user.employer
 
-    # ✅ Handle single group (not a loop)
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        for u in selected_group.user_set.filter(is_active=True, employer=employer):
-            recipients.append(
-                {
-                    "name": u.get_full_name(),
-                    "email": u.email,
-                    "status": "Active",
-                }
-            )
+        logger.info(
+            "Ignoring group selection on email send; only individual users are sent."
+        )
 
     if selected_users:
         for u in selected_users.order_by("first_name", "last_name"):
@@ -993,15 +987,11 @@ def prepare_sms_recipient_data(user, selected_group, selected_users):
     # We'll keep a map of user_id -> user instance so we can log names later
     user_map = {}
 
-    # 🔹 Collect recipients from selected group
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        qs = selected_group.user_set.filter(is_active=True, employer=employer)
-        for u in qs:
-            user_map[u.id] = u
-            if not u.phone_number:
-                skipped_no_phone.append(u)
-                continue
-            recipients.append({"id": u.id, "phone": u.phone_number})
+        logger.info(
+            "Ignoring group selection on SMS send; only individual users are sent."
+        )
 
     # 🔹 Collect individually selected users
     if selected_users:
@@ -1142,7 +1132,7 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
     draft.subject = cleaned_data.get("subject", "")
     draft.message = cleaned_data.get("message", "")
     draft.sendgrid_template = cleaned_data.get("sendgrid_id")
-    draft.selected_group = cleaned_data.get("selected_group")
+    draft.selected_group = None
     draft.attachment_urls = attachment_urls
     draft.save()
 

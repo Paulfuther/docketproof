@@ -869,6 +869,22 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertNotIn("Compose Message", send_form)
         self.assertIn("comms-mode-toggle", send_form)
         self.assertIn("comms-manage-link", send_form)
+        self.assertIn("comms-email-form", send_form)
+        self.assertIn("Select Individuals", send_form)
+        self.assertNotIn("toggle-email-group", send_form)
+        self.assertNotIn("selected_group", send_form)
+        self.assertNotIn("Choose Group", send_form)
+        docusign = (
+            Path(__file__).resolve().parent.parent
+            / "templates"
+            / "dsign"
+            / "name_email_form.html"
+        ).read_text()
+        self.assertIn("comms-email-form", docusign)
+        self.assertIn("max-width: 640px", docusign)
+        self.assertIn("Create Envelope", docusign)
+        self.assertNotIn("mobile-btn", docusign)
+        self.assertNotIn("selected_group", docusign)
         self.assertEqual(send_form.count("Manage templates"), 1)
         self.assertIn("{% url 'email_template_list' %}", send_form)
 
@@ -927,6 +943,37 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(kwargs["source"], EMAIL_SOURCE_IN_APP)
         self.assertEqual(kwargs["app_template_id"], template.pk)
         self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
+
+    @patch("arl.msg.views.master_email_send_task")
+    def test_comms_email_rejects_posted_group(self, mock_task):
+        comms_group = Group.objects.create(name="SendCOMMS")
+        self.user.groups.add(comms_group)
+        recipient = CustomUser.objects.create_user(
+            username="grouped-worker",
+            email="grouped@example.com",
+            password="pass12345",
+            phone_number="+15195550108",
+            employer=self.employer,
+            first_name="Sam",
+            last_name="Lee",
+            is_active=True,
+        )
+        crew = Group.objects.create(name="Crew")
+        recipient.groups.add(crew)
+
+        response = self.client.post(
+            reverse("comms") + "?tab=email",
+            {
+                "form_type": "email",
+                "email_mode": "text",
+                "subject": "Hello",
+                "message": "Please read this.",
+                "selected_group": str(crew.pk),
+                "selected_users": [str(recipient.pk)],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        mock_task.delay.assert_not_called()
 
     def test_preview_and_send_include_header_image(self):
         template = EmailTemplate.objects.create(

@@ -8,6 +8,7 @@ from django.urls import reverse
 from arl.msg.helpers import (
     SMS_OPT_OUT_FOOTER,
     compose_outbound_sms,
+    prepare_sms_recipient_data,
     send_bulk_sms,
     sms_compose_greeting,
     with_sms_opt_out,
@@ -75,6 +76,12 @@ class SmsOptOutFooterTests(TestCase):
         self.assertIn('getElementById("id_sms_message")', html)
         self.assertIn("data-sms-greeting", html)
         self.assertIn('greeting + "\\n" + text', html)
+        self.assertIn("comms-email-form", html)
+        self.assertIn("max-width: 640px", html)
+        self.assertIn("Select Individuals", html)
+        self.assertNotIn("toggleGroups", html)
+        self.assertNotIn("selected_group", html)
+        self.assertNotIn("Choose Group", html)
 
     def test_comms_sms_tab_renders_preview(self):
         employer = Employer.objects.create(
@@ -187,8 +194,7 @@ class SmsOptOutFooterTests(TestCase):
         self.assertNotIn("message_body", field_names)
 
     @patch("arl.msg.tasks.send_bulk_sms")
-    def test_group_send_uses_compose_helper(self, mock_send):
-        mock_send.return_value = True
+    def test_group_sms_task_does_not_send(self, mock_send):
         employer = Employer.objects.create(name="", senior_contact_name="")
         sender = CustomUser.objects.create_user(
             username="sms.group.sender",
@@ -214,15 +220,117 @@ class SmsOptOutFooterTests(TestCase):
             is_active=True,
         )
 
-        send_one_off_bulk_sms_task.run(group.pk, "Shift starts at 9.", sender.pk)
-
-        sent_body = mock_send.call_args.args[1]
-        self.assertEqual(
-            sent_body,
-            "Hello, this is your contact from our company.\n"
-            f"Shift starts at 9.\n{SMS_OPT_OUT_FOOTER}",
+        result = send_one_off_bulk_sms_task.run(
+            group.pk, "Shift starts at 9.", sender.pk
         )
-        log = SmsLog.objects.get()
-        self.assertEqual(log.level, "INFO")
-        self.assertIn(sent_body, log.message)
-        self.assertNotIn("message_body", {field.name for field in SmsLog._meta.fields})
+
+        mock_send.assert_not_called()
+        self.assertEqual(result, {"disabled": True})
+        self.assertFalse(SmsLog.objects.exists())
+
+    def test_prepare_sms_recipient_data_ignores_group(self):
+        employer = Employer.objects.create(name="Acme Co")
+        sender = CustomUser.objects.create_user(
+            username="sms.prep.sender",
+            email="prep@example.com",
+            password="pass12345",
+            phone_number="+15195550110",
+            employer=employer,
+        )
+        grouped = CustomUser.objects.create_user(
+            username="sms.prep.grouped",
+            email="grouped@example.com",
+            password="pass12345",
+            phone_number="+15195550111",
+            employer=employer,
+        )
+        chosen = CustomUser.objects.create_user(
+            username="sms.prep.chosen",
+            email="chosen@example.com",
+            password="pass12345",
+            phone_number="+15195550112",
+            employer=employer,
+        )
+        group = Group.objects.create(name="Crew")
+        grouped.groups.add(group)
+
+        from_group_only = prepare_sms_recipient_data(
+            sender, group, CustomUser.objects.none()
+        )
+        self.assertEqual(from_group_only, [])
+
+        chosen_only = prepare_sms_recipient_data(
+            sender, group, CustomUser.objects.filter(pk=chosen.pk)
+        )
+        self.assertEqual([row["id"] for row in chosen_only], [chosen.pk])
+
+    @patch("arl.msg.views.send_sms_to_selected_users_task")
+    def test_comms_sms_rejects_posted_group(self, mock_task):
+        employer = Employer.objects.create(name="Acme Co")
+        sender = CustomUser.objects.create_user(
+            username="sms.post.sender",
+            email="post@example.com",
+            password="pass12345",
+            phone_number="+15195550120",
+            employer=employer,
+        )
+        recipient = CustomUser.objects.create_user(
+            username="sms.post.recipient",
+            email="post-worker@example.com",
+            password="pass12345",
+            phone_number="+15195550121",
+            employer=employer,
+        )
+        for name in ("SendCOMMS", "SendSMS"):
+            sender.groups.add(Group.objects.create(name=name))
+        group = Group.objects.create(name="Shift")
+        recipient.groups.add(group)
+        self.client.force_login(sender)
+
+        response = self.client.post(
+            reverse("comms") + "?tab=sms",
+            {
+                "form_type": "sms",
+                "sms_message": "Shift starts at 9.",
+                "selected_group": str(group.pk),
+                "selected_users": [str(recipient.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mock_task.delay.assert_not_called()
+
+    @patch("arl.msg.views.send_sms_to_selected_users_task")
+    def test_comms_sms_sends_selected_users_only(self, mock_task):
+        employer = Employer.objects.create(name="Acme Co")
+        sender = CustomUser.objects.create_user(
+            username="sms.users.sender",
+            email="users@example.com",
+            password="pass12345",
+            phone_number="+15195550130",
+            employer=employer,
+        )
+        recipient = CustomUser.objects.create_user(
+            username="sms.users.recipient",
+            email="users-worker@example.com",
+            password="pass12345",
+            phone_number="+15195550131",
+            employer=employer,
+        )
+        for name in ("SendCOMMS", "SendSMS"):
+            sender.groups.add(Group.objects.create(name=name))
+        self.client.force_login(sender)
+
+        response = self.client.post(
+            reverse("comms") + "?tab=sms",
+            {
+                "form_type": "sms",
+                "sms_message": "Shift starts at 9.",
+                "selected_users": [str(recipient.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mock_task.delay.assert_called_once_with(
+            [recipient.pk], "Shift starts at 9.", sender.pk
+        )

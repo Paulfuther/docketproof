@@ -583,79 +583,16 @@ def lotto_theft_sms_link_task(self):
         return {"error": msg}
 
 
-# APPROVED
-# This task is APPROVED for multi tenant.
-# Tenatn api keys are geneated here and passed to the helper.
+# Group SMS is disabled. The task name stays so a previously queued job does not send.
 @app.task(name="one_off_bulk_sms")
 def send_one_off_bulk_sms_task(group_id, message, user_id):
-    User = get_user_model()
-    try:
-        # ✅ Get the user who initiated the SMS
-        user = User.objects.get(id=user_id)
-        employer = user.employer  # Assuming employer is a ForeignKey in User model
-
-    except User.DoesNotExist:
-        logger.error(f"🚨 User {user_id} not found.")
-        return
-
-    try:
-        # ✅ Get the group and active users
-        group = Group.objects.get(pk=group_id)
-        users_in_group = group.user_set.filter(is_active=True, employer=employer)
-        phone_numbers = [user.phone_number for user in users_in_group]
-
-    except Group.DoesNotExist:
-        logger.error(f"🚨 Group {group_id} not found.")
-        return
-
-    if not phone_numbers:
-        logger.warning(
-            f"⚠️ No active users in group {group.name}. Skipping SMS sending."
-        )
-        return
-
-    # ✅ Get employer-specific Twilio credentials from TenantApiKeys
-    twilio_keys = (
-        TenantApiKeys.objects.filter(employer=employer, is_active=True)
-        .values("account_sid", "auth_token", "notify_service_sid")
-        .first()
+    """Group SMS is disabled. Keep the task so an old queued job cannot send."""
+    logger.warning(
+        "Group SMS is disabled. Ignored one_off_bulk_sms group_id=%s sender_id=%s",
+        group_id,
+        user_id,
     )
-    print("Employer, Twilio keys :", employer, twilio_keys)
-    if not twilio_keys:
-        logger.error(
-            f"🚨 No active Twilio credentials for employer: {employer.name}. SMS not sent."
-        )
-        return
-
-    twilio_account_sid = twilio_keys.get("account_sid")
-    twilio_auth_token = twilio_keys.get("auth_token")
-    twilio_notify_sid = twilio_keys.get("notify_service_sid")
-
-    if not twilio_account_sid or not twilio_auth_token or not twilio_notify_sid:
-        logger.error(f"🚨 Missing Twilio credentials for employer: {employer.name}.")
-        return
-
-    try:
-        # Greeting + typed body + STOP. send_bulk_sms also enforces the footer.
-        message_body = compose_outbound_sms(message, employer)
-        send_bulk_sms(
-            phone_numbers,
-            message_body,
-            twilio_account_sid,
-            twilio_auth_token,
-            twilio_notify_sid,
-        )
-
-        log_message = (
-            f"📢 Bulk SMS sent by {employer.name} to {group.name} "
-            f"({len(phone_numbers)} recipients)\n{message_body}"
-        )
-        logger.info(log_message)
-
-        SmsLog.objects.create(level="INFO", message=log_message)
-
-    except Exception as e:
-        logger.error(f"🚨 An error occurred while sending SMS: {str(e)}")
+    return {"disabled": True}
 
 
 # NEW: Send SMS to selected individual users (not group)

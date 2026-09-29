@@ -281,6 +281,11 @@ def render_message_to_sendgrid(message):
     return escape(message).replace("\n", "<br>")
 
 
+def _posted_comms_group(request):
+    """Non-empty group id posted from Communications. Blank values are ignored."""
+    return (request.POST.get("selected_group") or "").strip()
+
+
 @login_required
 @user_passes_test(is_member_of_comms_group)
 def communications(request):
@@ -454,7 +459,6 @@ def communications(request):
                 "subject": draft.subject,
                 "message": draft.message,
                 "sendgrid_id": draft.sendgrid_template,
-                "selected_group": draft.selected_group,
                 "selected_users": draft.selected_users.all(),
             }
             attachment_urls = draft.attachment_urls or []
@@ -477,6 +481,12 @@ def communications(request):
         if form_type == "email":
             active_tab = "email"
             print("📬 Processing email form...")
+            if _posted_comms_group(request):
+                messages.error(
+                    request,
+                    "Sending to a group is no longer available. Select individual users.",
+                )
+                return redirect("/comms/?tab=email")
             email_form = EmailForm(
                 request.POST, request.FILES, user=user, initial=initial_data
             )
@@ -496,17 +506,14 @@ def communications(request):
             if email_form.is_valid():
                 print("valid")
                 mode = email_form.cleaned_data["email_mode"]
-                selected_group = email_form.cleaned_data["selected_group"]
                 selected_users = email_form.cleaned_data["selected_users"]
                 attachment_urls = get_uploaded_urls_from_request(request)
 
-                recipients = prepare_recipient_data(
-                    user, selected_group, selected_users
-                )
+                recipients = prepare_recipient_data(user, None, selected_users)
 
                 if not recipients:
                     messages.error(
-                        request, "No recipients found. Please select a group or users."
+                        request, "No recipients found. Please select at least one user."
                     )
                     return redirect("/comms/?tab=email")
 
@@ -599,20 +606,23 @@ def communications(request):
 
         elif form_type == "sms":
             active_tab = "sms"
+            if _posted_comms_group(request):
+                messages.error(
+                    request,
+                    "Sending to a group is no longer available. Select individual users.",
+                )
+                return redirect("/comms/?tab=sms")
             sms_form = SMSForm(request.POST, user=user)
 
             if sms_form.is_valid():
-                selected_group = sms_form.cleaned_data["selected_group"]
                 selected_users = sms_form.cleaned_data["selected_users"]
                 sms_message = sms_form.cleaned_data["sms_message"]
 
-                recipients = prepare_sms_recipient_data(
-                    user, selected_group, selected_users
-                )
+                recipients = prepare_sms_recipient_data(user, None, selected_users)
 
                 if not recipients:
                     messages.error(
-                        request, "No recipients found. Please select a group or users."
+                        request, "No recipients found. Please select at least one user."
                     )
                     return redirect("/comms/?tab=sms")
 
@@ -828,7 +838,7 @@ def save_draft_ajax(request):
     print("draft subject :", draft.subject)
     draft.message = form.cleaned_data.get("message", "")
     draft.sendgrid_template = form.cleaned_data.get("sendgrid_id")
-    draft.selected_group = form.cleaned_data.get("selected_group")
+    draft.selected_group = None
     uploaded_urls_raw = request.POST.get("uploaded_file_urls")
     draft.employer = request.user.employer
     try:
@@ -860,7 +870,6 @@ def edit_draft_email(request, draft_id):
             "subject": draft.subject,
             "message": draft.message,
             "sendgrid_id": draft.sendgrid_template,
-            "selected_group": draft.selected_group,
             "selected_users": draft.selected_users.all(),
         },
         user=request.user,
