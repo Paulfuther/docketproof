@@ -183,8 +183,9 @@ def _eastern_now():
     return current.date(), current.time().replace(microsecond=0)
 
 
-# Same page size as the SMS activity list. Checklist lists use 20.
-SALT_LOG_PAGE_SIZE = 25
+# Drafts, submitted, and completed each show this many rows.
+# SMS activity lists use 25. Checklist lists use 20.
+SALT_LOG_PAGE_SIZE = 5
 SALT_LOG_TABS = ("drafts", "submitted", "completed")
 
 

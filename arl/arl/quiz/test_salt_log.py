@@ -516,6 +516,7 @@ class SaltLogListPaginationTests(TestCase):
             )
 
     def test_page_size_limits_each_tab(self):
+        self.assertEqual(SALT_LOG_PAGE_SIZE, 5)
         total = SALT_LOG_PAGE_SIZE + 5
         self._fill(SaltLog.STATUS_DRAFT, total, area_prefix="Draft")
         self._fill(SaltLog.STATUS_SUBMITTED, total, area_prefix="Submitted")
