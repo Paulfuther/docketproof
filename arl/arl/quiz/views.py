@@ -37,6 +37,7 @@ from .forms import (
     SaltLogForm,
     TemplateItemFormSet,
 )
+from .action_plan_delivery import checklist_splits_action_plan
 from .models import Checklist, ChecklistItem, ChecklistTemplate, Quiz, SaltLog
 from .store_address import store_report_context
 from .tasks import (
@@ -585,9 +586,16 @@ def checklist_edit(request, slug):
                 # 🔔 Kick off async PDF generation
                 try:
                     generate_checklist_pdf_task.delay(checklist.id)
-                    messages.success(
-                        request, "Checklist submitted. PDF generation started."
-                    )
+                    if checklist_splits_action_plan(checklist):
+                        messages.success(
+                            request,
+                            "Checklist submitted. The checklist PDF and a separate "
+                            "action-plan PDF are being generated.",
+                        )
+                    else:
+                        messages.success(
+                            request, "Checklist submitted. PDF generation started."
+                        )
                 except Exception as e:
                     messages.error(
                         request,

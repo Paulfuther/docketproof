@@ -145,6 +145,15 @@ class ChecklistTemplate(models.Model):
         related_name="created_checklist_templates",
     )
     is_active = models.BooleanField(default=True)
+    split_action_plan_delivery = models.BooleanField(
+        default=False,
+        help_text=(
+            "Send the 6.4 action plan as its own PDF and email. "
+            "Security Assessment and Workplace Inspection (BC & ON) are on. "
+            "Leave this off and a matching name, document id, or 6.4 form "
+            "still splits."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -247,9 +256,9 @@ class Checklist(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     store = models.ForeignKey(
-        "user.Store",     # or "yourapp.Store" — use the correct app label
+        "user.Store",  # or "yourapp.Store" — use the correct app label
         on_delete=models.PROTECT,
-        null=True,          # set null=True for the first migration to avoid breaking existing rows
+        null=True,  # set null=True for the first migration to avoid breaking existing rows
         blank=True,
         related_name="checklists",
     )
@@ -337,9 +346,7 @@ class ChecklistItem(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     text = models.CharField(max_length=500)  # store a copy for audit
     section = models.CharField(max_length=200, blank=True)
-    result = models.CharField(
-        max_length=5, choices=RESULT, blank=True, default=""
-    )
+    result = models.CharField(max_length=5, choices=RESULT, blank=True, default="")
     responsibility = models.CharField(
         max_length=1, choices=RESPONSIBILITY, blank=True, default=""
     )

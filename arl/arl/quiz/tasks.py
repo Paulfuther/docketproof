@@ -1,6 +1,5 @@
 from __future__ import absolute_import, unicode_literals
 
-import base64
 import logging
 import os
 import time
@@ -17,18 +16,22 @@ from arl.helpers import (
     get_signed_url_for_key,
     upload_to_linode_object_storage,
 )
-from arl.msg.helpers import create_master_email
+from arl.quiz.action_plan_delivery import (
+    ACTION_PLAN_EMAIL_GROUP,
+    CHECKLIST_EMAIL_GROUP,
+    action_plan_pdf_context,
+    build_action_plan_dropbox_path,
+    checklist_pdf_shows_action_plan,
+    checklist_splits_action_plan,
+    email_pdf_to_employer_group,
+)
 from arl.quiz.dropbox_paths import (
     build_checklist_dropbox_path,
     build_salt_log_dropbox_path,
 )
 from arl.quiz.models import Checklist, SaltLog
 from arl.quiz.store_address import store_report_context
-from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, Store
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils.text import slugify
 from PIL import Image
@@ -159,6 +162,40 @@ def generate_salt_log_pdf_task(incident_id):
         return {"status": "error", "message": str(e)}
 
 
+def deliver_action_plan_pdf(checklist, store_segment, when=None):
+    """Upload the 6.4 PDF beside the checklist file and email the action-plan role."""
+    context = action_plan_pdf_context(checklist)
+    html = render_to_string("quiz/action_plan_pdf.html", context)
+    options = {
+        "enable-local-file-access": None,
+        "encoding": "UTF-8",
+        "--keep-relative-links": "",
+    }
+    pdf_bytes = pdfkit.from_string(html, False, options=options)
+    if not pdf_bytes:
+        raise RuntimeError("action-plan pdfkit returned no bytes")
+
+    full_file_path, _folder = build_action_plan_dropbox_path(
+        checklist, store_segment, when=when
+    )
+    logger.info("[Action Plan] upload_path=%s", full_file_path)
+    ok, msg = master_upload_file_to_dropbox(pdf_bytes, full_file_path)
+    if not ok:
+        logger.error("[Action Plan] upload failed: %s", msg)
+
+    email_pdf_to_employer_group(
+        checklist=checklist,
+        pdf_bytes=pdf_bytes,
+        filename=os.path.basename(full_file_path),
+        group_name=ACTION_PLAN_EMAIL_GROUP,
+        subject=f"Action plan #{checklist.id} PDF",
+        log_label="Action Plan Email",
+    )
+    if not ok:
+        raise RuntimeError(msg or "Action plan upload failed")
+    return full_file_path
+
+
 @app.task(name="create_checklist_pdf", bind=True, max_retries=3)
 def generate_checklist_pdf_task(self, checklist_id: int):
     checklist = (
@@ -171,9 +208,7 @@ def generate_checklist_pdf_task(self, checklist_id: int):
 
     try:
         checklist = (
-            Checklist.objects.select_related(
-                "created_by", "submitted_by", "template"
-            )
+            Checklist.objects.select_related("created_by", "submitted_by", "template")
             .prefetch_related("items")
             .get(pk=checklist_id)
         )
@@ -219,110 +254,23 @@ def generate_checklist_pdf_task(self, checklist_id: int):
         # Upload to Dropbox (unchanged)
         ok, msg = master_upload_file_to_dropbox(pdf_buffer.getvalue(), full_file_path)
 
-        # ================== EMAIL CHECKLIST PDF (unchanged) ==================
-        group_name = "quiz_email"  # or "checklist_email"
-        sendgrid_id = "d-7e7eb87381b04ef59bc39abc16550ead"
-        logger.info("[Checklist Email Task] Using template ID: %s", sendgrid_id)
-
-        employer_id = getattr(
-            getattr(checklist.created_by, "employer", None), "id", None
+        # Checklist role still gets the checklist PDF only.
+        email_pdf_to_employer_group(
+            checklist=checklist,
+            pdf_bytes=pdf_bytes,
+            filename=os.path.basename(full_file_path),
+            group_name=CHECKLIST_EMAIL_GROUP,
+            subject=f"Checklist #{checklist.id} PDF",
+            log_label="Checklist Email Task",
         )
-        if not employer_id:
-            logger.warning(
-                "[Checklist Email Task] No employer on checklist.created_by; skipping email."
-            )
-        else:
-            User = get_user_model()
-            to_emails = list(
-                User.objects.filter(
-                    Q(is_active=True),
-                    Q(groups__name=group_name),
-                    Q(employer_id=employer_id),
+
+        if checklist_splits_action_plan(checklist):
+            try:
+                deliver_action_plan_pdf(checklist, store_segment)
+            except Exception:
+                logger.exception(
+                    "[Action Plan] delivery failed checklist_id=%s", checklist_id
                 )
-                .values_list("email", flat=True)
-                .distinct()
-            )
-
-            if not to_emails:
-                logger.warning(
-                    "[Checklist Email Task] No active users in group '%s' for employer_id=%s",
-                    group_name,
-                    employer_id,
-                )
-            else:
-                tenant_api_key = TenantApiKeys.objects.filter(
-                    employer_id=employer_id
-                ).first()
-                sender_email = (
-                    tenant_api_key.verified_sender_email
-                    if tenant_api_key
-                    else settings.MAIL_DEFAULT_SENDER
-                )
-
-                pdf_filename = os.path.basename(full_file_path)
-                logger.info(
-                    "[Checklist Email Task] Preparing attachment: %s (%s bytes)",
-                    pdf_filename,
-                    len(pdf_bytes),
-                )
-
-                MAX_ATTACH_BYTES = 15_500_000  # conservative SG limit
-                attachments = None
-                if pdf_bytes and len(pdf_bytes) <= MAX_ATTACH_BYTES:
-                    attachments = [
-                        {
-                            "content": base64.b64encode(pdf_bytes).decode(),
-                            "filename": pdf_filename,
-                            "type": "application/pdf",
-                            "disposition": "attachment",
-                        }
-                    ]
-                else:
-                    logger.info(
-                        "[Checklist Email Task] Attachment too large/missing; sending without file"
-                    )
-
-                first_email = to_emails[0]
-                try:
-                    recip = User.objects.get(email=first_email)
-                    full_name = recip.get_full_name() or recip.username
-                    company_name = (
-                        getattr(getattr(recip, "employer", None), "name", None)
-                        or "Company"
-                    )
-                except User.DoesNotExist:
-                    full_name = "Team"
-                    company_name = "Company"
-
-                template_data = {
-                    "subject": f"Checklist #{checklist.id} PDF",
-                    "name": full_name,
-                    "company_name": company_name,
-                }
-
-                try:
-                    ok_email = create_master_email(
-                        to_email=to_emails,  # list OK
-                        sendgrid_id=sendgrid_id,
-                        template_data=template_data,
-                        attachments=attachments,
-                        verified_sender=sender_email,
-                    )
-                    if ok_email:
-                        logger.info(
-                            "[Checklist Email Task] Email sent to %d recipients in '%s'",
-                            len(to_emails),
-                            group_name,
-                        )
-                    else:
-                        logger.error(
-                            "[Checklist Email Task] SendGrid send returned False"
-                        )
-                except Exception as e:
-                    logger.exception(
-                        "[Checklist Email Task] Error sending email: %s", e
-                    )
-        # ================== /EMAIL CHECKLIST PDF ==================
 
         pdf_buffer.close()
 
@@ -368,7 +316,9 @@ def generate_checklist_pdf_task(self, checklist_id: int):
 def generate_fresh_checklist_pdf(checklist_id):
     try:
         checklist = (
-            Checklist.objects.select_related("created_by", "submitted_by", "store")
+            Checklist.objects.select_related(
+                "created_by", "submitted_by", "store", "template"
+            )
             .prefetch_related("items")
             .get(pk=checklist_id)
         )
@@ -408,6 +358,7 @@ def generate_fresh_checklist_pdf(checklist_id):
             logger.warning("[PDF] Could not process image %s: %s", http_url, e)
             return None
 
+    show_action_plan = checklist_pdf_shows_action_plan(checklist)
     # Build items
     items = []
     for it in checklist.items.select_related("action_item").order_by("order", "id"):
@@ -415,7 +366,7 @@ def generate_fresh_checklist_pdf(checklist_id):
         if it.photo and it.photo.name:
             orig = get_signed_url_for_key(it.photo.name, expires_in=900)
             photo_url = _downscale_for_pdf(orig, max_px=800, jpeg_quality=75)
-        action = it.get_action_item()
+        action = it.get_action_item() if show_action_plan else None
         items.append(
             {
                 "text": it.text,
@@ -438,7 +389,12 @@ def generate_fresh_checklist_pdf(checklist_id):
         {
             "checklist": checklist,
             "items": items,
-            "action_items": checklist.action_items.select_related("checklist_item"),
+            "include_action_plan": show_action_plan,
+            "action_items": (
+                checklist.action_items.select_related("checklist_item")
+                if show_action_plan
+                else []
+            ),
             **store_report_context(checklist.store),
         },
     )

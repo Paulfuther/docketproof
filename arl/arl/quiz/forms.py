@@ -229,6 +229,7 @@ class ChecklistTemplateForm(forms.ModelForm):
             "purpose",
             "instructions",
             "is_active",
+            "split_action_plan_delivery",
         ]
 
 
@@ -456,7 +457,7 @@ TemplateItemFormSet = inlineformset_factory(
 class ChecklistForm(forms.ModelForm):
     class Meta:
         model = Checklist
-        fields = ["title", "notes", "store"]   # ← add store
+        fields = ["title", "notes", "store"]  # ← add store
         widgets = {
             "title": forms.TextInput(attrs={"class": "form-control"}),
             "notes": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
@@ -578,7 +579,10 @@ class ChecklistItemForm(forms.ModelForm):
         if not item.pk:
             return cleaned
 
-        if item.creates_action(result) and not (cleaned.get("action_item") or "").strip():
+        if (
+            item.creates_action(result)
+            and not (cleaned.get("action_item") or "").strip()
+        ):
             cleaned["action_item"] = item.text
 
         if not self.validate_submit:
