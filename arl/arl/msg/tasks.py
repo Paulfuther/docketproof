@@ -698,8 +698,10 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
         )
         SmsLog.objects.create(
             level="INFO",
-            message=f"SMS sent to {len(phone_numbers)} users by {sender.email}",
-            message_body=message_body,
+            message=(
+                f"SMS sent to {len(phone_numbers)} users by {sender.email}\n"
+                f"{message_body}"
+            ),
         )
 
     except Exception as e:

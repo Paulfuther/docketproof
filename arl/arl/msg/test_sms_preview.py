@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from arl.msg.helpers import SMS_OPT_OUT_FOOTER, with_sms_opt_out
+from arl.msg.models import SmsLog
 from arl.msg.tasks import send_sms_to_selected_users_task
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer
@@ -93,3 +94,8 @@ class SmsOptOutFooterTests(TestCase):
         self.assertTrue(mock_send.called)
         sent_body = mock_send.call_args.args[1]
         self.assertEqual(sent_body, f"Shift starts at 9.\n{SMS_OPT_OUT_FOOTER}")
+
+        log = SmsLog.objects.get()
+        self.assertEqual(log.level, "INFO")
+        self.assertIn(sent_body, log.message)
+        self.assertIn(SMS_OPT_OUT_FOOTER, log.message)
