@@ -103,7 +103,10 @@ class IncidentHubTests(TestCase):
         self.assertContains(response, 'class="incident-pill"')
         self.assertContains(response, ">Insurance<")
         self.assertContains(response, ">Security<")
+        self.assertContains(response, ">PDF<")
+        self.assertContains(response, "grid-template-columns: 1fr 1fr")
         self.assertContains(response, 'title="Insurance PDF"')
+        self.assertContains(response, 'title="Incident PDF"')
         self.assertNotContains(response, ">Investigation<")
 
     def test_investigation_pdf_is_offered_to_the_restricted_group(self):
@@ -111,7 +114,10 @@ class IncidentHubTests(TestCase):
         group = Group.objects.create(name="abm_incident_pdf")
         self.user.groups.add(group)
         response = self.client.get(reverse("incidents") + "?tab=edit")
-        self.assertContains(response, ">Investigation<")
+        self.assertContains(response, ">PDF<")
+        self.assertContains(
+            response, reverse("restricted_incident_pdf_email", args=[Incident.objects.get().pk])
+        )
         self.assertContains(response, 'title="Investigation PDF"')
 
     def test_edit_tab_search_uses_a_plain_query(self):

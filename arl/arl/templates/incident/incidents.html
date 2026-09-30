@@ -23,21 +23,28 @@
       {% endif %}
 
       <style>
-        .incident-pills {
+        .incident-record {
           display: flex;
-          flex-wrap: nowrap;
-          align-items: stretch;
-          gap: 0.5rem;
-          width: 100%;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .incident-pills {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.35rem;
+          width: 12.5rem;
+          flex: 0 0 12.5rem;
+          margin-left: auto;
         }
         .incident-pill {
-          flex: 1 1 0;
+          width: 100%;
+          height: 2rem;
           min-width: 0;
-          min-height: 2rem;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0.25rem 0.75rem;
+          padding: 0.25rem 0.5rem;
           background: #fff;
           color: #212529;
           border: 1px solid #adb5bd;
@@ -100,46 +107,29 @@
 
           <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
-              <thead class="table-light d-none d-md-table-header-group">
-                <tr>
-                  <th>Description</th>
-                  <th>Store</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
               <tbody>
                 {% for incident in page_obj %}
                 <tr>
-                  <td class="d-none d-md-table-cell fw-semibold">{{ incident.brief_description|default:"—" }}</td>
-                  <td class="d-none d-md-table-cell">
-                    {% if incident.store %}
-                      Store {{ incident.store.number }}
-                      {% if incident.store.city %}<span class="text-muted"> · {{ incident.store.city }}</span>{% endif %}
-                    {% else %}—{% endif %}
-                  </td>
-                  <td class="d-none d-md-table-cell">
-                    {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
-                  </td>
-                  <td class="d-table-cell d-md-none" colspan="3">
-                    <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
-                    <div class="text-muted small">
-                      {% if incident.store %}
-                        Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
-                      {% else %}—{% endif %}
+                  <td>
+                    <div class="incident-record">
+                      <div>
+                        <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
+                        <div class="text-muted small">
+                          {% if incident.store %}
+                            Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
+                          {% else %}—{% endif %}
+                        </div>
+                        <div class="text-muted small">
+                          {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
+                        </div>
+                      </div>
+                      {% include "incident/partials/incident_row_actions.html" %}
                     </div>
-                    <div class="text-muted small">
-                      {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td colspan="3">
-                    {% include "incident/partials/incident_row_actions.html" %}
                   </td>
                 </tr>
                 {% empty %}
                 <tr>
-                  <td colspan="3" class="text-muted">No incidents found.</td>
+                  <td class="text-muted">No incidents found.</td>
                 </tr>
                 {% endfor %}
               </tbody>
