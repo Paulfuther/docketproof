@@ -32,9 +32,9 @@
         .incident-pills {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 0.35rem;
-          width: 12.5rem;
-          flex: 0 0 12.5rem;
+          gap: 0.7rem;
+          width: 13.25rem;
+          flex: 0 0 13.25rem;
           margin-left: auto;
         }
         .incident-pill {
@@ -96,8 +96,6 @@
           color: #495057;
           border-color: #495057;
         }
-        .incident-search-status { display: none; }
-        .incident-search-status.htmx-request { display: block; }
       </style>
 
       <legend class="mb-3">Incidents</legend>
@@ -139,8 +137,7 @@
             hx-target="#incident-list"
             hx-swap="outerHTML"
             hx-sync="#incident-search:replace"
-            hx-trigger="submit"
-            hx-indicator="#incident-search-loading">
+            hx-trigger="submit">
             <input type="hidden" name="tab" value="edit">
             <label class="form-label mb-1" for="incident-q">Search</label>
             <input
@@ -156,9 +153,7 @@
               hx-target="#incident-list"
               hx-swap="outerHTML"
               hx-include="#incident-search"
-              hx-sync="#incident-search:replace"
-              hx-indicator="#incident-search-loading">
-            <div id="incident-search-loading" class="incident-search-status small text-muted mt-1" aria-live="polite">Searching…</div>
+              hx-sync="#incident-search:replace">
           </form>
 
           {% include "incident/partials/incident_edit_list.html" %}

@@ -152,7 +152,10 @@ class IncidentHubTests(TestCase):
         self.assertContains(page, 'hx-trigger="input changed delay:300ms, search"')
         self.assertContains(page, 'id="incident-list"')
         self.assertContains(page, "incident-pills")
+        self.assertContains(page, "gap: 0.7rem")
         self.assertNotContains(page, ">Apply<")
+        self.assertNotContains(page, "Searching")
+        self.assertNotContains(page, "hx-indicator")
 
         by_store = self.client.get(reverse("incident_edit_list"), {"q": "12"})
         self.assertEqual(by_store.status_code, 200)
