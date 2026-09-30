@@ -3,19 +3,17 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 
-<div class="container">
+<div class="container mb-2">
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
-    <div class="col-12 col-lg-10">
-      <div class="d-flex justify-content-between align-items-center mb-3">
+    {% include "msg/partials/comms_side_nav.html" %}
+    <section class="col-12 col-lg-11">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
           <h3 class="mb-1">Email templates</h3>
           <p class="text-muted mb-0">Create and edit templates in DocketProof. SendGrid is used only to deliver the message.</p>
         </div>
-        <div class="d-flex gap-2">
-          <a class="btn btn-outline-secondary" href="{% url 'comms' %}?tab=email">Back to Comms</a>
-          <a class="btn btn-primary" href="{% url 'email_template_create' %}">New template</a>
-        </div>
+        <a class="btn btn-outline-secondary text-nowrap" href="{% url 'email_template_create' %}">New template</a>
       </div>
 
       {% for message in messages %}
@@ -69,7 +67,7 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   </div>
 </div>
 {% endblock %}

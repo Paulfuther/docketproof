@@ -107,18 +107,22 @@ class CommsNavTooltipTests(TestCase):
         self.assertIn('url.searchParams.set("tab", tabName)', body)
         self.assertIn('aria-hidden="true"', desktop_html)
         self.assertIn('aria-hidden="true"', mobile_html)
+        self.assertIn('data-bs-toggle="tab"', desktop_html)
+        self.assertIn('href="#email"', desktop_html)
+        self.assertEqual(body.count("comms-nav-link active"), 2)
 
-        template = (
-            Path(__file__).resolve().parent.parent
-            / "templates"
-            / "msg"
-            / "master_comms.html"
-        ).read_text()
+        templates_dir = (
+            Path(__file__).resolve().parent.parent / "templates" / "msg"
+        )
+        page = (templates_dir / "master_comms.html").read_text()
+        template = (templates_dir / "partials" / "comms_side_nav.html").read_text()
+        self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', page)
         self.assertEqual(_attr_count(template, "data-title", "WhatsApp"), 2)
         self.assertEqual(_attr_count(template, "title", "WhatsApp"), 2)
         self.assertEqual(_attr_count(template, "aria-label", "WhatsApp"), 2)
         self.assertEqual(template.count(">WhatsApp</span>"), 1)
         self.assertIn("{% if can_send_whatsapp %}", template)
+        self.assertIn("{% if can_send_whatsapp %}", page)
         self.assertNotIn('data-title="DSign"', template)
         self.assertNotIn('data-title="SMS Link Logs"', template)
         self.assertIn(".comms-nav-tooltip", template)

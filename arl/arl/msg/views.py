@@ -1167,6 +1167,22 @@ def search_users_view(request):
     )
 
 
+def _email_template_page_context(request, **extra):
+    """Communications chrome for template list, edit, and delete pages."""
+    user = request.user
+    context = {
+        "active_tab": "templates",
+        "comms_nav_mode": "page",
+        "can_send_email": is_member_of_email_group(user),
+        "can_send_sms": is_member_of_msg_group(user),
+        "can_send_docusign": is_member_of_docusign_group(user),
+        "can_view_email_logs": is_member_of_email_logs_group(user),
+        "can_view_sms_logs": is_member_of_sms_logs_group(user),
+    }
+    context.update(extra)
+    return context
+
+
 def _visible_email_templates(employer):
     return (
         EmailTemplate.objects.filter(
@@ -1199,11 +1215,12 @@ def email_template_list(request):
     return render(
         request,
         "msg/email_template_list.html",
-        {
-            "templates": templates,
-            "employer": employer,
-            "owned_template_ids": owned_template_ids,
-        },
+        _email_template_page_context(
+            request,
+            templates=templates,
+            employer=employer,
+            owned_template_ids=owned_template_ids,
+        ),
     )
 
 
@@ -1223,12 +1240,13 @@ def email_template_create(request):
     return render(
         request,
         "msg/email_template_form.html",
-        {
-            "form": form,
-            "template": None,
-            "preview_context": sample_preview_context(request.user),
-            "merge_fields": IN_APP_MERGE_FIELDS,
-        },
+        _email_template_page_context(
+            request,
+            form=form,
+            template=None,
+            preview_context=sample_preview_context(request.user),
+            merge_fields=IN_APP_MERGE_FIELDS,
+        ),
     )
 
 
@@ -1254,12 +1272,13 @@ def email_template_edit(request, pk):
     return render(
         request,
         "msg/email_template_form.html",
-        {
-            "form": form,
-            "template": template,
-            "preview_context": sample_preview_context(request.user),
-            "merge_fields": IN_APP_MERGE_FIELDS,
-        },
+        _email_template_page_context(
+            request,
+            form=form,
+            template=template,
+            preview_context=sample_preview_context(request.user),
+            merge_fields=IN_APP_MERGE_FIELDS,
+        ),
     )
 
 
@@ -1281,7 +1300,7 @@ def email_template_delete(request, pk):
     return render(
         request,
         "msg/email_template_confirm_delete.html",
-        {"template": template},
+        _email_template_page_context(request, template=template),
     )
 
 

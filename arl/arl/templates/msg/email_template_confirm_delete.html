@@ -3,18 +3,21 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 
-<div class="container">
+<div class="container mb-2">
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-6">
-      <h3>Delete template</h3>
-      <p>Delete <strong>{{ template.name }}</strong>? This does not affect mail that has already been sent.</p>
-      <form method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Delete</button>
-        <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">Cancel</a>
-      </form>
-    </div>
+    {% include "msg/partials/comms_side_nav.html" %}
+    <section class="col-12 col-lg-11">
+      <div class="col-12 col-md-8 col-lg-6 px-0">
+        <h3>Delete template</h3>
+        <p>Delete <strong>{{ template.name }}</strong>? This does not affect mail that has already been sent.</p>
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">Delete</button>
+          <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">Cancel</a>
+        </form>
+      </div>
+    </section>
   </div>
 </div>
 {% endblock %}
