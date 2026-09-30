@@ -74,12 +74,12 @@ class IncidentHubTests(TestCase):
         response = self.client.get(reverse("incidents"))
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
-        self.assertIn('href="#create"', body)
+        self.assertIn('href="#start"', body)
         self.assertIn('href="#edit"', body)
         self.assertIn("Create site incident", body)
         self.assertIn("Edit <br>", body)
         self.assertIn("Fuel spill", body)
-        self.assertIn("table table-sm align-middle", body)
+        self.assertIn("record-list", body)
         self.assertNotIn("Make Incident Form", body)
         self.assertNotIn("Edit Incident Form", body)
         self.assertNotIn("DataTable(", body)
@@ -183,7 +183,7 @@ class IncidentHubTests(TestCase):
 
     def test_legacy_create_and_list_urls_open_the_hub(self):
         create = self.client.get(reverse("create_incident"))
-        self.assertRedirects(create, reverse("incidents") + "?tab=create")
+        self.assertRedirects(create, reverse("incidents") + "?tab=start")
         listing = self.client.get(reverse("incident_list"))
         self.assertRedirects(listing, reverse("incidents") + "?tab=edit")
 
@@ -191,7 +191,7 @@ class IncidentHubTests(TestCase):
         response = self.client.post(reverse("create_incident"), {})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Create site incident")
-        self.assertContains(response, 'id="create"')
+        self.assertContains(response, 'id="start"')
         self.assertContains(response, "show active")
 
     def test_user_without_incident_permission_is_denied(self):
@@ -208,7 +208,7 @@ class IncidentHubTests(TestCase):
         body = response.content.decode()
         self.assertIn("Fuel spill", body)
         self.assertIn('href="#edit"', body)
-        self.assertNotIn('href="#create"', body)
+        self.assertNotIn('href="#start"', body)
         self.assertNotIn('id="my-dropzone"', body)
 
     def test_edit_form_is_a_plain_page_back_to_the_hub(self):

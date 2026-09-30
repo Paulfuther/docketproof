@@ -1,15 +1,17 @@
 {% extends "../base/base.html" %}
-{% block title %}Incidents{% endblock %}
+{% block title %}Incident Dashboard{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
 {% load crispy_forms_tags %}
 {% if form %}{{ form|as_crispy_errors }}{% endif %}
 
-<div class="container">
+<div class="container record-hub">
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+
+      {% include "base/partials/record_hub_styles.html" %}
 
       {% if messages %}
         <div class="mt-3">
@@ -23,12 +25,6 @@
       {% endif %}
 
       <style>
-        .incident-record {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 0.75rem;
-        }
         .incident-pills {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -98,13 +94,13 @@
         }
       </style>
 
-      <legend class="mb-3">Incidents</legend>
+      <h1 class="record-hub-title">Incident Dashboard</h1>
 
-      <ul class="nav nav-tabs flex-wrap text-center" id="incidentTabs">
+      <ul class="nav nav-tabs record-hub-tabs text-center" id="incidentTabs">
         {% if can_add %}
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'create' %} active{% endif %}" data-bs-toggle="tab" href="#create">
-            Create
+          <a class="nav-link{% if active_tab == 'start' %} active{% endif %}" data-bs-toggle="tab" href="#start">
+            Start
           </a>
         </li>
         {% endif %}
@@ -118,9 +114,9 @@
         {% endif %}
       </ul>
 
-      <div class="tab-content border border-top-0 p-3 bg-white">
+      <div class="tab-content record-hub-card">
         {% if can_add %}
-        <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
+        <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
           <h2 class="h5 mb-3">Create site incident</h2>
           {% include "incident/partials/site_incident_form.html" %}
         </div>
@@ -132,7 +128,7 @@
             id="incident-search"
             method="get"
             action="{% url 'incidents' %}"
-            class="mb-3"
+            class="record-hub-search mb-3"
             hx-get="{% url 'incident_edit_list' %}"
             hx-target="#incident-list"
             hx-swap="outerHTML"

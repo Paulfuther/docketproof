@@ -1,217 +1,136 @@
 {% extends "../base/base.html" %}
-{% block title %}Index{% endblock %}
+{% block title %}Checklist Dashboard{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
-{% load crispy_forms_tags %}
-{{ form|as_crispy_errors }}
 
+<div class="container record-hub">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
 
-<div class="container">
-    <div class="row justify-content-center pt-5 mt-5"></div>
-    <div class="row justify-content-center">
-        <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
-  
+      {% include "base/partials/record_hub_styles.html" %}
 
-  <legend>Checklist Dashboard</legend>
-
-<ul class="nav nav-tabs flex-wrap text-center" id="checklistTabs">
-  <li class="nav-item">
-    <a class="nav-link active" data-bs-toggle="tab" href="#available">
-      Available <br>
-      <span class="badge bg-light text-dark">{{ templates|length }}</span>
-    </a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" data-bs-toggle="tab" href="#inprogress">
-      In Progress <br>
-      <span class="badge bg-light text-dark">{{ drafts|length }}</span>
-    </a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" data-bs-toggle="tab" href="#submitted">
-      Submitted <br>
-      <span class="badge bg-light text-dark">{{ submitted|length }}</span>
-    </a>
-  </li>
-</ul>
-
-  <!-- Tab panes -->
-  <div class="tab-content border border-top-0 p-3 bg-white">
-
- 
-   <!-- Available -->
-<div class="tab-pane fade show active" id="available" role="tabpanel" aria-labelledby="available-tab">
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      
-      <tbody>
-        {% for t in templates %}
-          <tr>
-            <td class="fw-semibold">
-              {{ t.name }}
-              <!-- Small-screen meta -->
-              {% if t.description %}
-                <div class="small text-muted d-md-none mt-1">
-                  {{ t.description }}
-                </div>
-              {% endif %}
-            </td>
-
-            <!-- Hidden on < md -->
-            <td class="d-none d-md-table-cell">
-              {{ t.description|default:"—" }}
-            </td>
-
-            <td class="d-flex gap-2">
-              <a class="btn btn-sm btn-outline-primary py-1"
-                 href="{% url 'checklist_from_template' template_id=t.pk %}">
-                Start
-              </a>
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="3" class="text-muted">No templates available.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-    <!-- In Progress -->
-<div class="tab-pane fade" id="inprogress" role="tabpanel">
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <!-- Show headers on md+; hide on mobile -->
-      <thead class="table-light d-none d-md-table-header-group">
-        <tr>
-          <th>Title</th>
-          <th>Created</th>
-          <th>Store</th>
-          <th>By</th>
-          <th style="width:140px;">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for c in drafts %}
-        <tr>
-          <!-- Desktop cells -->
-          <td class="d-none d-md-table-cell fw-semibold">{{ c.title }}</td>
-          <td class="d-none d-md-table-cell">{{ c.created_at|date:"Y-m-d H:i" }}</td>
-          <td class="d-none d-md-table-cell">
-            {% if c.store %}
-              {% if c.store.number %}Store {{ c.store.number }}{% else %}{{ c.store }}{% endif %}
-              {% if c.store.city %}<span class="text-muted"> · {{ c.store.city }}</span>{% endif %}
-            {% else %}—{% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            {% if c.created_by %}{{ c.created_by.get_full_name|default:c.created_by }}{% else %}—{% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            <a class="btn btn-sm btn-outline-primary""
-               href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
-          </td>
-
-          <!-- Mobile stacked cell -->
-          <td class="d-table-cell d-md-none" colspan="5">
-            <div class="d-flex justify-content-between align-items-start">
-              <div class="me-2">
-                <div class="fw-semibold">{{ c.title }}</div>
-                <div class="text-muted small">
-                  {% if c.store %}
-                    {% if c.store.number %}Store {{ c.store.number }}{% else %}{{ c.store }}{% endif %}
-                    {% if c.store.city %} · {{ c.store.city }}{% endif %}
-                  {% else %}—{% endif %}
-                </div>
-                <div class="text-muted small">
-                  {% if c.created_by %}by {{ c.created_by.get_full_name|default:c.created_by }}{% else %}by —{% endif %}
-                </div>
-                <div class="text-muted small">Created: {{ c.created_at|date:"Y-m-d H:i" }}</div>
-              </div>
-              <div>
-                <a class="btn btn-sm btn-outline-primary"
-                   href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
-              </div>
+      {% if messages %}
+        <div class="mt-3">
+          {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="5" class="text-muted">No drafts.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+          {% endfor %}
+        </div>
+      {% endif %}
 
-        <!-- Submitted -->
-<div class="tab-pane fade" id="submitted" role="tabpanel">
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead class="table-light d-none d-md-table-header-group">
-        <tr>
-          <th>Title</th>
-          <th>Submitted</th>
-          <th>Store</th>
-          <th>By</th>
-          <th style="width:140px;">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for c in submitted %}
-        <tr>
-          <!-- Desktop cells -->
-          <td class="d-none d-md-table-cell fw-semibold">{{ c.title }}</td>
-          <td class="d-none d-md-table-cell">{{ c.submitted_at|date:"Y-m-d H:i" }}</td>
-          <td class="d-none d-md-table-cell">
-            {% if c.store %}
-              {% if c.store.number %}Store {{ c.store.number }}{% else %}{{ c.store }}{% endif %}
-              {% if c.store.city %}<span class="text-muted"> · {{ c.store.city }}</span>{% endif %}
-            {% else %}—{% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            {% if c.submitted_by %}{{ c.submitted_by.get_full_name|default:c.submitted_by }}{% else %}—{% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            <a class="btn btn-sm btn-outline-primary""
-               href="{% url 'checklist_detail' slug=c.slug %}">View</a>
-          </td>
+      <h1 class="record-hub-title">Checklist Dashboard</h1>
 
-          <!-- Mobile stacked cell -->
-          <td class="d-table-cell d-md-none" colspan="5">
-            <div class="d-flex justify-content-between align-items-start">
-              <div class="me-2">
-                <div class="fw-semibold">{{ c.title }}</div>
-                <div class="text-muted small">
-                  {% if c.store %}
-                    {% if c.store.number %}Store {{ c.store.number }}{% else %}{{ c.store }}{% endif %}
-                    {% if c.store.city %} · {{ c.store.city }}{% endif %}
-                  {% else %}—{% endif %}
+      <ul class="nav nav-tabs record-hub-tabs text-center" id="checklistTabs">
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'start' %} active{% endif %}" data-bs-toggle="tab" href="#start">
+            Start
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'inprogress' %} active{% endif %}" data-bs-toggle="tab" href="#inprogress">
+            In progress <br>
+            <span class="badge bg-light text-dark">{{ in_progress_count }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'submitted' %} active{% endif %}" data-bs-toggle="tab" href="#submitted">
+            Submitted <br>
+            <span class="badge bg-light text-dark">{{ submitted_count }}</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="tab-content record-hub-card">
+        <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
+          <div class="record-list">
+            {% for t in templates %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ t.name }}</div>
+                  {% if t.description %}
+                    <div class="record-row-meta">{{ t.description }}</div>
+                  {% endif %}
                 </div>
-                <div class="text-muted small">
-                  {% if c.submitted_by %}by {{ c.submitted_by.get_full_name|default:c.submitted_by }}{% else %}by —{% endif %}
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_from_template' template_id=t.pk %}">Start</a>
+              </div>
+            {% empty %}
+              <p class="record-empty">No templates available.</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="tab-pane fade{% if active_tab == 'inprogress' %} show active{% endif %}" id="inprogress" role="tabpanel">
+          <form method="get" action="{% url 'checklist_dashboard' %}" class="record-hub-search mb-3">
+            <input type="hidden" name="tab" value="inprogress">
+            <label class="form-label mb-1" for="checklist-progress-q">Search</label>
+            <input
+              id="checklist-progress-q"
+              type="search"
+              name="q"
+              value="{{ q }}"
+              class="form-control"
+              placeholder="Title or store"
+              autocomplete="off">
+          </form>
+
+          <div class="record-list">
+            {% for c in in_progress %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ c.title }}</div>
+                  <div class="record-row-meta">
+                    {% include "base/partials/record_meta.html" with store=c.store when=c.created_at %}
+                  </div>
                 </div>
-                <div class="text-muted small">Submitted: {{ c.submitted_at|date:"Y-m-d H:i" }}</div>
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
               </div>
-              <div>
-                <a class="btn btn-sm btn-outline-primary""
-                   href="{% url 'checklist_detail' slug=c.slug %}">View</a>
+            {% empty %}
+              <p class="record-empty">No drafts.</p>
+            {% endfor %}
+          </div>
+
+          {% include "base/partials/record_pager.html" with page=in_progress pager="checklist" list_tab="inprogress" page_param="progress_page" %}
+        </div>
+
+        <div class="tab-pane fade{% if active_tab == 'submitted' %} show active{% endif %}" id="submitted" role="tabpanel">
+          <form method="get" action="{% url 'checklist_dashboard' %}" class="record-hub-search mb-3">
+            <input type="hidden" name="tab" value="submitted">
+            <label class="form-label mb-1" for="checklist-q">Search</label>
+            <input
+              id="checklist-q"
+              type="search"
+              name="q"
+              value="{{ q }}"
+              class="form-control"
+              placeholder="Title or store"
+              autocomplete="off">
+          </form>
+
+          <div class="record-list">
+            {% for c in submitted %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ c.title }}</div>
+                  <div class="record-row-meta">
+                    {% include "base/partials/record_meta.html" with store=c.store when=c.submitted_at %}
+                  </div>
+                </div>
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_detail' slug=c.slug %}">View</a>
               </div>
-            </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="5" class="text-muted">No submitted checklists.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+            {% empty %}
+              <p class="record-empty">No checklists submitted.</p>
+            {% endfor %}
+          </div>
+
+          {% include "base/partials/record_pager.html" with page=submitted pager="checklist" list_tab="submitted" page_param="page" %}
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
-  </div>
-
-</div>
-</div>
-
-</div>
-</div>
-
 {% endblock %}

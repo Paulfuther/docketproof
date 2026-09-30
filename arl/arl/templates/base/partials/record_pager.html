@@ -1,0 +1,40 @@
+{% if page and page.paginator.num_pages > 1 %}
+<div class="record-pager">
+  <div class="record-pager-status">
+    Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}
+    · Page {{ page.number }} of {{ page.paginator.num_pages }}
+  </div>
+  <div class="btn-group">
+    {% if page.has_previous %}
+      {% if pager == "incident" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{% url 'incidents' %}?tab=edit&page={{ page.previous_page_number }}&q={{ q|urlencode }}"
+           hx-get="{% url 'incident_edit_list' %}?page={{ page.previous_page_number }}&q={{ q|urlencode }}"
+           hx-target="#incident-list"
+           hx-swap="outerHTML">Prev</a>
+      {% elif pager == "salt" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="?tab={{ tab }}&{{ page_param }}={{ page.previous_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Prev</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="?tab={{ list_tab }}&{{ page_param }}={{ page.previous_page_number }}&q={{ q|urlencode }}">Prev</a>
+      {% endif %}
+    {% endif %}
+    {% if page.has_next %}
+      {% if pager == "incident" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{% url 'incidents' %}?tab=edit&page={{ page.next_page_number }}&q={{ q|urlencode }}"
+           hx-get="{% url 'incident_edit_list' %}?page={{ page.next_page_number }}&q={{ q|urlencode }}"
+           hx-target="#incident-list"
+           hx-swap="outerHTML">Next</a>
+      {% elif pager == "salt" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="?tab={{ tab }}&{{ page_param }}={{ page.next_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Next</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="?tab={{ list_tab }}&{{ page_param }}={{ page.next_page_number }}&q={{ q|urlencode }}">Next</a>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
