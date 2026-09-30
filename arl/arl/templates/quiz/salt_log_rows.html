@@ -1,42 +1,17 @@
 <div class="table-responsive">
   <table class="table table-sm align-middle mb-0">
-    <thead class="table-light d-none d-md-table-header-group">
-      <tr>
-        <th>Area</th>
-        <th>Store</th>
-        <th>{{ when_label }}</th>
-        <th style="width:110px;"></th>
-      </tr>
-    </thead>
     <tbody>
       {% for row in rows %}
         <tr>
-          <td class="d-none d-md-table-cell fw-semibold">{{ row.area_salted|default:"Untitled draft" }}</td>
-          <td class="d-none d-md-table-cell">
-            {% if row.store %}Store {{ row.store.number }}{% if row.store.city %} · {{ row.store.city }}{% endif %}{% else %}—{% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            {% if when_attr == "submitted_at" and row.submitted_at %}
-              {{ row.submitted_at|date:"Y-m-d H:i" }}
-            {% else %}
-              {{ row.hidden_timestamp|date:"Y-m-d H:i" }}
-            {% endif %}
-          </td>
-          <td class="d-none d-md-table-cell">
-            <a class="btn btn-sm btn-outline-primary" href="{% url 'salt_log_edit' pk=row.pk %}">{{ action_label }}</a>
-          </td>
-          <td class="d-table-cell d-md-none">
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <div>
-                <div class="fw-semibold">{{ row.area_salted|default:"Untitled draft" }}</div>
-                <div class="text-muted small">
-                  {% if row.store %}Store {{ row.store.number }}{% if row.store.city %} · {{ row.store.city }}{% endif %}{% else %}No store yet{% endif %}
-                </div>
-                <div class="text-muted small">
+          <td>
+            <div class="record-row">
+              <div class="record-row-main">
+                <div class="record-row-title">{{ row.area_salted|default:"Untitled draft" }}</div>
+                <div class="record-row-meta">
                   {% if when_attr == "submitted_at" and row.submitted_at %}
-                    {{ when_label }}: {{ row.submitted_at|date:"Y-m-d H:i" }}
+                    {% include "base/partials/record_meta.html" with store=row.store when=row.submitted_at %}
                   {% else %}
-                    {{ when_label }}: {{ row.hidden_timestamp|date:"Y-m-d H:i" }}
+                    {% include "base/partials/record_meta.html" with store=row.store when=row.hidden_timestamp %}
                   {% endif %}
                 </div>
               </div>
@@ -45,39 +20,9 @@
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="4" class="text-muted">Nothing here.</td></tr>
+        <tr><td class="text-muted">Nothing here.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-{% if rows.paginator.count %}
-  <div class="small text-muted text-center mt-2">
-    Showing {{ rows.start_index }}–{{ rows.end_index }} of {{ rows.paginator.count }}
-    {% if rows.paginator.num_pages > 1 %}
-      · Page {{ rows.number }} of {{ rows.paginator.num_pages }}
-    {% endif %}
-  </div>
-{% endif %}
-{% if rows.paginator.num_pages > 1 %}
-  <nav class="mt-2" aria-label="Salt log pages">
-    <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
-      {% if rows.has_previous %}
-        <li class="page-item">
-          <a class="page-link" href="?tab={{ tab }}&{{ page_param }}={{ rows.previous_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Previous</a>
-        </li>
-      {% else %}
-        <li class="page-item disabled"><span class="page-link">Previous</span></li>
-      {% endif %}
-      <li class="page-item disabled">
-        <span class="page-link">Page {{ rows.number }} of {{ rows.paginator.num_pages }}</span>
-      </li>
-      {% if rows.has_next %}
-        <li class="page-item">
-          <a class="page-link" href="?tab={{ tab }}&{{ page_param }}={{ rows.next_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Next</a>
-        </li>
-      {% else %}
-        <li class="page-item disabled"><span class="page-link">Next</span></li>
-      {% endif %}
-    </ul>
-  </nav>
-{% endif %}
+{% include "base/partials/record_pager.html" with page=rows pager="salt" %}

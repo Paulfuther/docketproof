@@ -4,18 +4,12 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 
-<style>
-  .salt-menu input,
-  .salt-menu select,
-  .salt-menu button {
-    font-size: 16px;
-  }
-</style>
-
-<div class="container salt-menu">
+<div class="container record-hub">
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+
+      {% include "base/partials/record_hub_styles.html" %}
 
       {% if messages %}
         <div class="mt-3">
@@ -28,17 +22,17 @@
         </div>
       {% endif %}
 
-      <legend class="mb-3">Salt logs</legend>
+      <h1 class="record-hub-title">Salt logs</h1>
 
       <form method="post" action="{% url 'create_salt_log' %}" class="mb-3">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary w-100">Start salt log</button>
       </form>
 
-      <form method="get" class="row g-2 mb-3">
+      <form method="get" class="record-hub-search row g-2 mb-3">
         <input type="hidden" name="tab" id="salt-tab" value="{{ active_tab }}">
         <div class="col-12 col-md-6">
-          <label class="form-label" for="salt-store-filter">Store</label>
+          <label class="form-label mb-1" for="salt-store-filter">Store</label>
           <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
             <option value="">All stores</option>
             {% for store in stores %}
@@ -49,8 +43,8 @@
           </select>
         </div>
         <div class="col-12 col-md-6">
-          <label class="form-label" for="salt-q">Area</label>
-          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Search area">
+          <label class="form-label mb-1" for="salt-q">Search</label>
+          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Area" autocomplete="off">
         </div>
       </form>
 
@@ -75,7 +69,7 @@
         </li>
       </ul>
 
-      <div class="tab-content border border-top-0 p-3 bg-white">
+      <div class="tab-content record-hub-card">
         <div class="tab-pane fade{% if active_tab == 'drafts' %} show active{% endif %}" id="drafts">
           {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" page_param="drafts_page" tab="drafts" %}
         </div>

@@ -1,0 +1,1 @@
+{% if store %}Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}{% else %}—{% endif %}{% if when %} · {{ when|date:"Y-m-d" }}{% endif %}

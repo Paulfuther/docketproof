@@ -74,5 +74,5 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import arl.quiz.test_action_plan_delivery arl.quiz.test_salt_log arl.user.test_invite arl.user.test_registration arl.user.test_work_permit_expiry_digest arl.user.test_immigration_audit_export
+          coverage run arl/manage.py test arl.quiz.tests arl.quiz.test_checklist_import arl.quiz.test_action_plan_delivery arl.quiz.test_salt_log arl.quiz.test_record_hub arl.incident.test_incidents_hub arl.user.test_invite arl.user.test_registration arl.user.test_work_permit_expiry_digest arl.user.test_immigration_audit_export
           coverage report

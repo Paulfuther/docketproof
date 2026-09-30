@@ -251,9 +251,7 @@ def salt_log_start(request):
     """Create the draft in this request so photos have a row to attach to."""
     employer = getattr(request.user, "employer", None)
     if employer is None:
-        messages.error(
-            request, "Your account has no company. Ask an admin to set one."
-        )
+        messages.error(request, "Your account has no company. Ask an admin to set one.")
         return redirect("salt_log_list")
 
     date_salted, time_salted = _eastern_now()
@@ -458,9 +456,7 @@ class ProcessSaltLogImagesView(LoginRequiredMixin, View):
 
         any_success = any(item.get("ok") for item in results)
         status_code = 200 if any_success else 400
-        return JsonResponse(
-            {"ok": any_success, "results": results}, status=status_code
-        )
+        return JsonResponse({"ok": any_success, "results": results}, status=status_code)
 
 
 @login_required
@@ -784,51 +780,67 @@ def checklist_edit_by_id(request, pk: int):
     return redirect("checklist_edit", slug=checklist.slug)
 
 
+# Saved checklists use the same page size the older checklist list used.
+CHECKLIST_PAGE_SIZE = 20
+CHECKLIST_TABS = ("create", "saved")
+
+
+def _checklists_for_user(user):
+    """Checklists this company can see.
+
+    A checklist has no employer column of its own. Show it when the creator,
+    the submitter, or the store belongs to this company.
+    """
+    employer = getattr(user, "employer", None)
+    if employer is None:
+        return Checklist.objects.none()
+    return Checklist.objects.filter(
+        Q(created_by__employer=employer)
+        | Q(submitted_by__employer=employer)
+        | Q(store__employer=employer)
+    ).distinct()
+
+
 @login_required
 def checklist_dashboard(request):
-    """
-    Dashboard with: available templates, in-progress (draft), and submitted.
+    """One Checklists page: start from a template, or open a saved one.
+
+    Create and Saved stay on this route. Salt logs and incidents stay on theirs.
     """
     q = (request.GET.get("q") or "").strip()
-    mine = request.GET.get("mine") == "1"
+    active_tab = (request.GET.get("tab") or "create").strip()
+    if active_tab not in CHECKLIST_TABS:
+        active_tab = "create"
 
-    templates = ChecklistTemplate.objects.filter(is_active=True)
-    if q:
-        templates = templates.filter(Q(name__icontains=q) | Q(description__icontains=q))
-    templates = templates.order_by("name").prefetch_related("items")
+    templates = ChecklistTemplate.objects.filter(is_active=True).order_by("name")
 
-    drafts = Checklist.objects.filter(status="draft")
-    submitted = Checklist.objects.filter(status="submitted")
-    # If you want to show completed too, uncomment:
-    # completed = Checklist.objects.filter(status="completed")
-
-    if q:
-        drafts = drafts.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-        submitted = submitted.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-        # completed = completed.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-
-    if mine:
-        drafts = drafts.filter(created_by=request.user)
-        submitted = submitted.filter(
-            Q(created_by=request.user) | Q(submitted_by=request.user)
-        )
-        # completed = completed.filter(Q(created_by=request.user) | Q(submitted_by=request.user))
-
-    drafts = drafts.select_related("created_by").order_by("-created_at")
-    submitted = submitted.select_related("submitted_by").order_by(
-        "-submitted_at", "-created_at"
+    saved_qs = (
+        _checklists_for_user(request.user)
+        .select_related("created_by", "submitted_by", "store")
+        .order_by("-created_at", "-pk")
     )
-    # completed = completed.order_by("-submitted_at", "-created_at")
+    if q:
+        text = (
+            Q(title__icontains=q) | Q(notes__icontains=q) | Q(store__city__icontains=q)
+        )
+        if q.isdigit():
+            text |= Q(store__number=int(q))
+        saved_qs = saved_qs.filter(text)
 
-    ctx = {
-        "q": q,
-        "mine": "1" if mine else "",
-        "templates": templates,
-        "drafts": drafts,
-        "submitted": submitted,
-        # "completed": completed,
-    }
-    return render(request, "quiz/checklist_dashboard.html", ctx)
+    saved = Paginator(saved_qs, CHECKLIST_PAGE_SIZE).get_page(
+        request.GET.get("page") or 1
+    )
+    return render(
+        request,
+        "quiz/checklist_dashboard.html",
+        {
+            "q": q,
+            "active_tab": active_tab,
+            "templates": templates,
+            "saved": saved,
+            "saved_count": saved.paginator.count,
+        },
+    )
 
 
 # ------------------------------------------------ #

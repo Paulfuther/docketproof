@@ -6,10 +6,12 @@
 {% load crispy_forms_tags %}
 {% if form %}{{ form|as_crispy_errors }}{% endif %}
 
-<div class="container">
+<div class="container record-hub">
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+
+      {% include "base/partials/record_hub_styles.html" %}
 
       {% if messages %}
         <div class="mt-3">
@@ -23,12 +25,6 @@
       {% endif %}
 
       <style>
-        .incident-record {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 0.75rem;
-        }
         .incident-pills {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -98,7 +94,7 @@
         }
       </style>
 
-      <legend class="mb-3">Incidents</legend>
+      <h1 class="record-hub-title">Incidents</h1>
 
       <ul class="nav nav-tabs flex-wrap text-center" id="incidentTabs">
         {% if can_add %}
@@ -118,7 +114,7 @@
         {% endif %}
       </ul>
 
-      <div class="tab-content border border-top-0 p-3 bg-white">
+      <div class="tab-content record-hub-card">
         {% if can_add %}
         <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
           <h2 class="h5 mb-3">Create site incident</h2>
@@ -132,7 +128,7 @@
             id="incident-search"
             method="get"
             action="{% url 'incidents' %}"
-            class="mb-3"
+            class="record-hub-search mb-3"
             hx-get="{% url 'incident_edit_list' %}"
             hx-target="#incident-list"
             hx-swap="outerHTML"
