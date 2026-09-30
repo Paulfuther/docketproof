@@ -1,0 +1,57 @@
+<div id="incident-list">
+  {% if live_search %}
+  <span id="incident-count" class="badge bg-light text-dark" hx-swap-oob="outerHTML">{{ incident_count }}</span>
+  {% endif %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <tbody>
+        {% for incident in page_obj %}
+        <tr>
+          <td>
+            <div class="incident-record">
+              <div>
+                <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
+                <div class="text-muted small">
+                  {% if incident.store %}
+                    Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
+                  {% else %}—{% endif %}
+                </div>
+                <div class="text-muted small">
+                  {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
+                </div>
+              </div>
+              {% include "incident/partials/incident_row_actions.html" %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td class="text-muted">No incidents found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj and page_obj.paginator.num_pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="btn-group">
+      {% if page_obj.has_previous %}
+      <a class="btn btn-sm btn-outline-secondary"
+         href="{% url 'incidents' %}?tab=edit&page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}"
+         hx-get="{% url 'incident_edit_list' %}?page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}"
+         hx-target="#incident-list"
+         hx-swap="outerHTML">Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a class="btn btn-sm btn-outline-secondary"
+         href="{% url 'incidents' %}?tab=edit&page={{ page_obj.next_page_number }}&q={{ q|urlencode }}"
+         hx-get="{% url 'incident_edit_list' %}?page={{ page_obj.next_page_number }}&q={{ q|urlencode }}"
+         hx-target="#incident-list"
+         hx-swap="outerHTML">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

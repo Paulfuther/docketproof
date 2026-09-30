@@ -10,11 +10,14 @@ from django.contrib.auth.decorators import (
 )
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
+from django.db.models import CharField, Q
+from django.db.models.functions import Cast
 from django.db.models.signals import post_save
 from django.dispatch import Signal, receiver
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import ListView
 from django.views.generic.edit import CreateView, UpdateView
@@ -38,10 +41,95 @@ from .tasks import (
 incident_updated = Signal()
 logger = logging.getLogger(__name__)
 
+INCIDENT_PAGE_SIZE = 10
+
 
 # Custom decorator to check if the user belongs to abm_incident_report group
 def is_abm_incident_pdf(user):
     return user.groups.filter(name="abm_incident_pdf").exists()
+
+
+def _incident_list_for_user(user, query):
+    """Employer-scoped incident rows for the Edit tab, newest first."""
+    if not hasattr(user, "employer"):
+        qs = Incident.objects.none()
+    else:
+        qs = (
+            Incident.objects.filter(user_employer=user.employer)
+            .select_related("store")
+            .order_by("-eventdate", "-pk")
+        )
+    query = (query or "").strip()
+    if query:
+        qs = qs.annotate(
+            store_number_text=Cast("store__number", CharField())
+        ).filter(
+            Q(brief_description__icontains=query)
+            | Q(store__city__icontains=query)
+            | Q(store_number_text__icontains=query)
+        )
+    return qs
+
+
+def _hub_list_context(request):
+    """Shared Create | Edit tab context. Does not build the incident form."""
+    user = request.user
+    can_add = user.has_perm("incident.add_incident")
+    can_view = user.has_perm("incident.view_incident")
+    query = (request.GET.get("q") or "").strip()
+    page_obj = None
+    incident_count = 0
+    if can_view:
+        paginator = Paginator(
+            _incident_list_for_user(user, query), INCIDENT_PAGE_SIZE
+        )
+        page_obj = paginator.get_page(request.GET.get("page"))
+        incident_count = paginator.count
+    tab = request.GET.get("tab") or ("create" if can_add else "edit")
+    if tab not in ("create", "edit"):
+        tab = "create" if can_add else "edit"
+    if tab == "create" and not can_add:
+        tab = "edit"
+    if tab == "edit" and not can_view:
+        tab = "create"
+    return {
+        "active_tab": tab,
+        "can_add": can_add,
+        "can_view": can_view,
+        "can_view_pdf": is_abm_incident_pdf(user),
+        "page_obj": page_obj,
+        "incident_count": incident_count,
+        "q": query,
+        "form_action": reverse("create_incident"),
+    }
+
+
+@login_required(login_url="/login/")
+def incident_edit_list(request):
+    """Edit-tab rows for live search. Swapped in as you type, without a full page load."""
+    if not request.user.has_perm("incident.view_incident"):
+        return render(request, "incident/403.html", status=403)
+    context = _hub_list_context(request)
+    context["live_search"] = True
+    return render(request, "incident/partials/incident_edit_list.html", context)
+
+
+class IncidentHubView(LoginRequiredMixin, View):
+    """One Incidents page: Create a report, or pick an existing one to edit."""
+
+    login_url = "/login/"
+    template_name = "incident/incidents.html"
+
+    def get(self, request):
+        can_add = request.user.has_perm("incident.add_incident")
+        can_view = request.user.has_perm("incident.view_incident")
+        if not can_add and not can_view:
+            return render(request, "incident/403.html", status=403)
+        context = _hub_list_context(request)
+        context["existing_images"] = []
+        if can_add:
+            context["form"] = IncidentForm(user=request.user)
+        return render(request, self.template_name, context)
 
 
 class IncidentCreateView(
@@ -53,12 +141,17 @@ class IncidentCreateView(
     login_url = "/login/"
     permission_required = "incident.add_incident"
     form_class = IncidentForm
-    template_name = "incident/create_incident.html"
+    template_name = "incident/incidents.html"
     success_url = reverse_lazy("home")
+
+    def get(self, request, *args, **kwargs):
+        return redirect(f"{reverse('incidents')}?tab=create")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["existing_images"] = []
+        context.update(_hub_list_context(self.request))
+        context["active_tab"] = "create"
         return context
 
     def handle_no_permission(self):
@@ -247,7 +340,9 @@ class IncidentUpdateView(PermissionRequiredMixin, LoginRequiredMixin, UpdateView
     permission_required = "incident.add_incident"
     form_class = IncidentForm
     template_name = "incident/create_incident.html"
-    success_url = reverse_lazy("incident_list")
+
+    def get_success_url(self):
+        return f"{reverse('incidents')}?tab=edit"
 
     def handle_no_permission(self):
         # Render the custom 403.html template for permission denial
@@ -602,7 +697,7 @@ def email_significant_security_report(
             "Your account does not have an email address.",
         )
 
-        return redirect("incident_list")
+        return redirect(f"{reverse('incidents')}?tab=edit")
 
     generate_significant_security_pdf_email_task.delay(
         incident.pk,
@@ -617,39 +712,16 @@ def email_significant_security_report(
         ),
     )
 
-    return redirect("incident_list")
+    return redirect(f"{reverse('incidents')}?tab=edit")
 
 
-class IncidentListView(PermissionRequiredMixin, ListView):
-    model = Incident
-    template_name = "incident/incident_list.html"
-    context_object_name = "incidents"
-    permission_required = "incident.view_incident"
-    raise_exception = False
+class IncidentListView(LoginRequiredMixin, View):
+    """Old Edit Incident URL. Opens the Incidents hub on the Edit tab."""
 
-    def get_queryset(self):
-        """Filter incidents by the employer of the logged-in user."""
-        user = self.request.user
+    login_url = "/login/"
 
-        if not hasattr(user, "employer"):
-            return (
-                Incident.objects.none()
-            )  # If user has no employer, return empty queryset
-
-        return Incident.objects.filter(user_employer=user.employer)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["defer_render"] = True
-        # Check if the user belongs to the "abm_incident_pdf2" group
-        user = self.request.user
-        context["can_view_pdf"] = user.groups.filter(name="abm_incident_pdf").exists()
-        # Pass defer_render as context to the template
-        return context
-
-    def handle_no_permission(self):
-        # Render the custom 403.html template for permission denial
-        return render(self.request, "incident/403.html", status=403)
+    def get(self, request, *args, **kwargs):
+        return redirect(f"{reverse('incidents')}?tab=edit")
 
 
 class MajorIncidentListView(PermissionRequiredMixin, ListView):
