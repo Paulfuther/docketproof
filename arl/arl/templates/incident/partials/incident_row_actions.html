@@ -1,10 +1,10 @@
 <div class="incident-pills">
-  <a class="incident-pill" href="{% url 'update_incident' pk=incident.pk %}" title="Edit incident">Edit</a>
-  <a class="incident-pill" href="{% url 'tester' incident.pk %}" title="Insurance PDF">Insurance</a>
-  <a class="incident-pill" href="{% url 'email_significant_security_report' incident.pk %}" title="Security PDF">Security</a>
+  <a class="incident-pill incident-pill-edit" href="{% url 'update_incident' pk=incident.pk %}" title="Edit incident">Edit</a>
+  <a class="incident-pill incident-pill-insurance" href="{% url 'tester' incident.pk %}" title="Insurance PDF">Insurance</a>
+  <a class="incident-pill incident-pill-security" href="{% url 'email_significant_security_report' incident.pk %}" title="Security PDF">Security</a>
   {% if can_view_pdf %}
-  <a class="incident-pill" href="{% url 'restricted_incident_pdf_email' incident.pk %}" title="Investigation PDF">PDF</a>
+  <a class="incident-pill incident-pill-pdf" href="{% url 'restricted_incident_pdf_email' incident.pk %}" title="Investigation PDF">PDF</a>
   {% else %}
-  <a class="incident-pill" href="{% url 'generate_pdf' incident.pk %}" title="Incident PDF">PDF</a>
+  <a class="incident-pill incident-pill-pdf" href="{% url 'generate_pdf' incident.pk %}" title="Incident PDF">PDF</a>
   {% endif %}
 </div>

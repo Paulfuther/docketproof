@@ -100,7 +100,14 @@ class IncidentHubTests(TestCase):
             response, reverse("update_incident", kwargs={"pk": own.pk})
         )
         self.assertContains(response, "incident-pills")
-        self.assertContains(response, 'class="incident-pill"')
+        self.assertContains(response, "incident-pill-edit")
+        self.assertContains(response, "incident-pill-insurance")
+        self.assertContains(response, "incident-pill-security")
+        self.assertContains(response, "incident-pill-pdf")
+        self.assertContains(response, "color: #0d6efd")
+        self.assertContains(response, "color: #0f766e")
+        self.assertContains(response, "color: #dc3545")
+        self.assertContains(response, "color: #6c757d")
         self.assertContains(response, ">Insurance<")
         self.assertContains(response, ">Security<")
         self.assertContains(response, ">PDF<")
@@ -130,6 +137,39 @@ class IncidentHubTests(TestCase):
             reverse("incidents"), {"tab": "edit", "q": "12"}
         )
         self.assertContains(by_store, "Fuel spill")
+
+    def test_edit_tab_search_filters_the_list_as_you_type(self):
+        other_store = Store.objects.create(
+            number=44,
+            employer=self.employer,
+            address="44 Side St",
+            city="Windsor",
+            province="ON",
+        )
+        self._incident("Fuel spill", when=date(2026, 3, 2))
+        self._incident("Slip near door", store=other_store, when=date(2026, 3, 1))
+        page = self.client.get(reverse("incidents"), {"tab": "edit"})
+        self.assertContains(page, 'hx-trigger="input changed delay:300ms, search"')
+        self.assertContains(page, 'id="incident-list"')
+        self.assertContains(page, "incident-pills")
+        self.assertNotContains(page, ">Apply<")
+
+        by_store = self.client.get(reverse("incident_edit_list"), {"q": "12"})
+        self.assertEqual(by_store.status_code, 200)
+        self.assertContains(by_store, "Fuel spill")
+        self.assertContains(by_store, "Store 12")
+        self.assertNotContains(by_store, "Slip near door")
+        self.assertNotContains(by_store, "Create site incident")
+        self.assertContains(by_store, 'hx-swap-oob="outerHTML"')
+        self.assertContains(by_store, "incident-pill")
+
+        by_city = self.client.get(reverse("incident_edit_list"), {"q": "Windsor"})
+        self.assertContains(by_city, "Slip near door")
+        self.assertNotContains(by_city, "Fuel spill")
+
+        cleared = self.client.get(reverse("incident_edit_list"))
+        self.assertContains(cleared, "Fuel spill")
+        self.assertContains(cleared, "Slip near door")
 
     def test_edit_tab_paginates_without_a_table_plugin(self):
         for index in range(INCIDENT_PAGE_SIZE + 1):

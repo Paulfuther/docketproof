@@ -17,6 +17,7 @@ from arl.incident.views import (
     generate_restricted_incident_pdf_email,
     generate_restricted_pdf_web,
     htmx_edit_incident,
+    incident_edit_list,
     incident_dashboard,
     mark_do_not_send,
     preview_restricted_incident,
@@ -27,6 +28,7 @@ from arl.incident.views import (
 
 urlpatterns = [
     path("incidents/", IncidentHubView.as_view(), name="incidents"),
+    path("incidents/list/", incident_edit_list, name="incident_edit_list"),
     path("incident/", IncidentCreateView.as_view(), name="create_incident"),
     path("incident/dashboard/", incident_dashboard, name="incident_dashboard"),
     path("incident/<int:pk>/", IncidentUpdateView.as_view(), name="update_incident"),

@@ -56,12 +56,48 @@
           text-decoration: none;
           white-space: nowrap;
         }
-        .incident-pill:hover,
-        .incident-pill:focus {
-          background: #f8f9fa;
-          color: #212529;
+        .incident-pill-edit {
+          color: #0d6efd;
+          border-color: #0d6efd;
+        }
+        .incident-pill-edit:hover,
+        .incident-pill-edit:focus {
+          background: #e7f1ff;
+          color: #0a58ca;
+          border-color: #0a58ca;
+        }
+        .incident-pill-insurance {
+          color: #0f766e;
+          border-color: #0f766e;
+        }
+        .incident-pill-insurance:hover,
+        .incident-pill-insurance:focus {
+          background: #f0fdfa;
+          color: #115e59;
+          border-color: #115e59;
+        }
+        .incident-pill-security {
+          color: #dc3545;
+          border-color: #dc3545;
+        }
+        .incident-pill-security:hover,
+        .incident-pill-security:focus {
+          background: #fdecee;
+          color: #b02a37;
+          border-color: #b02a37;
+        }
+        .incident-pill-pdf {
+          color: #6c757d;
           border-color: #6c757d;
         }
+        .incident-pill-pdf:hover,
+        .incident-pill-pdf:focus {
+          background: #f8f9fa;
+          color: #495057;
+          border-color: #495057;
+        }
+        .incident-search-status { display: none; }
+        .incident-search-status.htmx-request { display: block; }
       </style>
 
       <legend class="mb-3">Incidents</legend>
@@ -78,7 +114,7 @@
         <li class="nav-item">
           <a class="nav-link{% if active_tab == 'edit' %} active{% endif %}" data-bs-toggle="tab" href="#edit">
             Edit <br>
-            <span class="badge bg-light text-dark">{{ incident_count }}</span>
+            <span id="incident-count" class="badge bg-light text-dark">{{ incident_count }}</span>
           </a>
         </li>
         {% endif %}
@@ -94,61 +130,38 @@
 
         {% if can_view %}
         <div class="tab-pane fade{% if active_tab == 'edit' %} show active{% endif %}" id="edit" role="tabpanel">
-          <form method="get" class="row gy-2 gx-2 align-items-end mb-3">
+          <form
+            id="incident-search"
+            method="get"
+            action="{% url 'incidents' %}"
+            class="mb-3"
+            hx-get="{% url 'incident_edit_list' %}"
+            hx-target="#incident-list"
+            hx-swap="outerHTML"
+            hx-sync="#incident-search:replace"
+            hx-trigger="submit"
+            hx-indicator="#incident-search-loading">
             <input type="hidden" name="tab" value="edit">
-            <div class="col-12 col-md-8">
-              <label class="form-label mb-1" for="incident-q">Search</label>
-              <input id="incident-q" type="text" name="q" value="{{ q }}" class="form-control" placeholder="Store or description">
-            </div>
-            <div class="col-12 col-md-4 d-grid">
-              <button class="btn btn-primary" type="submit">Apply</button>
-            </div>
+            <label class="form-label mb-1" for="incident-q">Search</label>
+            <input
+              id="incident-q"
+              type="search"
+              name="q"
+              value="{{ q }}"
+              class="form-control"
+              placeholder="Store or description"
+              autocomplete="off"
+              hx-get="{% url 'incident_edit_list' %}"
+              hx-trigger="input changed delay:300ms, search"
+              hx-target="#incident-list"
+              hx-swap="outerHTML"
+              hx-include="#incident-search"
+              hx-sync="#incident-search:replace"
+              hx-indicator="#incident-search-loading">
+            <div id="incident-search-loading" class="incident-search-status small text-muted mt-1" aria-live="polite">Searching…</div>
           </form>
 
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <tbody>
-                {% for incident in page_obj %}
-                <tr>
-                  <td>
-                    <div class="incident-record">
-                      <div>
-                        <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
-                        <div class="text-muted small">
-                          {% if incident.store %}
-                            Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
-                          {% else %}—{% endif %}
-                        </div>
-                        <div class="text-muted small">
-                          {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
-                        </div>
-                      </div>
-                      {% include "incident/partials/incident_row_actions.html" %}
-                    </div>
-                  </td>
-                </tr>
-                {% empty %}
-                <tr>
-                  <td class="text-muted">No incidents found.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-
-          {% if page_obj and page_obj.paginator.num_pages > 1 %}
-          <div class="d-flex justify-content-between align-items-center mt-3">
-            <div class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
-            <div class="btn-group">
-              {% if page_obj.has_previous %}
-              <a class="btn btn-sm btn-outline-secondary" href="?tab=edit&page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}">Prev</a>
-              {% endif %}
-              {% if page_obj.has_next %}
-              <a class="btn btn-sm btn-outline-secondary" href="?tab=edit&page={{ page_obj.next_page_number }}&q={{ q|urlencode }}">Next</a>
-              {% endif %}
-            </div>
-          </div>
-          {% endif %}
+          {% include "incident/partials/incident_edit_list.html" %}
         </div>
         {% endif %}
       </div>

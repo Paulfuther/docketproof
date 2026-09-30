@@ -104,6 +104,16 @@ def _hub_list_context(request):
     }
 
 
+@login_required(login_url="/login/")
+def incident_edit_list(request):
+    """Edit-tab rows for live search. Swapped in as you type, without a full page load."""
+    if not request.user.has_perm("incident.view_incident"):
+        return render(request, "incident/403.html", status=403)
+    context = _hub_list_context(request)
+    context["live_search"] = True
+    return render(request, "incident/partials/incident_edit_list.html", context)
+
+
 class IncidentHubView(LoginRequiredMixin, View):
     """One Incidents page: Create a report, or pick an existing one to edit."""
 
