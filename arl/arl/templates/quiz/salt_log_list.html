@@ -22,33 +22,15 @@
         </div>
       {% endif %}
 
-      <h1 class="record-hub-title">Salt logs</h1>
+      <div class="record-hub-heading">
+        <h1 class="record-hub-title">Salt logs</h1>
+        <form method="post" action="{% url 'create_salt_log' %}" class="mb-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-secondary record-hub-create text-nowrap">Start salt log</button>
+        </form>
+      </div>
 
-      <form method="post" action="{% url 'create_salt_log' %}" class="mb-3">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary w-100">Start salt log</button>
-      </form>
-
-      <form method="get" class="record-hub-search row g-2 mb-3">
-        <input type="hidden" name="tab" id="salt-tab" value="{{ active_tab }}">
-        <div class="col-12 col-md-6">
-          <label class="form-label mb-1" for="salt-store-filter">Store</label>
-          <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
-            <option value="">All stores</option>
-            {% for store in stores %}
-              <option value="{{ store.pk }}" {% if store_filter == store.pk|stringformat:"s" %}selected{% endif %}>
-                Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-6">
-          <label class="form-label mb-1" for="salt-q">Search</label>
-          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Area" autocomplete="off">
-        </div>
-      </form>
-
-      <ul class="nav nav-tabs flex-wrap text-center" id="saltLogTabs">
+      <ul class="nav nav-tabs record-hub-tabs text-center" id="saltLogTabs">
         <li class="nav-item">
           <a class="nav-link{% if active_tab == 'drafts' %} active{% endif %}" data-bs-toggle="tab" href="#drafts">
             Drafts <br>
@@ -70,6 +52,23 @@
       </ul>
 
       <div class="tab-content record-hub-card">
+        <form method="get" class="record-hub-search mb-3">
+          <input type="hidden" name="tab" id="salt-tab" value="{{ active_tab }}">
+          <div class="mb-2">
+            <label class="form-label mb-1" for="salt-store-filter">Store</label>
+            <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
+              <option value="">All stores</option>
+              {% for store in stores %}
+                <option value="{{ store.pk }}" {% if store_filter == store.pk|stringformat:"s" %}selected{% endif %}>
+                  Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <label class="form-label mb-1" for="salt-q">Search</label>
+          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Area" autocomplete="off">
+        </form>
+
         <div class="tab-pane fade{% if active_tab == 'drafts' %} show active{% endif %}" id="drafts">
           {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" page_param="drafts_page" tab="drafts" %}
         </div>

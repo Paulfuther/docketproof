@@ -24,7 +24,7 @@
 
       <h1 class="record-hub-title">Checklists</h1>
 
-      <ul class="nav nav-tabs flex-wrap text-center" id="checklistTabs">
+      <ul class="nav nav-tabs record-hub-tabs text-center" id="checklistTabs">
         <li class="nav-item">
           <a class="nav-link{% if active_tab == 'create' %} active{% endif %}" data-bs-toggle="tab" href="#create">
             Create
@@ -40,30 +40,20 @@
 
       <div class="tab-content record-hub-card">
         <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <tbody>
-                {% for t in templates %}
-                  <tr>
-                    <td>
-                      <div class="record-row">
-                        <div class="record-row-main">
-                          <div class="record-row-title">{{ t.name }}</div>
-                          {% if t.description %}
-                            <div class="record-row-meta">{{ t.description }}</div>
-                          {% endif %}
-                        </div>
-                        <a class="btn btn-sm btn-outline-primary" href="{% url 'checklist_from_template' template_id=t.pk %}">Start</a>
-                      </div>
-                    </td>
-                  </tr>
-                {% empty %}
-                  <tr>
-                    <td class="text-muted">No templates available.</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="record-list">
+            {% for t in templates %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ t.name }}</div>
+                  {% if t.description %}
+                    <div class="record-row-meta">{{ t.description }}</div>
+                  {% endif %}
+                </div>
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_from_template' template_id=t.pk %}">Start</a>
+              </div>
+            {% empty %}
+              <p class="record-empty">No templates available.</p>
+            {% endfor %}
           </div>
         </div>
 
@@ -81,38 +71,28 @@
               autocomplete="off">
           </form>
 
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <tbody>
-                {% for c in saved %}
-                  <tr>
-                    <td>
-                      <div class="record-row">
-                        <div class="record-row-main">
-                          <div class="record-row-title">{{ c.title }}</div>
-                          <div class="record-row-meta">
-                            {% if c.submitted_at %}
-                              {% include "base/partials/record_meta.html" with store=c.store when=c.submitted_at %}
-                            {% else %}
-                              {% include "base/partials/record_meta.html" with store=c.store when=c.created_at %}
-                            {% endif %}
-                          </div>
-                        </div>
-                        {% if c.status == "draft" %}
-                          <a class="btn btn-sm btn-outline-primary" href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
-                        {% else %}
-                          <a class="btn btn-sm btn-outline-primary" href="{% url 'checklist_detail' slug=c.slug %}">View</a>
-                        {% endif %}
-                      </div>
-                    </td>
-                  </tr>
-                {% empty %}
-                  <tr>
-                    <td class="text-muted">No checklists found.</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="record-list">
+            {% for c in saved %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ c.title }}</div>
+                  <div class="record-row-meta">
+                    {% if c.submitted_at %}
+                      {% include "base/partials/record_meta.html" with store=c.store when=c.submitted_at %}
+                    {% else %}
+                      {% include "base/partials/record_meta.html" with store=c.store when=c.created_at %}
+                    {% endif %}
+                  </div>
+                </div>
+                {% if c.status == "draft" %}
+                  <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
+                {% else %}
+                  <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_detail' slug=c.slug %}">View</a>
+                {% endif %}
+              </div>
+            {% empty %}
+              <p class="record-empty">No checklists found.</p>
+            {% endfor %}
           </div>
 
           {% include "base/partials/record_pager.html" with page=saved pager="checklist" %}

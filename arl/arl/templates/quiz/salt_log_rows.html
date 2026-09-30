@@ -1,28 +1,20 @@
-<div class="table-responsive">
-  <table class="table table-sm align-middle mb-0">
-    <tbody>
-      {% for row in rows %}
-        <tr>
-          <td>
-            <div class="record-row">
-              <div class="record-row-main">
-                <div class="record-row-title">{{ row.area_salted|default:"Untitled draft" }}</div>
-                <div class="record-row-meta">
-                  {% if when_attr == "submitted_at" and row.submitted_at %}
-                    {% include "base/partials/record_meta.html" with store=row.store when=row.submitted_at %}
-                  {% else %}
-                    {% include "base/partials/record_meta.html" with store=row.store when=row.hidden_timestamp %}
-                  {% endif %}
-                </div>
-              </div>
-              <a class="btn btn-sm btn-outline-primary" href="{% url 'salt_log_edit' pk=row.pk %}">{{ action_label }}</a>
-            </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td class="text-muted">Nothing here.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="record-list">
+  {% for row in rows %}
+    <div class="record-row">
+      <div class="record-row-main">
+        <div class="record-row-title">{{ row.area_salted|default:"Untitled draft" }}</div>
+        <div class="record-row-meta">
+          {% if when_attr == "submitted_at" and row.submitted_at %}
+            {% include "base/partials/record_meta.html" with store=row.store when=row.submitted_at %}
+          {% else %}
+            {% include "base/partials/record_meta.html" with store=row.store when=row.hidden_timestamp %}
+          {% endif %}
+        </div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'salt_log_edit' pk=row.pk %}">{{ action_label }}</a>
+    </div>
+  {% empty %}
+    <p class="record-empty">Nothing here.</p>
+  {% endfor %}
 </div>
 {% include "base/partials/record_pager.html" with page=rows pager="salt" %}

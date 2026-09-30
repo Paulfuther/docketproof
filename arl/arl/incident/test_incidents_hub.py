@@ -79,7 +79,7 @@ class IncidentHubTests(TestCase):
         self.assertIn("Create site incident", body)
         self.assertIn("Edit <br>", body)
         self.assertIn("Fuel spill", body)
-        self.assertIn("table table-sm align-middle", body)
+        self.assertIn("record-list", body)
         self.assertNotIn("Make Incident Form", body)
         self.assertNotIn("Edit Incident Form", body)
         self.assertNotIn("DataTable(", body)

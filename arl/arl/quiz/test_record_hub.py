@@ -82,6 +82,9 @@ class RecordHubChromeTests(TestCase):
 
         self.assertContains(salt_page, "Start salt log")
         self.assertContains(salt_page, reverse("create_salt_log"))
+        self.assertContains(salt_page, "record-hub-create")
+        self.assertContains(salt_page, "btn-outline-secondary")
+        self.assertNotContains(salt_page, "btn-primary")
         self.assertNotContains(salt_page, "Create site incident")
         self.assertNotContains(salt_page, 'href="#saved"')
 
@@ -132,10 +135,12 @@ class RecordHubChromeTests(TestCase):
         ]
         for page in pages:
             self.assertContains(page, 'class="record-hub-title"')
-            self.assertContains(page, "font-size: 1.25rem")
+            self.assertContains(page, "font-size: 1.125rem")
             self.assertContains(page, "font-weight: 500")
+            self.assertContains(page, "record-hub-tabs")
             self.assertContains(page, "record-hub-search")
             self.assertContains(page, "record-hub-card")
+            self.assertContains(page, "record-list")
             self.assertContains(page, "record-row-title")
             self.assertContains(page, "record-row-meta")
             self.assertContains(page, "padding: 1rem")

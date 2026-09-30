@@ -2,30 +2,20 @@
   {% if live_search %}
   <span id="incident-count" class="badge bg-light text-dark" hx-swap-oob="outerHTML">{{ incident_count }}</span>
   {% endif %}
-  <div class="table-responsive">
-    <table class="table table-sm align-middle mb-0">
-      <tbody>
-        {% for incident in page_obj %}
-        <tr>
-          <td>
-            <div class="record-row">
-              <div class="record-row-main">
-                <div class="record-row-title">{{ incident.brief_description|default:"—" }}</div>
-                <div class="record-row-meta">
-                  {% include "base/partials/record_meta.html" with store=incident.store when=incident.eventdate %}
-                </div>
-              </div>
-              {% include "incident/partials/incident_row_actions.html" %}
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td class="text-muted">No incidents found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="record-list">
+    {% for incident in page_obj %}
+    <div class="record-row">
+      <div class="record-row-main">
+        <div class="record-row-title">{{ incident.brief_description|default:"—" }}</div>
+        <div class="record-row-meta">
+          {% include "base/partials/record_meta.html" with store=incident.store when=incident.eventdate %}
+        </div>
+      </div>
+      {% include "incident/partials/incident_row_actions.html" %}
+    </div>
+    {% empty %}
+    <p class="record-empty">No incidents found.</p>
+    {% endfor %}
   </div>
 
   {% include "base/partials/record_pager.html" with page=page_obj pager="incident" %}
