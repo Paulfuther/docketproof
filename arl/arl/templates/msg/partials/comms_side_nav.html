@@ -1,4 +1,29 @@
 <style>
+/* The <style> and tooltip <script> are included inside a Bootstrap .row.
+   .row > * is width:100% and flex-shrink:0, so if those tags take a flex
+   slot they shove the sidebar off the left of the page. */
+.row > style,
+.row > script {
+  display: none !important;
+  position: absolute !important;
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+@media (min-width: 992px) {
+  aside:has(#commsNav) {
+    display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    z-index: 2;
+  }
+}
+
 /* ===== Sidebar (desktop) ===== */
 #commsNav {
   min-height: 100vh;

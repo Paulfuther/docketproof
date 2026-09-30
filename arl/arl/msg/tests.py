@@ -858,6 +858,46 @@ class InAppEmailTemplateViewTests(TestCase):
             html,
         )
         self.assertNotIn("btn-primary", html)
+        self.assertIn('class="fw-semibold">Email templates</div>', html)
+        self.assertIn("text-muted small mb-0", html)
+        self.assertIn("table table-sm table-hover align-middle", html)
+        self.assertIn('class="text-muted small">No templates yet.', html)
+        self.assertNotIn("<h3", html)
+
+    def test_template_pages_match_email_type(self):
+        templates_dir = Path(__file__).resolve().parent.parent / "templates" / "msg"
+        form = (templates_dir / "email_template_form.html").read_text()
+        delete = (templates_dir / "email_template_confirm_delete.html").read_text()
+        email = (templates_dir / "template_email_form.html").read_text()
+        self.assertIn('class="fw-semibold small mb-1">Preview</div>', email)
+        self.assertIn("btn btn-outline-primary", email)
+        self.assertIn('class="fw-semibold">{% if template %}', form)
+        self.assertIn('class="fw-semibold small mb-1">Preview</div>', form)
+        self.assertIn('class="btn btn-outline-primary">Save template</button>', form)
+        self.assertIn('class="btn btn-outline-primary" id="header-use-full"', form)
+        self.assertNotIn("btn-primary", form)
+        self.assertNotIn("<h3", form)
+        self.assertNotIn("<code>", form)
+        self.assertIn("#template-form .form-group > label", form)
+        nav = (templates_dir / "partials" / "comms_side_nav.html").read_text()
+        self.assertIn("aside:has(#commsNav)", nav)
+        self.assertIn(".row > style", nav)
+        self.assertIn('id="commsNav"', nav)
+        for page in (
+            templates_dir / "email_template_list.html",
+            templates_dir / "email_template_form.html",
+            templates_dir / "email_template_confirm_delete.html",
+        ):
+            page_html = page.read_text()
+            self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', page_html)
+            self.assertIn('style="height: 95vh;"', page_html)
+            self.assertNotIn("Back to Comms", page_html)
+        self.assertIn('class="fw-semibold mb-2">Delete template</div>', delete)
+        self.assertIn('class="btn btn-outline-danger">Delete</button>', delete)
+        self.assertIn("btn btn-outline-secondary", delete)
+        self.assertNotIn("<h3", delete)
+        self.assertNotIn("btn-danger", delete)
+        self.assertNotIn("btn-primary", delete)
 
     def test_template_pages_render_comms_side_menu(self):
         list_response = self.client.get(reverse("email_template_list"))
