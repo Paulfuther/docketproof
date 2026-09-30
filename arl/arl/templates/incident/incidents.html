@@ -1,0 +1,140 @@
+{% extends "../base/base.html" %}
+{% block title %}Incidents{% endblock %}
+
+{% block template %}
+{% include "../base/navbar.html" %}
+{% load crispy_forms_tags %}
+{% if form %}{{ form|as_crispy_errors }}{% endif %}
+
+<div class="container">
+  <div class="row justify-content-center pt-5 mt-5"></div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+
+      {% if messages %}
+        <div class="mt-3">
+          {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <legend class="mb-3">Incidents</legend>
+
+      <ul class="nav nav-tabs flex-wrap text-center" id="incidentTabs">
+        {% if can_add %}
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'create' %} active{% endif %}" data-bs-toggle="tab" href="#create">
+            Create
+          </a>
+        </li>
+        {% endif %}
+        {% if can_view %}
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'edit' %} active{% endif %}" data-bs-toggle="tab" href="#edit">
+            Edit <br>
+            <span class="badge bg-light text-dark">{{ incident_count }}</span>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+
+      <div class="tab-content border border-top-0 p-3 bg-white">
+        {% if can_add %}
+        <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
+          <h2 class="h5 mb-3">Create site incident</h2>
+          {% include "incident/partials/site_incident_form.html" %}
+        </div>
+        {% endif %}
+
+        {% if can_view %}
+        <div class="tab-pane fade{% if active_tab == 'edit' %} show active{% endif %}" id="edit" role="tabpanel">
+          <form method="get" class="row gy-2 gx-2 align-items-end mb-3">
+            <input type="hidden" name="tab" value="edit">
+            <div class="col-12 col-md-8">
+              <label class="form-label mb-1" for="incident-q">Search</label>
+              <input id="incident-q" type="text" name="q" value="{{ q }}" class="form-control" placeholder="Store or description">
+            </div>
+            <div class="col-12 col-md-4 d-grid">
+              <button class="btn btn-primary" type="submit">Apply</button>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light d-none d-md-table-header-group">
+                <tr>
+                  <th>Description</th>
+                  <th>Store</th>
+                  <th>Date</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for incident in page_obj %}
+                <tr>
+                  <td class="d-none d-md-table-cell fw-semibold">{{ incident.brief_description|default:"—" }}</td>
+                  <td class="d-none d-md-table-cell">
+                    {% if incident.store %}
+                      Store {{ incident.store.number }}
+                      {% if incident.store.city %}<span class="text-muted"> · {{ incident.store.city }}</span>{% endif %}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    {% include "incident/partials/incident_row_actions.html" %}
+                  </td>
+                  <td class="d-table-cell d-md-none" colspan="4">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                      <div class="me-2">
+                        <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
+                        <div class="text-muted small">
+                          {% if incident.store %}
+                            Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
+                          {% else %}—{% endif %}
+                        </div>
+                        <div class="text-muted small">
+                          {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
+                        </div>
+                        <div class="mt-2">
+                          {% include "incident/partials/incident_row_actions.html" %}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="text-muted">No incidents found.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if page_obj and page_obj.paginator.num_pages > 1 %}
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+            <div class="btn-group">
+              {% if page_obj.has_previous %}
+              <a class="btn btn-sm btn-outline-secondary" href="?tab=edit&page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}">Prev</a>
+              {% endif %}
+              {% if page_obj.has_next %}
+              <a class="btn btn-sm btn-outline-secondary" href="?tab=edit&page={{ page_obj.next_page_number }}&q={{ q|urlencode }}">Next</a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

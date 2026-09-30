@@ -1,0 +1,8 @@
+<div class="d-flex flex-wrap gap-1">
+  <a class="btn btn-sm btn-outline-primary" href="{% url 'update_incident' pk=incident.pk %}">Edit</a>
+  <a class="btn btn-sm btn-outline-success" href="{% url 'tester' incident.pk %}">Insurance PDF</a>
+  {% if can_view_pdf %}
+  <a class="btn btn-sm btn-outline-success" href="{% url 'restricted_incident_pdf_email' incident.pk %}">Investigation PDF</a>
+  {% endif %}
+  <a class="btn btn-sm btn-outline-success" href="{% url 'email_significant_security_report' incident.pk %}">Security PDF</a>
+</div>
