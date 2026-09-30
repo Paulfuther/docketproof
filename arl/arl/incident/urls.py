@@ -2,6 +2,7 @@ from django.urls import path
 
 from arl.incident.views import (
     IncidentCreateView,
+    IncidentHubView,
     IncidentListView,
     IncidentUpdateView,
     MajorIncidentCreateView,
@@ -25,6 +26,7 @@ from arl.incident.views import (
 )
 
 urlpatterns = [
+    path("incidents/", IncidentHubView.as_view(), name="incidents"),
     path("incident/", IncidentCreateView.as_view(), name="create_incident"),
     path("incident/dashboard/", incident_dashboard, name="incident_dashboard"),
     path("incident/<int:pk>/", IncidentUpdateView.as_view(), name="update_incident"),
