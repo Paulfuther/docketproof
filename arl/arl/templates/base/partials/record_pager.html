@@ -17,7 +17,7 @@
            href="?tab={{ tab }}&{{ page_param }}={{ page.previous_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Prev</a>
       {% else %}
         <a class="btn btn-sm btn-outline-secondary"
-           href="?tab=saved&page={{ page.previous_page_number }}&q={{ q|urlencode }}">Prev</a>
+           href="?tab={{ list_tab }}&{{ page_param }}={{ page.previous_page_number }}&q={{ q|urlencode }}">Prev</a>
       {% endif %}
     {% endif %}
     {% if page.has_next %}
@@ -32,7 +32,7 @@
            href="?tab={{ tab }}&{{ page_param }}={{ page.next_page_number }}&q={{ q|urlencode }}&store={{ store_filter|urlencode }}">Next</a>
       {% else %}
         <a class="btn btn-sm btn-outline-secondary"
-           href="?tab=saved&page={{ page.next_page_number }}&q={{ q|urlencode }}">Next</a>
+           href="?tab={{ list_tab }}&{{ page_param }}={{ page.next_page_number }}&q={{ q|urlencode }}">Next</a>
       {% endif %}
     {% endif %}
   </div>

@@ -183,10 +183,10 @@ def _eastern_now():
     return current.date(), current.time().replace(microsecond=0)
 
 
-# Drafts, submitted, and completed each show this many rows.
+# The Edit list shows this many existing salt logs.
 # SMS activity lists use 25. Checklist lists use 20.
 SALT_LOG_PAGE_SIZE = 5
-SALT_LOG_TABS = ("drafts", "submitted", "completed")
+SALT_LOG_TABS = ("start", "edit")
 
 
 def _salt_log_page(request, queryset, page_param):
@@ -197,16 +197,17 @@ def _salt_log_page(request, queryset, page_param):
 
 @login_required
 def salt_log_dashboard(request):
-    """Open drafts, submitted, and completed salt logs for this employer.
+    """Salt Log Dashboard: start a log, or open an existing one.
 
-    Each tab is its own page of rows. Counts stay on the badges; the tables
-    only load the current page.
+    Older Drafts, Submitted, and Completed links open the Edit list.
     """
     q = (request.GET.get("q") or "").strip()
     store_filter = (request.GET.get("store") or "").strip()
-    active_tab = (request.GET.get("tab") or "drafts").strip()
+    active_tab = (request.GET.get("tab") or "start").strip()
+    if active_tab in ("drafts", "submitted", "completed"):
+        active_tab = "edit"
     if active_tab not in SALT_LOG_TABS:
-        active_tab = "drafts"
+        active_tab = "start"
 
     logs = (
         salt_logs_for_user(request.user)
@@ -221,6 +222,7 @@ def salt_log_dashboard(request):
     if store_filter.isdigit():
         logs = logs.filter(store_id=int(store_filter))
 
+    edit_page = _salt_log_page(request, logs, "page")
     return render(
         request,
         "quiz/salt_log_list.html",
@@ -229,19 +231,8 @@ def salt_log_dashboard(request):
             "store_filter": store_filter,
             "active_tab": active_tab,
             "stores": _stores_for_user(request.user),
-            "drafts": _salt_log_page(
-                request, logs.filter(status=SaltLog.STATUS_DRAFT), "drafts_page"
-            ),
-            "submitted": _salt_log_page(
-                request,
-                logs.filter(status=SaltLog.STATUS_SUBMITTED),
-                "submitted_page",
-            ),
-            "completed": _salt_log_page(
-                request,
-                logs.filter(status=SaltLog.STATUS_COMPLETED),
-                "completed_page",
-            ),
+            "logs": edit_page,
+            "log_count": edit_page.paginator.count,
         },
     )
 
@@ -780,9 +771,9 @@ def checklist_edit_by_id(request, pk: int):
     return redirect("checklist_edit", slug=checklist.slug)
 
 
-# Saved checklists use the same page size the older checklist list used.
+# In progress and Submitted each show this many rows.
 CHECKLIST_PAGE_SIZE = 20
-CHECKLIST_TABS = ("create", "saved")
+CHECKLIST_TABS = ("start", "inprogress", "submitted")
 
 
 def _checklists_for_user(user):
@@ -801,35 +792,53 @@ def _checklists_for_user(user):
     ).distinct()
 
 
+def _filter_checklists(queryset, query):
+    if not query:
+        return queryset
+    text = (
+        Q(title__icontains=query)
+        | Q(notes__icontains=query)
+        | Q(store__city__icontains=query)
+    )
+    if query.isdigit():
+        text |= Q(store__number=int(query))
+    return queryset.filter(text)
+
+
 @login_required
 def checklist_dashboard(request):
-    """One Checklists page: start from a template, or open a saved one.
+    """Checklist Dashboard: start one, resume a draft, or open a submitted one.
 
-    Create and Saved stay on this route. Salt logs and incidents stay on theirs.
+    Start, In progress, and Submitted stay on this route.
+    Salt logs and incidents stay on theirs.
     """
     q = (request.GET.get("q") or "").strip()
-    active_tab = (request.GET.get("tab") or "create").strip()
+    active_tab = (request.GET.get("tab") or "start").strip()
+    if active_tab == "create":
+        active_tab = "start"
+    if active_tab == "saved":
+        active_tab = "submitted"
     if active_tab not in CHECKLIST_TABS:
-        active_tab = "create"
+        active_tab = "start"
 
     templates = ChecklistTemplate.objects.filter(is_active=True).order_by("name")
 
-    saved_qs = (
-        _checklists_for_user(request.user)
-        .select_related("created_by", "submitted_by", "store")
-        .order_by("-created_at", "-pk")
+    visible = _filter_checklists(
+        _checklists_for_user(request.user).select_related(
+            "created_by", "submitted_by", "store"
+        ),
+        q,
     )
-    if q:
-        text = (
-            Q(title__icontains=q) | Q(notes__icontains=q) | Q(store__city__icontains=q)
-        )
-        if q.isdigit():
-            text |= Q(store__number=int(q))
-        saved_qs = saved_qs.filter(text)
-
-    saved = Paginator(saved_qs, CHECKLIST_PAGE_SIZE).get_page(
-        request.GET.get("page") or 1
-    )
+    in_progress = Paginator(
+        visible.filter(status="draft").order_by("-created_at", "-pk"),
+        CHECKLIST_PAGE_SIZE,
+    ).get_page(request.GET.get("progress_page") or 1)
+    submitted = Paginator(
+        visible.filter(status__in=["submitted", "completed"]).order_by(
+            "-submitted_at", "-pk"
+        ),
+        CHECKLIST_PAGE_SIZE,
+    ).get_page(request.GET.get("page") or 1)
     return render(
         request,
         "quiz/checklist_dashboard.html",
@@ -837,8 +846,10 @@ def checklist_dashboard(request):
             "q": q,
             "active_tab": active_tab,
             "templates": templates,
-            "saved": saved,
-            "saved_count": saved.paginator.count,
+            "in_progress": in_progress,
+            "in_progress_count": in_progress.paginator.count,
+            "submitted": submitted,
+            "submitted_count": submitted.paginator.count,
         },
     )
 

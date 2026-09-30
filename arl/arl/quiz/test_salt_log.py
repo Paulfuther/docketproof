@@ -515,24 +515,22 @@ class SaltLogListPaginationTests(TestCase):
                 store=store,
             )
 
-    def test_page_size_limits_each_tab(self):
+    def test_page_size_limits_the_edit_list(self):
         self.assertEqual(SALT_LOG_PAGE_SIZE, 5)
         total = SALT_LOG_PAGE_SIZE + 5
-        self._fill(SaltLog.STATUS_DRAFT, total, area_prefix="Draft")
         self._fill(SaltLog.STATUS_SUBMITTED, total, area_prefix="Submitted")
-        self._fill(SaltLog.STATUS_COMPLETED, total, area_prefix="Done")
 
-        page = self.client.get(reverse("salt_log_list"), {"tab": "submitted"})
+        page = self.client.get(reverse("salt_log_list"), {"tab": "edit"})
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Submitted 0000")
         self.assertContains(page, f"Submitted {SALT_LOG_PAGE_SIZE - 1:04d}")
         self.assertNotContains(page, f"Submitted {SALT_LOG_PAGE_SIZE:04d}")
         self.assertContains(page, f"Showing 1–{SALT_LOG_PAGE_SIZE} of {total}")
         self.assertContains(page, "Page 1 of 2")
-        self.assertContains(page, f">{total}<", count=3)
-        self.assertContains(page, "drafts_page=2")
-        self.assertContains(page, "submitted_page=2")
-        self.assertContains(page, "completed_page=2")
+        self.assertContains(page, f">{total}<")
+        self.assertContains(page, "tab=edit&page=2")
+        self.assertContains(page, 'href="#start"')
+        self.assertContains(page, "Start salt log")
 
     def test_second_page_keeps_filters_and_newest_first_order(self):
         total = SALT_LOG_PAGE_SIZE + 3
@@ -544,26 +542,20 @@ class SaltLogListPaginationTests(TestCase):
             store=self.other_store,
         )
 
-        query = {"tab": "submitted", "q": "Walk", "store": str(self.store.pk)}
+        query = {"tab": "edit", "q": "Walk", "store": str(self.store.pk)}
         page1 = self.client.get(reverse("salt_log_list"), query)
         self.assertContains(page1, "Walk 0000")
         self.assertNotContains(page1, "Other store walk")
         self.assertNotContains(page1, f"Walk {SALT_LOG_PAGE_SIZE:04d}")
-        next_link = (
-            f"tab=submitted&submitted_page=2&q=Walk&store={self.store.pk}"
-        )
+        next_link = f"tab=edit&page=2&q=Walk&store={self.store.pk}"
         self.assertContains(page1, next_link)
 
-        page2 = self.client.get(
-            reverse("salt_log_list"), {**query, "submitted_page": 2}
-        )
+        page2 = self.client.get(reverse("salt_log_list"), {**query, "page": 2})
         self.assertContains(page2, f"Walk {SALT_LOG_PAGE_SIZE:04d}")
         self.assertContains(page2, f"Walk {total - 1:04d}")
         self.assertNotContains(page2, "Walk 0000")
         self.assertNotContains(page2, "Other store walk")
-        self.assertContains(
-            page2, 'class="tab-pane fade show active" id="submitted"'
-        )
+        self.assertContains(page2, 'class="tab-pane fade show active" id="edit"')
         self.assertContains(
             page2,
             f"Showing {SALT_LOG_PAGE_SIZE + 1}–{total} of {total}",
@@ -571,19 +563,17 @@ class SaltLogListPaginationTests(TestCase):
         self.assertContains(page2, "Page 2 of 2")
 
     def test_empty_page_and_out_of_range_page(self):
-        empty = self.client.get(
-            reverse("salt_log_list"), {"tab": "submitted", "submitted_page": 4}
-        )
+        empty = self.client.get(reverse("salt_log_list"), {"tab": "edit", "page": 4})
         self.assertEqual(empty.status_code, 200)
-        self.assertContains(empty, "Nothing here.", count=3)
-        self.assertContains(empty, ">0<", count=3)
+        self.assertContains(empty, "Nothing here.")
+        self.assertContains(empty, ">0<")
         self.assertNotContains(empty, "Previous")
         self.assertNotContains(empty, "Page 1 of")
 
         self._fill(SaltLog.STATUS_SUBMITTED, SALT_LOG_PAGE_SIZE + 1, area_prefix="Lot")
         not_a_number = self.client.get(
             reverse("salt_log_list"),
-            {"tab": "submitted", "submitted_page": "nope"},
+            {"tab": "edit", "page": "nope"},
         )
         self.assertEqual(not_a_number.status_code, 200)
         self.assertContains(not_a_number, "Lot 0000")
@@ -591,29 +581,18 @@ class SaltLogListPaginationTests(TestCase):
 
         past_end = self.client.get(
             reverse("salt_log_list"),
-            {"tab": "submitted", "submitted_page": 99},
+            {"tab": "submitted", "page": 99},
         )
         self.assertEqual(past_end.status_code, 200)
         self.assertContains(past_end, f"Lot {SALT_LOG_PAGE_SIZE:04d}")
         self.assertNotContains(past_end, "Lot 0000")
         self.assertContains(past_end, "Page 2 of 2")
-        self.assertContains(
-            past_end, 'class="tab-pane fade show active" id="submitted"'
-        )
-
-        empty_completed = self.client.get(
-            reverse("salt_log_list"),
-            {"tab": "completed", "completed_page": 99},
-        )
-        self.assertEqual(empty_completed.status_code, 200)
-        self.assertContains(empty_completed, "Nothing here.")
+        self.assertContains(past_end, 'class="tab-pane fade show active" id="edit"')
 
     def test_queries_fetch_only_the_current_page(self):
         self._fill(SaltLog.STATUS_SUBMITTED, SALT_LOG_PAGE_SIZE + 15, area_prefix="Ice")
         with CaptureQueriesContext(connection) as captured:
-            response = self.client.get(
-                reverse("salt_log_list"), {"tab": "submitted"}
-            )
+            response = self.client.get(reverse("salt_log_list"), {"tab": "edit"})
         self.assertEqual(response.status_code, 200)
         salt_sql = [
             query["sql"]
@@ -626,7 +605,7 @@ class SaltLogListPaginationTests(TestCase):
             if sql.lstrip().upper().startswith("SELECT COUNT")
         ]
         pages = [sql for sql in salt_sql if sql not in counts]
-        self.assertGreaterEqual(len(counts), 3)
+        self.assertGreaterEqual(len(counts), 1)
         self.assertTrue(pages)
         for sql in pages:
             self.assertIn("LIMIT", sql.upper())

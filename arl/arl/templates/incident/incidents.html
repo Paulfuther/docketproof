@@ -1,5 +1,5 @@
 {% extends "../base/base.html" %}
-{% block title %}Incidents{% endblock %}
+{% block title %}Incident Dashboard{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
@@ -94,13 +94,13 @@
         }
       </style>
 
-      <h1 class="record-hub-title">Incidents</h1>
+      <h1 class="record-hub-title">Incident Dashboard</h1>
 
       <ul class="nav nav-tabs record-hub-tabs text-center" id="incidentTabs">
         {% if can_add %}
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'create' %} active{% endif %}" data-bs-toggle="tab" href="#create">
-            Create
+          <a class="nav-link{% if active_tab == 'start' %} active{% endif %}" data-bs-toggle="tab" href="#start">
+            Start
           </a>
         </li>
         {% endif %}
@@ -116,7 +116,7 @@
 
       <div class="tab-content record-hub-card">
         {% if can_add %}
-        <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
+        <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
           <h2 class="h5 mb-3">Create site incident</h2>
           {% include "incident/partials/site_incident_form.html" %}
         </div>

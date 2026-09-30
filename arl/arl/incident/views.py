@@ -72,7 +72,7 @@ def _incident_list_for_user(user, query):
 
 
 def _hub_list_context(request):
-    """Shared Create | Edit tab context. Does not build the incident form."""
+    """Shared Start | Edit tab context. Does not build the incident form."""
     user = request.user
     can_add = user.has_perm("incident.add_incident")
     can_view = user.has_perm("incident.view_incident")
@@ -85,13 +85,15 @@ def _hub_list_context(request):
         )
         page_obj = paginator.get_page(request.GET.get("page"))
         incident_count = paginator.count
-    tab = request.GET.get("tab") or ("create" if can_add else "edit")
-    if tab not in ("create", "edit"):
-        tab = "create" if can_add else "edit"
-    if tab == "create" and not can_add:
+    tab = request.GET.get("tab") or ("start" if can_add else "edit")
+    if tab == "create":
+        tab = "start"
+    if tab not in ("start", "edit"):
+        tab = "start" if can_add else "edit"
+    if tab == "start" and not can_add:
         tab = "edit"
     if tab == "edit" and not can_view:
-        tab = "create"
+        tab = "start"
     return {
         "active_tab": tab,
         "can_add": can_add,
@@ -145,13 +147,13 @@ class IncidentCreateView(
     success_url = reverse_lazy("home")
 
     def get(self, request, *args, **kwargs):
-        return redirect(f"{reverse('incidents')}?tab=create")
+        return redirect(f"{reverse('incidents')}?tab=start")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["existing_images"] = []
         context.update(_hub_list_context(self.request))
-        context["active_tab"] = "create"
+        context["active_tab"] = "start"
         return context
 
     def handle_no_permission(self):

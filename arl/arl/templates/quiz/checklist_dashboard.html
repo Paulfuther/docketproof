@@ -1,5 +1,5 @@
 {% extends "../base/base.html" %}
-{% block title %}Checklists{% endblock %}
+{% block title %}Checklist Dashboard{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
@@ -22,24 +22,30 @@
         </div>
       {% endif %}
 
-      <h1 class="record-hub-title">Checklists</h1>
+      <h1 class="record-hub-title">Checklist Dashboard</h1>
 
       <ul class="nav nav-tabs record-hub-tabs text-center" id="checklistTabs">
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'create' %} active{% endif %}" data-bs-toggle="tab" href="#create">
-            Create
+          <a class="nav-link{% if active_tab == 'start' %} active{% endif %}" data-bs-toggle="tab" href="#start">
+            Start
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'saved' %} active{% endif %}" data-bs-toggle="tab" href="#saved">
-            Saved <br>
-            <span class="badge bg-light text-dark">{{ saved_count }}</span>
+          <a class="nav-link{% if active_tab == 'inprogress' %} active{% endif %}" data-bs-toggle="tab" href="#inprogress">
+            In progress <br>
+            <span class="badge bg-light text-dark">{{ in_progress_count }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link{% if active_tab == 'submitted' %} active{% endif %}" data-bs-toggle="tab" href="#submitted">
+            Submitted <br>
+            <span class="badge bg-light text-dark">{{ submitted_count }}</span>
           </a>
         </li>
       </ul>
 
       <div class="tab-content record-hub-card">
-        <div class="tab-pane fade{% if active_tab == 'create' %} show active{% endif %}" id="create" role="tabpanel">
+        <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
           <div class="record-list">
             {% for t in templates %}
               <div class="record-row">
@@ -57,9 +63,42 @@
           </div>
         </div>
 
-        <div class="tab-pane fade{% if active_tab == 'saved' %} show active{% endif %}" id="saved" role="tabpanel">
+        <div class="tab-pane fade{% if active_tab == 'inprogress' %} show active{% endif %}" id="inprogress" role="tabpanel">
           <form method="get" action="{% url 'checklist_dashboard' %}" class="record-hub-search mb-3">
-            <input type="hidden" name="tab" value="saved">
+            <input type="hidden" name="tab" value="inprogress">
+            <label class="form-label mb-1" for="checklist-progress-q">Search</label>
+            <input
+              id="checklist-progress-q"
+              type="search"
+              name="q"
+              value="{{ q }}"
+              class="form-control"
+              placeholder="Title or store"
+              autocomplete="off">
+          </form>
+
+          <div class="record-list">
+            {% for c in in_progress %}
+              <div class="record-row">
+                <div class="record-row-main">
+                  <div class="record-row-title">{{ c.title }}</div>
+                  <div class="record-row-meta">
+                    {% include "base/partials/record_meta.html" with store=c.store when=c.created_at %}
+                  </div>
+                </div>
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
+              </div>
+            {% empty %}
+              <p class="record-empty">No drafts.</p>
+            {% endfor %}
+          </div>
+
+          {% include "base/partials/record_pager.html" with page=in_progress pager="checklist" list_tab="inprogress" page_param="progress_page" %}
+        </div>
+
+        <div class="tab-pane fade{% if active_tab == 'submitted' %} show active{% endif %}" id="submitted" role="tabpanel">
+          <form method="get" action="{% url 'checklist_dashboard' %}" class="record-hub-search mb-3">
+            <input type="hidden" name="tab" value="submitted">
             <label class="form-label mb-1" for="checklist-q">Search</label>
             <input
               id="checklist-q"
@@ -72,30 +111,22 @@
           </form>
 
           <div class="record-list">
-            {% for c in saved %}
+            {% for c in submitted %}
               <div class="record-row">
                 <div class="record-row-main">
                   <div class="record-row-title">{{ c.title }}</div>
                   <div class="record-row-meta">
-                    {% if c.submitted_at %}
-                      {% include "base/partials/record_meta.html" with store=c.store when=c.submitted_at %}
-                    {% else %}
-                      {% include "base/partials/record_meta.html" with store=c.store when=c.created_at %}
-                    {% endif %}
+                    {% include "base/partials/record_meta.html" with store=c.store when=c.submitted_at %}
                   </div>
                 </div>
-                {% if c.status == "draft" %}
-                  <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_edit' slug=c.slug %}">Resume</a>
-                {% else %}
-                  <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_detail' slug=c.slug %}">View</a>
-                {% endif %}
+                <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{% url 'checklist_detail' slug=c.slug %}">View</a>
               </div>
             {% empty %}
-              <p class="record-empty">No checklists found.</p>
+              <p class="record-empty">No checklists submitted.</p>
             {% endfor %}
           </div>
 
-          {% include "base/partials/record_pager.html" with page=saved pager="checklist" %}
+          {% include "base/partials/record_pager.html" with page=submitted pager="checklist" list_tab="submitted" page_param="page" %}
         </div>
       </div>
 

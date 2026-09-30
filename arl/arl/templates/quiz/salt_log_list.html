@@ -1,5 +1,5 @@
 {% extends "../base/base.html" %}
-{% block title %}Salt logs{% endblock %}
+{% block title %}Salt Log Dashboard{% endblock %}
 
 {% block template %}
 {% include "../base/navbar.html" %}
@@ -22,75 +22,52 @@
         </div>
       {% endif %}
 
-      <div class="record-hub-heading">
-        <h1 class="record-hub-title">Salt logs</h1>
-        <form method="post" action="{% url 'create_salt_log' %}" class="mb-0">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-outline-secondary record-hub-create text-nowrap">Start salt log</button>
-        </form>
-      </div>
+      <h1 class="record-hub-title">Salt Log Dashboard</h1>
 
       <ul class="nav nav-tabs record-hub-tabs text-center" id="saltLogTabs">
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'drafts' %} active{% endif %}" data-bs-toggle="tab" href="#drafts">
-            Drafts <br>
-            <span class="badge bg-light text-dark">{{ drafts.paginator.count }}</span>
+          <a class="nav-link{% if active_tab == 'start' %} active{% endif %}" data-bs-toggle="tab" href="#start">
+            Start
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'submitted' %} active{% endif %}" data-bs-toggle="tab" href="#submitted">
-            Submitted <br>
-            <span class="badge bg-light text-dark">{{ submitted.paginator.count }}</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link{% if active_tab == 'completed' %} active{% endif %}" data-bs-toggle="tab" href="#completed">
-            Completed <br>
-            <span class="badge bg-light text-dark">{{ completed.paginator.count }}</span>
+          <a class="nav-link{% if active_tab == 'edit' %} active{% endif %}" data-bs-toggle="tab" href="#edit">
+            Edit <br>
+            <span class="badge bg-light text-dark">{{ log_count }}</span>
           </a>
         </li>
       </ul>
 
       <div class="tab-content record-hub-card">
-        <form method="get" class="record-hub-search mb-3">
-          <input type="hidden" name="tab" id="salt-tab" value="{{ active_tab }}">
-          <div class="mb-2">
-            <label class="form-label mb-1" for="salt-store-filter">Store</label>
-            <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
-              <option value="">All stores</option>
-              {% for store in stores %}
-                <option value="{{ store.pk }}" {% if store_filter == store.pk|stringformat:"s" %}selected{% endif %}>
-                  Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-          <label class="form-label mb-1" for="salt-q">Search</label>
-          <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Area" autocomplete="off">
-        </form>
+        <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
+          <form method="post" action="{% url 'create_salt_log' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary record-hub-create">Start salt log</button>
+          </form>
+        </div>
 
-        <div class="tab-pane fade{% if active_tab == 'drafts' %} show active{% endif %}" id="drafts">
-          {% include "quiz/salt_log_rows.html" with rows=drafts action_label="Resume" when_label="Started" when_attr="hidden_timestamp" page_param="drafts_page" tab="drafts" %}
-        </div>
-        <div class="tab-pane fade{% if active_tab == 'submitted' %} show active{% endif %}" id="submitted">
-          {% include "quiz/salt_log_rows.html" with rows=submitted action_label="View" when_label="Submitted" when_attr="submitted_at" page_param="submitted_page" tab="submitted" %}
-        </div>
-        <div class="tab-pane fade{% if active_tab == 'completed' %} show active{% endif %}" id="completed">
-          {% include "quiz/salt_log_rows.html" with rows=completed action_label="View" when_label="Submitted" when_attr="submitted_at" page_param="completed_page" tab="completed" %}
+        <div class="tab-pane fade{% if active_tab == 'edit' %} show active{% endif %}" id="edit" role="tabpanel">
+          <form method="get" class="record-hub-search mb-3">
+            <input type="hidden" name="tab" value="edit">
+            <div class="mb-2">
+              <label class="form-label mb-1" for="salt-store-filter">Store</label>
+              <select class="form-select" id="salt-store-filter" name="store" onchange="this.form.submit()">
+                <option value="">All stores</option>
+                {% for store in stores %}
+                  <option value="{{ store.pk }}" {% if store_filter == store.pk|stringformat:"s" %}selected{% endif %}>
+                    Store {{ store.number }}{% if store.city %} · {{ store.city }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <label class="form-label mb-1" for="salt-q">Search</label>
+            <input class="form-control" id="salt-q" type="search" name="q" value="{{ q }}" placeholder="Area" autocomplete="off">
+          </form>
+
+          {% include "quiz/salt_log_rows.html" with rows=logs tab="edit" page_param="page" %}
         </div>
       </div>
     </div>
   </div>
 </div>
-<script>
-  (function () {
-    var tabs = document.getElementById("saltLogTabs");
-    var input = document.getElementById("salt-tab");
-    if (!tabs || !input) return;
-    tabs.addEventListener("shown.bs.tab", function (event) {
-      var pane = (event.target.getAttribute("href") || "").replace("#", "");
-      if (pane) input.value = pane;
-    });
-  })();
-</script>
 {% endblock %}
