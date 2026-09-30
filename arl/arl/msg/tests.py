@@ -879,6 +879,19 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertNotIn("<h3", form)
         self.assertNotIn("<code>", form)
         self.assertIn("#template-form .form-group > label", form)
+        nav = (templates_dir / "partials" / "comms_side_nav.html").read_text()
+        self.assertIn("aside:has(#commsNav)", nav)
+        self.assertIn(".row > style", nav)
+        self.assertIn('id="commsNav"', nav)
+        for page in (
+            templates_dir / "email_template_list.html",
+            templates_dir / "email_template_form.html",
+            templates_dir / "email_template_confirm_delete.html",
+        ):
+            page_html = page.read_text()
+            self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', page_html)
+            self.assertIn('style="height: 95vh;"', page_html)
+            self.assertNotIn("Back to Comms", page_html)
         self.assertIn('class="fw-semibold mb-2">Delete template</div>', delete)
         self.assertIn('class="btn btn-outline-danger">Delete</button>', delete)
         self.assertIn("btn btn-outline-secondary", delete)
