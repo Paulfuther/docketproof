@@ -5,8 +5,15 @@
 
 
 <style>
-  /* Stop any horizontal scrolling */
-  html, body { overflow-x: hidden; }
+  /* Stop any horizontal scrolling.
+     Reserve the classic scrollbar gutter on every page so the fixed
+     navbar does not shift between short pages (Checklists, Salt Logs)
+     and tall ones (Incidents). */
+  html {
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
+  body { overflow-x: hidden; }
 
   /* Make sure nothing can exceed viewport width */
   .container, .row, .col-12, .card { max-width: 100%; }

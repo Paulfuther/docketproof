@@ -22,6 +22,41 @@
         </div>
       {% endif %}
 
+      <style>
+        .incident-pills {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: stretch;
+          gap: 0.5rem;
+          width: 100%;
+        }
+        .incident-pill {
+          flex: 1 1 0;
+          min-width: 0;
+          min-height: 2rem;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.25rem 0.75rem;
+          background: #fff;
+          color: #212529;
+          border: 1px solid #adb5bd;
+          border-radius: 50rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          line-height: 1.5;
+          text-align: center;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .incident-pill:hover,
+        .incident-pill:focus {
+          background: #f8f9fa;
+          color: #212529;
+          border-color: #6c757d;
+        }
+      </style>
+
       <legend class="mb-3">Incidents</legend>
 
       <ul class="nav nav-tabs flex-wrap text-center" id="incidentTabs">
@@ -70,7 +105,6 @@
                   <th>Description</th>
                   <th>Store</th>
                   <th>Date</th>
-                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,31 +120,26 @@
                   <td class="d-none d-md-table-cell">
                     {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
                   </td>
-                  <td class="d-none d-md-table-cell">
-                    {% include "incident/partials/incident_row_actions.html" %}
-                  </td>
-                  <td class="d-table-cell d-md-none" colspan="4">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                      <div class="me-2">
-                        <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
-                        <div class="text-muted small">
-                          {% if incident.store %}
-                            Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
-                          {% else %}—{% endif %}
-                        </div>
-                        <div class="text-muted small">
-                          {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
-                        </div>
-                        <div class="mt-2">
-                          {% include "incident/partials/incident_row_actions.html" %}
-                        </div>
-                      </div>
+                  <td class="d-table-cell d-md-none" colspan="3">
+                    <div class="fw-semibold">{{ incident.brief_description|default:"—" }}</div>
+                    <div class="text-muted small">
+                      {% if incident.store %}
+                        Store {{ incident.store.number }}{% if incident.store.city %} · {{ incident.store.city }}{% endif %}
+                      {% else %}—{% endif %}
                     </div>
+                    <div class="text-muted small">
+                      {% if incident.eventdate %}{{ incident.eventdate|date:"Y-m-d" }}{% else %}—{% endif %}
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3">
+                    {% include "incident/partials/incident_row_actions.html" %}
                   </td>
                 </tr>
                 {% empty %}
                 <tr>
-                  <td colspan="4" class="text-muted">No incidents found.</td>
+                  <td colspan="3" class="text-muted">No incidents found.</td>
                 </tr>
                 {% endfor %}
               </tbody>

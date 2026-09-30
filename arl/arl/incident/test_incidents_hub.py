@@ -99,16 +99,20 @@ class IncidentHubTests(TestCase):
         self.assertContains(
             response, reverse("update_incident", kwargs={"pk": own.pk})
         )
-        self.assertContains(response, "Insurance PDF")
-        self.assertContains(response, "Security PDF")
-        self.assertNotContains(response, "Investigation PDF")
+        self.assertContains(response, "incident-pills")
+        self.assertContains(response, 'class="incident-pill"')
+        self.assertContains(response, ">Insurance<")
+        self.assertContains(response, ">Security<")
+        self.assertContains(response, 'title="Insurance PDF"')
+        self.assertNotContains(response, ">Investigation<")
 
     def test_investigation_pdf_is_offered_to_the_restricted_group(self):
         self._incident("Fuel spill")
         group = Group.objects.create(name="abm_incident_pdf")
         self.user.groups.add(group)
         response = self.client.get(reverse("incidents") + "?tab=edit")
-        self.assertContains(response, "Investigation PDF")
+        self.assertContains(response, ">Investigation<")
+        self.assertContains(response, 'title="Investigation PDF"')
 
     def test_edit_tab_search_uses_a_plain_query(self):
         self._incident("Fuel spill", when=date(2026, 3, 2))
