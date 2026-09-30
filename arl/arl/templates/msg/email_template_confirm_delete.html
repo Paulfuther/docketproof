@@ -9,12 +9,14 @@
     {% include "msg/partials/comms_side_nav.html" %}
     <section class="col-12 col-lg-11">
       <div class="col-12 col-md-8 col-lg-6 px-0">
-        <h3>Delete template</h3>
-        <p>Delete <strong>{{ template.name }}</strong>? This does not affect mail that has already been sent.</p>
+        <div class="fw-semibold mb-2">Delete template</div>
+        <p class="mb-3">Delete <strong>{{ template.name }}</strong>? This does not affect mail that has already been sent.</p>
         <form method="post">
           {% csrf_token %}
-          <button type="submit" class="btn btn-danger">Delete</button>
-          <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">Cancel</a>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-outline-danger">Delete</button>
+            <a class="btn btn-outline-secondary" href="{% url 'email_template_list' %}">Cancel</a>
+          </div>
         </form>
       </div>
     </section>

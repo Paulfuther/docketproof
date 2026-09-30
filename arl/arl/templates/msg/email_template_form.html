@@ -12,6 +12,21 @@
     .template-preview-col { position: sticky; top: 72px; }
   }
   .dz-header-image, .dz-template-image { min-height: 64px; cursor: pointer; }
+  /* Crispy bootstrap4 wraps fields in .form-group. Match Email/SMS .form-label spacing. */
+  #template-form .form-group { margin-bottom: 1rem; }
+  #template-form .form-group > label {
+    display: inline-block;
+    margin-bottom: .5rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+  #template-form .asteriskField { color: var(--bs-danger); }
+  #advanced-html > summary {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
   #header-crop-wrap { padding: 18px; background: #111; overflow: visible; min-height: 280px; }
   #header-crop-wrap .cropper-container { min-height: 240px; }
   #header-crop-wrap .cropper-point {
@@ -30,7 +45,7 @@
     {% include "msg/partials/comms_side_nav.html" %}
     <section class="col-12 col-lg-11">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <h3 class="mb-0">{% if template %}{{ template.name }}{% else %}New email template{% endif %}</h3>
+        <div class="fw-semibold">{% if template %}{{ template.name }}{% else %}New email template{% endif %}</div>
         <a class="btn btn-outline-secondary text-nowrap" href="{% url 'email_template_list' %}">All templates</a>
       </div>
 
@@ -40,7 +55,7 @@
 
       <p class="text-muted small mb-3">
         Write the message. Add a header or pictures if you want.
-        {% verbatim %}Example: <code>{{name}}</code>{% endverbatim %}
+        {% verbatim %}Example: {{name}}{% endverbatim %}
       </p>
 
       <form method="post" id="template-form"
@@ -157,13 +172,13 @@
             </details>
 
             <div class="template-save-bar">
-              <button type="submit" class="btn btn-primary">Save template</button>
+              <button type="submit" class="btn btn-outline-primary">Save template</button>
             </div>
           </div>
 
           <div class="col-12 col-lg-6 template-preview-col">
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="fw-semibold">Preview</div>
+              <div class="fw-semibold small mb-1">Preview</div>
               <button type="button" class="btn btn-sm btn-link py-0" id="refresh-preview">Refresh</button>
             </div>
             <div class="small text-muted mb-2" id="preview-subject"></div>
@@ -197,7 +212,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-outline-secondary" id="header-crop-apply">Apply crop</button>
-        <button type="button" class="btn btn-primary" id="header-use-full">Use full image</button>
+        <button type="button" class="btn btn-outline-primary" id="header-use-full">Use full image</button>
       </div>
     </div>
   </div>
