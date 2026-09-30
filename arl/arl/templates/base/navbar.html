@@ -112,18 +112,6 @@
     </a>
 </li>
 
-        <!-- rec and close-->
-         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="formsDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="material-symbols-outlined">
-              assignment_turned_in
-            </i> rec and close
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'create_reclose' %}">Rec and Close</a></li>
-            </ul>
-         </li>
-
         <!-- Dropbox (if enabled) -->
         {% if user.is_dropbox %}
         <li class="nav-item">
