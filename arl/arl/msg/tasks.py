@@ -47,6 +47,7 @@ from arl.setup.models import TenantApiKeys
 from arl.user.models import SMSOptOut, EmployerSMSTask, NewHireInvite
 
 from .helpers import (
+    SMS_OPT_OUT_FOOTER,
     client,
     create_master_email,
     create_single_csv_email,
@@ -56,6 +57,7 @@ from .helpers import (
     send_store_phonecall_reminder,
     send_whats_app_template,
     send_whats_app_template_autoreply,
+    compose_outbound_sms,
     sync_contacts_with_sendgrid,
 )
 
@@ -459,8 +461,7 @@ def send_bulk_shortened_sms_link_task(self):
                 "Hello, this is Terry from Petro Canada. Each week, we share reminders for employees "
                 "about regulated products. Please review this week’s message: "
                 "https://paulfuther.eu-central-1.linodeobjects.com/compliance/4dcc0432-05f8-4e5e-b462-7c31bd7c59bd_compliance/rules.pdf "
-                "Reply STOP to opt out."
-            )
+            ) + SMS_OPT_OUT_FOOTER
             # Send individually to each user so link gets shortened per-message
             for phone in phone_numbers:
                 result = send_linkshortened_sms(
@@ -549,8 +550,7 @@ def lotto_theft_sms_link_task(self):
                 "Remove all 100 and 30 dollar lotto tickets. Do not activate anymore of these and lock up the ones you have."
                 "Please review an image of the suspect: "
                 "https://paulfuther.eu-central-1.linodeobjects.com/compliance/83d38dc5-4198-4d47-a710-97017e2173c6_compliance/f738598d-b7e8-497b-9da1-5393e8c74625.jpeg "
-                "Reply STOP to opt out."
-            )
+            ) + SMS_OPT_OUT_FOOTER
             # Send individually to each user so link gets shortened per-message
             for phone in phone_numbers:
                 result = send_linkshortened_sms(
@@ -583,81 +583,21 @@ def lotto_theft_sms_link_task(self):
         return {"error": msg}
 
 
-# APPROVED
-# This task is APPROVED for multi tenant.
-# Tenatn api keys are geneated here and passed to the helper.
+# Group SMS is disabled. The task name stays so a previously queued job does not send.
 @app.task(name="one_off_bulk_sms")
 def send_one_off_bulk_sms_task(group_id, message, user_id):
-    User = get_user_model()
-    try:
-        # ✅ Get the user who initiated the SMS
-        user = User.objects.get(id=user_id)
-        employer = user.employer  # Assuming employer is a ForeignKey in User model
-
-    except User.DoesNotExist:
-        logger.error(f"🚨 User {user_id} not found.")
-        return
-
-    try:
-        # ✅ Get the group and active users
-        group = Group.objects.get(pk=group_id)
-        users_in_group = group.user_set.filter(is_active=True, employer=employer)
-        phone_numbers = [user.phone_number for user in users_in_group]
-
-    except Group.DoesNotExist:
-        logger.error(f"🚨 Group {group_id} not found.")
-        return
-
-    if not phone_numbers:
-        logger.warning(
-            f"⚠️ No active users in group {group.name}. Skipping SMS sending."
-        )
-        return
-
-    # ✅ Get employer-specific Twilio credentials from TenantApiKeys
-    twilio_keys = (
-        TenantApiKeys.objects.filter(employer=employer, is_active=True)
-        .values("account_sid", "auth_token", "notify_service_sid")
-        .first()
+    """Group SMS is disabled. Keep the task so an old queued job cannot send."""
+    logger.warning(
+        "Group SMS is disabled. Ignored one_off_bulk_sms group_id=%s sender_id=%s",
+        group_id,
+        user_id,
     )
-    print("Employer, Twilio keys :", employer, twilio_keys)
-    if not twilio_keys:
-        logger.error(
-            f"🚨 No active Twilio credentials for employer: {employer.name}. SMS not sent."
-        )
-        return
-
-    twilio_account_sid = twilio_keys.get("account_sid")
-    twilio_auth_token = twilio_keys.get("auth_token")
-    twilio_notify_sid = twilio_keys.get("notify_service_sid")
-
-    if not twilio_account_sid or not twilio_auth_token or not twilio_notify_sid:
-        logger.error(f"🚨 Missing Twilio credentials for employer: {employer.name}.")
-        return
-
-    try:
-        # ✅ Send bulk SMS, now including employer info
-        send_bulk_sms(
-            phone_numbers,
-            message,
-            twilio_account_sid,
-            twilio_auth_token,
-            twilio_notify_sid,
-        )
-
-        log_message = f"📢 Bulk SMS sent by {employer.name} to {group.name} ({len(phone_numbers)} recipients)"
-        logger.info(log_message)
-
-        SmsLog.objects.create(level="INFO", message=log_message)
-
-    except Exception as e:
-        logger.error(f"🚨 An error occurred while sending SMS: {str(e)}")
+    return {"disabled": True}
 
 
 # NEW: Send SMS to selected individual users (not group)
 @app.task(name="one_off_user_sms")
 def send_sms_to_selected_users_task(user_ids, message, sender_id):
-    message_body = message
     User = get_user_model()
     try:
         sender = User.objects.get(id=sender_id)
@@ -665,6 +605,8 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
     except User.DoesNotExist:
         logger.error(f"🚨 Sender user {sender_id} not found.")
         return
+
+    message_body = compose_outbound_sms(message, employer)
 
     # ✅ Fetch active target users
     users = User.objects.filter(id__in=user_ids, is_active=True, employer=employer)
@@ -687,7 +629,7 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
     try:
         send_bulk_sms(
             phone_numbers,
-            message,
+            message_body,
             twilio_keys["account_sid"],
             twilio_keys["auth_token"],
             twilio_keys["notify_service_sid"],
@@ -698,8 +640,10 @@ def send_sms_to_selected_users_task(user_ids, message, sender_id):
         )
         SmsLog.objects.create(
             level="INFO",
-            message=f"SMS sent to {len(phone_numbers)} users by {sender.email}",
-            message_body=message_body,
+            message=(
+                f"SMS sent to {len(phone_numbers)} users by {sender.email}\n"
+                f"{message_body}"
+            ),
         )
 
     except Exception as e:

@@ -792,8 +792,9 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn('data-tag="{{ field.tag }}"', html)
         self.assertIn("Insert field", html)
         self.assertIn("These fill in for each person when you send.", html)
-        self.assertIn("Back to Comms", html)
-        self.assertIn("{% url 'comms' %}?tab=email", html)
+        self.assertNotIn("Back to Comms", html)
+        self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', html)
+        self.assertIn("All templates", html)
         self.assertIn("padding:12px 16px", html)
         self.assertIn("Advanced HTML", html)
         self.assertIn("No pictures yet.", html)
@@ -842,7 +843,7 @@ class InAppEmailTemplateViewTests(TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_template_list_links_back_to_comms(self):
+    def test_template_list_uses_comms_side_menu(self):
         path = (
             Path(__file__).resolve().parent.parent
             / "templates"
@@ -850,18 +851,79 @@ class InAppEmailTemplateViewTests(TestCase):
             / "email_template_list.html"
         )
         html = path.read_text()
-        self.assertIn("Back to Comms", html)
-        self.assertIn("{% url 'comms' %}?tab=email", html)
+        self.assertNotIn("Back to Comms", html)
+        self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', html)
+        self.assertIn(
+            'class="btn btn-outline-secondary text-nowrap" href="{% url \'email_template_create\' %}">New template</a>',
+            html,
+        )
+        self.assertNotIn("btn-primary", html)
+
+    def test_template_pages_render_comms_side_menu(self):
+        list_response = self.client.get(reverse("email_template_list"))
+        self.assertEqual(list_response.status_code, 200)
+        html = list_response.content.decode()
+        self.assertIn('id="commsNav"', html)
+        self.assertIn('id="commsNavMobile"', html)
+        self.assertNotIn("Back to Comms", html)
+        self.assertNotIn("btn-primary", html)
+        self.assertIn(">New template</a>", html)
+        self.assertIn("btn-outline-secondary", html)
+        self.assertEqual(html.count("comms-nav-link active"), 2)
+        self.assertIn('href="/comms/?tab=email"', html)
+        self.assertIn('data-title="Manage templates"', html)
+        self.assertIn(
+            '<span class="comms-nav-label" aria-hidden="true">Manage templates</span>',
+            html,
+        )
+        self.assertIn("bootstrap.Tooltip", html)
+        self.assertNotIn('data-bs-toggle="tab"', html)
+
+        form_response = self.client.get(reverse("email_template_create"))
+        self.assertEqual(form_response.status_code, 200)
+        form_html = form_response.content.decode()
+        self.assertIn('id="commsNav"', form_html)
+        self.assertNotIn("Back to Comms", form_html)
+        self.assertIn("All templates", form_html)
+        self.assertEqual(form_html.count("comms-nav-link active"), 2)
+
+        template = EmailTemplate.objects.create(
+            name="Welcome",
+            subject="Hello",
+            html_body="<p>Hi</p>",
+        )
+        template.employers.add(self.employer)
+        edit_response = self.client.get(
+            reverse("email_template_edit", args=[template.pk])
+        )
+        self.assertEqual(edit_response.status_code, 200)
+        edit_html = edit_response.content.decode()
+        self.assertIn('id="commsNav"', edit_html)
+        self.assertNotIn("Back to Comms", edit_html)
+        self.assertEqual(edit_html.count("comms-nav-link active"), 2)
+
+        delete_response = self.client.get(
+            reverse("email_template_delete", args=[template.pk])
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        delete_html = delete_response.content.decode()
+        self.assertIn('id="commsNav"', delete_html)
+        self.assertNotIn("Back to Comms", delete_html)
+        self.assertEqual(delete_html.count("comms-nav-link active"), 2)
 
     def test_comms_library_link_says_manage_templates(self):
         templates_dir = Path(__file__).resolve().parent.parent / "templates" / "msg"
         comms = (templates_dir / "master_comms.html").read_text()
+        nav = (templates_dir / "partials" / "comms_side_nav.html").read_text()
         send_form = (templates_dir / "template_email_form.html").read_text()
-        self.assertIn('data-title="Manage templates"', comms)
-        self.assertIn('title="Manage templates"', comms)
+        self.assertIn('{% include "msg/partials/comms_side_nav.html" %}', comms)
+        self.assertIn('data-title="Manage templates"', nav)
+        self.assertIn('title="Manage templates"', nav)
+        self.assertNotIn('data-title="Templates"', nav)
         self.assertNotIn('data-title="Templates"', comms)
-        self.assertIn("{% url 'email_template_list' %}", comms)
-        self.assertEqual(comms.count('data-title="Manage templates"'), 2)
+        self.assertIn("{% url 'email_template_list' %}", nav)
+        self.assertEqual(nav.count('data-title="Manage templates"'), 2)
+        self.assertIn("active_tab == 'templates'", nav)
         self.assertIn("Manage templates", send_form)
         self.assertIn("Use template", send_form)
         self.assertIn("Write message", send_form)
@@ -869,6 +931,22 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertNotIn("Compose Message", send_form)
         self.assertIn("comms-mode-toggle", send_form)
         self.assertIn("comms-manage-link", send_form)
+        self.assertIn("comms-email-form", send_form)
+        self.assertIn("Select Individuals", send_form)
+        self.assertNotIn("toggle-email-group", send_form)
+        self.assertNotIn("selected_group", send_form)
+        self.assertNotIn("Choose Group", send_form)
+        docusign = (
+            Path(__file__).resolve().parent.parent
+            / "templates"
+            / "dsign"
+            / "name_email_form.html"
+        ).read_text()
+        self.assertIn("comms-email-form", docusign)
+        self.assertIn("max-width: 640px", docusign)
+        self.assertIn("Create Envelope", docusign)
+        self.assertNotIn("mobile-btn", docusign)
+        self.assertNotIn("selected_group", docusign)
         self.assertEqual(send_form.count("Manage templates"), 1)
         self.assertIn("{% url 'email_template_list' %}", send_form)
 
@@ -927,6 +1005,37 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(kwargs["source"], EMAIL_SOURCE_IN_APP)
         self.assertEqual(kwargs["app_template_id"], template.pk)
         self.assertIn("<p>Hello {{name}}</p>", kwargs["html_body"])
+
+    @patch("arl.msg.views.master_email_send_task")
+    def test_comms_email_rejects_posted_group(self, mock_task):
+        comms_group = Group.objects.create(name="SendCOMMS")
+        self.user.groups.add(comms_group)
+        recipient = CustomUser.objects.create_user(
+            username="grouped-worker",
+            email="grouped@example.com",
+            password="pass12345",
+            phone_number="+15195550108",
+            employer=self.employer,
+            first_name="Sam",
+            last_name="Lee",
+            is_active=True,
+        )
+        crew = Group.objects.create(name="Crew")
+        recipient.groups.add(crew)
+
+        response = self.client.post(
+            reverse("comms") + "?tab=email",
+            {
+                "form_type": "email",
+                "email_mode": "text",
+                "subject": "Hello",
+                "message": "Please read this.",
+                "selected_group": str(crew.pk),
+                "selected_users": [str(recipient.pk)],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        mock_task.delay.assert_not_called()
 
     def test_preview_and_send_include_header_image(self):
         template = EmailTemplate.objects.create(

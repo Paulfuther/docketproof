@@ -1,6 +1,9 @@
 {% load crispy_forms_tags %}
 
 <style>
+  .comms-email-form { max-width: 640px; }
+  .comms-email-form .custom-input { margin-bottom: 0; }
+
   /* Loader Animation */
     .loading-container {
       display: flex;
@@ -74,6 +77,30 @@
     margin-right: 10px;
   }
 
+  .dropdown-toggle-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 10px 12px;
+    width: 100%;
+    text-align: left;
+    font-weight: 500;
+    position: relative;
+  }
+
+  .dropdown-toggle-btn:after {
+    content: "▼";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: transform 0.3s ease;
+  }
+
+  .dropdown-toggle-btn.open:after {
+    transform: translateY(-50%) rotate(180deg);
+  }
+
 
 
   @media (max-width: 768px) {
@@ -83,6 +110,7 @@
   }
 </style>
 
+<div class="comms-email-form py-3">
 <form method="post">
   {% csrf_token %}
   <input type="hidden" name="form_type" value="sms">
@@ -99,7 +127,7 @@
   
 
     <!-- AI Prompt Section -->
-      <div class="mb-3">
+      <div class="mb-4">
         <label for="sms-ai-prompt" class="form-label">Need help from AI to craft your message?</label>
         <textarea id="sms-ai-prompt" class="form-control mb-2" rows="2" placeholder="Describe what you want to say..."></textarea>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="generateSmsAi()">Generate with AI</button>
@@ -129,76 +157,46 @@
     {% if sms_form.message.errors %}
       <div class="text-danger small">{{ sms_form.message.errors.0 }}</div>
     {% endif %}
-  </div>
 
-  <!-- Group Dropdown -->
-  <label class="form-label">Select Group</label>
-  <button type="button" id="toggleGroups" class="dropdown-toggle-btn">Choose Group</button>
-
-  <div id="groupBox" class="dropdown-box mb-3">
-    {% for radio in sms_form.selected_group %}
-      <div class="dropdown-option">
-        {{ radio.tag }} {{ radio.choice_label }}
+    <div class="mt-3" id="sms-preview-wrap">
+      <div class="fw-semibold small mb-1">Preview</div>
+      <div id="sms-preview"
+           class="border rounded bg-white p-2 small text-muted"
+           data-opt-out-footer="Reply STOP to opt out."
+           data-sms-greeting="{{ sms_form.preview_greeting }}"
+           style="min-height: 80px; max-height: 200px; overflow:auto; white-space: pre-wrap;">Your message will appear here.</div>
+      <div class="text-muted small mt-1">
+        Recipients receive the greeting, your message, and Reply STOP to opt out.
       </div>
-    {% empty %}
-      <p class="text-muted px-3">No groups available for your employer.</p>
-    {% endfor %}
+    </div>
   </div>
 
-          <!-- User Selection -->
-           <label class="form-label">Or Select Individuals</label>
-              <button type="button" id="toggle-sms-user-dropdown" class="dropdown-toggle-btn">
-                <span id="sms-selected-summary-label" class="d-inline">Select Users</span>
-              </button>
-
-          <div id="sms-user-dropdownBox" class="dropdown-box mb-3">
-
-            <!-- 🔍 Search Input -->
-            <div class="px-3 mt-3 mb-2">
-              <input type="text"
-                    name="search"
-                    class="form-control mb-2"
-                    placeholder="Search users..."
-                    hx-get="{% url 'search_users' %}"
-                    hx-trigger="keyup changed delay:200ms"
-                    hx-target="#sms-user-checkbox-list"
-                    hx-include="[name='csrfmiddlewaretoken'], input[name='selected_users']:checked"
-                    autocomplete="off">
-            </div>
-            
-            <!-- 🔁 Live Result Target -->
-            <div id="sms-user-checkbox-list" class="text-muted small px-3">
-             <!-- Template Email -->
-             {% include "msg/partials/user_checkboxes.html" with users=email_form.fields.selected_users.queryset selected_ids=selected_ids summary_id="sms-selected-summary" %}
-            </div>
-            </div>
-  <!-- Submit Button -->
-  <button type="submit" class="btn btn-outline-primary mt-3">Send SMS</button>
+  <label class="form-label">Select Individuals</label>
+  <button type="button" id="toggle-sms-user-dropdown" class="dropdown-toggle-btn">
+    <span id="sms-selected-summary-label" class="d-inline">Select Users</span>
+  </button>
+  <div id="sms-user-dropdownBox" class="dropdown-box mb-3">
+    <div class="px-3 mt-3 mb-2">
+      <input type="text"
+             name="search"
+             class="form-control mb-2"
+             placeholder="Search users..."
+             hx-get="{% url 'search_users' %}"
+             hx-trigger="keyup changed delay:200ms"
+             hx-target="#sms-user-checkbox-list"
+             hx-include="[name='csrfmiddlewaretoken'], input[name='selected_users']:checked"
+             autocomplete="off">
+    </div>
+    <div id="sms-user-checkbox-list" class="text-muted small px-3">
+      {% include "msg/partials/user_checkboxes.html" with users=email_form.fields.selected_users.queryset selected_ids=selected_ids summary_id="sms-selected-summary" %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 mt-2">
+    <button type="submit" class="btn btn-outline-primary mt-3">Send SMS</button>
+  </div>
 </form>
+</div>
 
-
-<!-- Set up groups -->
-<script>
-  const toggleGroupBtn = document.getElementById("toggleGroups");
-  const groupBox = document.getElementById("groupBox");
-
-  toggleGroupBtn.addEventListener("click", function () {
-    groupBox.classList.toggle("open");
-    toggleGroupBtn.classList.toggle("open");
-  });
-
-  // Update toggle button with selected group label
-  document.querySelectorAll("#groupBox input[type=radio]").forEach(radio => {
-    radio.addEventListener("change", () => {
-      const label = radio.closest(".dropdown-option").textContent.trim();
-      if (label) {
-        toggleGroupBtn.textContent = label;
-      }
-      groupBox.classList.remove("open");
-      toggleGroupBtn.classList.remove("open");
-    });
-  });
-</script>
 
 <!-- Set up Users -->
 <script>
@@ -254,8 +252,41 @@
   function insertSmsAi() {
   console.log("Insert button clicked");
   const aiText = document.getElementById("sms-ai-body").value;
-  document.getElementById("id_sms_message").value = aiText;
+  const field = document.getElementById("id_sms_message");
+  if (!field) return;
+  field.value = aiText;
+  updateSmsPreview();
 }
+
+  function updateSmsPreview() {
+    const field = document.getElementById("id_sms_message");
+    const preview = document.getElementById("sms-preview");
+    if (!field || !preview) return;
+    const footer = (preview.getAttribute("data-opt-out-footer") || "").trim();
+    const greeting = (preview.getAttribute("data-sms-greeting") || "").trim();
+    const text = field.value.trim();
+    if (!text) {
+      const parts = [];
+      if (greeting) parts.push(greeting);
+      parts.push("Your message will appear here.");
+      if (footer) parts.push(footer);
+      preview.textContent = parts.join("\n");
+      preview.classList.add("text-muted");
+      return;
+    }
+    let finalText = greeting ? greeting + "\n" + text : text;
+    if (footer && finalText.toLowerCase().indexOf(footer.toLowerCase()) === -1) {
+      finalText = finalText + "\n" + footer;
+    }
+    preview.textContent = finalText;
+    preview.classList.remove("text-muted");
+  }
+
+  const smsMessageField = document.getElementById("id_sms_message");
+  if (smsMessageField) {
+    smsMessageField.addEventListener("input", updateSmsPreview);
+    updateSmsPreview();
+  }
 
  
 </script>

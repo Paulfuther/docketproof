@@ -53,7 +53,7 @@ from arl.msg.email_utils import (
     sendgrid_id_for_template,
     wrap_in_app_email_html,
 )
-from arl.msg.helpers import (client, get_all_contact_lists,
+from arl.msg.helpers import (SMS_OPT_OUT_FOOTER, client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
                              is_member_of_comms_group,
                              is_member_of_docusign_group,
@@ -281,6 +281,11 @@ def render_message_to_sendgrid(message):
     return escape(message).replace("\n", "<br>")
 
 
+def _posted_comms_group(request):
+    """Non-empty group id posted from Communications. Blank values are ignored."""
+    return (request.POST.get("selected_group") or "").strip()
+
+
 @login_required
 @user_passes_test(is_member_of_comms_group)
 def communications(request):
@@ -454,7 +459,6 @@ def communications(request):
                 "subject": draft.subject,
                 "message": draft.message,
                 "sendgrid_id": draft.sendgrid_template,
-                "selected_group": draft.selected_group,
                 "selected_users": draft.selected_users.all(),
             }
             attachment_urls = draft.attachment_urls or []
@@ -477,6 +481,12 @@ def communications(request):
         if form_type == "email":
             active_tab = "email"
             print("📬 Processing email form...")
+            if _posted_comms_group(request):
+                messages.error(
+                    request,
+                    "Sending to a group is no longer available. Select individual users.",
+                )
+                return redirect("/comms/?tab=email")
             email_form = EmailForm(
                 request.POST, request.FILES, user=user, initial=initial_data
             )
@@ -496,17 +506,14 @@ def communications(request):
             if email_form.is_valid():
                 print("valid")
                 mode = email_form.cleaned_data["email_mode"]
-                selected_group = email_form.cleaned_data["selected_group"]
                 selected_users = email_form.cleaned_data["selected_users"]
                 attachment_urls = get_uploaded_urls_from_request(request)
 
-                recipients = prepare_recipient_data(
-                    user, selected_group, selected_users
-                )
+                recipients = prepare_recipient_data(user, None, selected_users)
 
                 if not recipients:
                     messages.error(
-                        request, "No recipients found. Please select a group or users."
+                        request, "No recipients found. Please select at least one user."
                     )
                     return redirect("/comms/?tab=email")
 
@@ -599,20 +606,23 @@ def communications(request):
 
         elif form_type == "sms":
             active_tab = "sms"
+            if _posted_comms_group(request):
+                messages.error(
+                    request,
+                    "Sending to a group is no longer available. Select individual users.",
+                )
+                return redirect("/comms/?tab=sms")
             sms_form = SMSForm(request.POST, user=user)
 
             if sms_form.is_valid():
-                selected_group = sms_form.cleaned_data["selected_group"]
                 selected_users = sms_form.cleaned_data["selected_users"]
                 sms_message = sms_form.cleaned_data["sms_message"]
 
-                recipients = prepare_sms_recipient_data(
-                    user, selected_group, selected_users
-                )
+                recipients = prepare_sms_recipient_data(user, None, selected_users)
 
                 if not recipients:
                     messages.error(
-                        request, "No recipients found. Please select a group or users."
+                        request, "No recipients found. Please select at least one user."
                     )
                     return redirect("/comms/?tab=sms")
 
@@ -828,7 +838,7 @@ def save_draft_ajax(request):
     print("draft subject :", draft.subject)
     draft.message = form.cleaned_data.get("message", "")
     draft.sendgrid_template = form.cleaned_data.get("sendgrid_id")
-    draft.selected_group = form.cleaned_data.get("selected_group")
+    draft.selected_group = None
     uploaded_urls_raw = request.POST.get("uploaded_file_urls")
     draft.employer = request.user.employer
     try:
@@ -860,7 +870,6 @@ def edit_draft_email(request, draft_id):
             "subject": draft.subject,
             "message": draft.message,
             "sendgrid_id": draft.sendgrid_template,
-            "selected_group": draft.selected_group,
             "selected_users": draft.selected_users.all(),
         },
         user=request.user,
@@ -1158,6 +1167,22 @@ def search_users_view(request):
     )
 
 
+def _email_template_page_context(request, **extra):
+    """Communications chrome for template list, edit, and delete pages."""
+    user = request.user
+    context = {
+        "active_tab": "templates",
+        "comms_nav_mode": "page",
+        "can_send_email": is_member_of_email_group(user),
+        "can_send_sms": is_member_of_msg_group(user),
+        "can_send_docusign": is_member_of_docusign_group(user),
+        "can_view_email_logs": is_member_of_email_logs_group(user),
+        "can_view_sms_logs": is_member_of_sms_logs_group(user),
+    }
+    context.update(extra)
+    return context
+
+
 def _visible_email_templates(employer):
     return (
         EmailTemplate.objects.filter(
@@ -1190,11 +1215,12 @@ def email_template_list(request):
     return render(
         request,
         "msg/email_template_list.html",
-        {
-            "templates": templates,
-            "employer": employer,
-            "owned_template_ids": owned_template_ids,
-        },
+        _email_template_page_context(
+            request,
+            templates=templates,
+            employer=employer,
+            owned_template_ids=owned_template_ids,
+        ),
     )
 
 
@@ -1214,12 +1240,13 @@ def email_template_create(request):
     return render(
         request,
         "msg/email_template_form.html",
-        {
-            "form": form,
-            "template": None,
-            "preview_context": sample_preview_context(request.user),
-            "merge_fields": IN_APP_MERGE_FIELDS,
-        },
+        _email_template_page_context(
+            request,
+            form=form,
+            template=None,
+            preview_context=sample_preview_context(request.user),
+            merge_fields=IN_APP_MERGE_FIELDS,
+        ),
     )
 
 
@@ -1245,12 +1272,13 @@ def email_template_edit(request, pk):
     return render(
         request,
         "msg/email_template_form.html",
-        {
-            "form": form,
-            "template": template,
-            "preview_context": sample_preview_context(request.user),
-            "merge_fields": IN_APP_MERGE_FIELDS,
-        },
+        _email_template_page_context(
+            request,
+            form=form,
+            template=template,
+            preview_context=sample_preview_context(request.user),
+            merge_fields=IN_APP_MERGE_FIELDS,
+        ),
     )
 
 
@@ -1272,7 +1300,7 @@ def email_template_delete(request, pk):
     return render(
         request,
         "msg/email_template_confirm_delete.html",
-        {"template": template},
+        _email_template_page_context(request, template=template),
     )
 
 
@@ -1652,8 +1680,7 @@ def test_sms_with_short_link(request):
         "Hello, this is Terry from Petro Canada. Each week, we share reminders for employees "
         "about regulated products. Please review this week’s message: "
         "https://paulfuther.eu-central-1.linodeobjects.com/compliance/4dcc0432-05f8-4e5e-b462-7c31bd7c59bd_compliance/rules.pdf "
-        "Reply STOP to opt out."
-    )
+    ) + SMS_OPT_OUT_FOOTER
 
     result = send_linkshortened_sms(
         to_number=test_number,

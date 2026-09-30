@@ -1,6 +1,8 @@
 {% load crispy_forms_tags %}
 
 <style>
+  .comms-email-form { max-width: 640px; }
+
   .dropdown-box {
     border: 1px solid #ccc;
     border-radius: 8px;
@@ -61,14 +63,14 @@
   }
 </style>
 
+<div class="comms-email-form py-3">
 <form method="post">
   {% csrf_token %}
   <input type="hidden" name="form_type" value="docusign">
- 
-  <!-- Employee Selection -->
+
   <label class="form-label">Select Employee</label>
   <button type="button" id="toggleRecipient" class="dropdown-toggle-btn">Choose Employee</button>
-  <div id="recipientBox" class="dropdown-box">
+  <div id="recipientBox" class="dropdown-box mb-3">
     {% for radio in docusign_form.recipient %}
       <div class="dropdown-option">
         {{ radio.tag }} {{ radio.choice_label }}
@@ -76,10 +78,9 @@
     {% endfor %}
   </div>
 
-  <!-- Template Selection -->
-  <label class="form-label mt-3">Select Template</label>
+  <label class="form-label">Select Template</label>
   <button type="button" id="toggleTemplates" class="dropdown-toggle-btn">Choose Template</button>
-  <div id="templateBox" class="dropdown-box">
+  <div id="templateBox" class="dropdown-box mb-3">
     {% for radio in docusign_form.template_name %}
       <div class="dropdown-option">
         {{ radio.tag }} {{ radio.choice_label }}
@@ -87,8 +88,11 @@
     {% endfor %}
   </div>
 
-  <button type="submit" class="btn btn-outline-primary mobile-btn mt-3">Create Envelope</button>
+  <div class="d-flex gap-2 mt-2">
+    <button type="submit" class="btn btn-outline-primary mt-3">Create Envelope</button>
+  </div>
 </form>
+</div>
 
 <script>
   function setupDropdown(toggleId, boxId, labelPrefix) {

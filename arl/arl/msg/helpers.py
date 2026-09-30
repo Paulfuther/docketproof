@@ -345,6 +345,48 @@ def send_linkshortened_sms(
         return f"❌ Error sending SMS: {str(e)}"
 
 
+# Same opt-out line the compliance SMS templates already append.
+SMS_OPT_OUT_FOOTER = "Reply STOP to opt out."
+
+
+def with_sms_opt_out(body):
+    """Append the opt-out line when it is not already in the message.
+
+    Compliance templates already end with SMS_OPT_OUT_FOOTER. Compose uses
+    the same line so the preview matches what the recipient receives.
+    An empty body is left empty. A message that already contains the line
+    is not given a second copy.
+    """
+    text = (body or "").strip()
+    if not text:
+        return ""
+    if SMS_OPT_OUT_FOOTER.casefold() in text.casefold():
+        return text
+    return f"{text}\n{SMS_OPT_OUT_FOOTER}"
+
+
+def sms_compose_greeting(employer):
+    """Opening line for Communications SMS.
+
+    Uses the same employer tokens as in-app email: senior_contact_name and
+    company name (employer.name). A blank senior contact becomes
+    "your contact"; a blank company becomes "our company".
+    """
+    senior = (getattr(employer, "senior_contact_name", None) or "").strip()
+    company = (getattr(employer, "name", None) or "").strip()
+    senior = senior or "your contact"
+    company = company or "our company"
+    return f"Hello, this is {senior} from {company}."
+
+
+def compose_outbound_sms(body, employer=None):
+    """Greeting, the user's typed body, then the STOP opt-out line."""
+    greeting = sms_compose_greeting(employer)
+    text = (body or "").strip()
+    combined = f"{greeting}\n{text}" if text else greeting
+    return with_sms_opt_out(combined)
+
+
 # This function function is APPROVED for multip tenant.
 # It gets its arguments from the task
 def send_bulk_sms(
@@ -380,6 +422,9 @@ def send_bulk_sms(
         ]
 
         print("=====> To Bindings :>", bindings, "<: =====")
+
+        # Every bulk/compose SMS includes the opt-out line, even if a caller skipped it.
+        body = with_sms_opt_out(body)
 
         # ✅ Use the employer's Twilio Account SID & Auth Token
         client = Client(twilio_account_sid, twilio_auth_token)
@@ -906,18 +951,12 @@ def collect_attachments(request, max_files=5):
 
 def prepare_recipient_data(user, selected_group, selected_users):
     recipients = []
-    employer = user.employer
 
-    # ✅ Handle single group (not a loop)
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        for u in selected_group.user_set.filter(is_active=True, employer=employer):
-            recipients.append(
-                {
-                    "name": u.get_full_name(),
-                    "email": u.email,
-                    "status": "Active",
-                }
-            )
+        logger.info(
+            "Ignoring group selection on email send; only individual users are sent."
+        )
 
     if selected_users:
         for u in selected_users.order_by("first_name", "last_name"):
@@ -948,15 +987,11 @@ def prepare_sms_recipient_data(user, selected_group, selected_users):
     # We'll keep a map of user_id -> user instance so we can log names later
     user_map = {}
 
-    # 🔹 Collect recipients from selected group
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        qs = selected_group.user_set.filter(is_active=True, employer=employer)
-        for u in qs:
-            user_map[u.id] = u
-            if not u.phone_number:
-                skipped_no_phone.append(u)
-                continue
-            recipients.append({"id": u.id, "phone": u.phone_number})
+        logger.info(
+            "Ignoring group selection on SMS send; only individual users are sent."
+        )
 
     # 🔹 Collect individually selected users
     if selected_users:
@@ -1097,7 +1132,7 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
     draft.subject = cleaned_data.get("subject", "")
     draft.message = cleaned_data.get("message", "")
     draft.sendgrid_template = cleaned_data.get("sendgrid_id")
-    draft.selected_group = cleaned_data.get("selected_group")
+    draft.selected_group = None
     draft.attachment_urls = attachment_urls
     draft.save()
 

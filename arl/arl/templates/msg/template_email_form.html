@@ -109,21 +109,8 @@
     </div>
   </div>
 
-  <!-- Group (EMAIL) -->
-  <label class="form-label">Select Group</label>
-  <button type="button" id="toggle-email-group" class="dropdown-toggle-btn">Choose Group</button>
-  <div id="email-groupBox" class="dropdown-box mb-3">
-    {% for radio in email_form.selected_group %}
-      <div class="dropdown-option">
-        {{ radio.tag }} {{ radio.choice_label }}
-      </div>
-    {% empty %}
-      <p class="text-muted px-3">No groups available for your employer.</p>
-    {% endfor %}
-  </div>
-
-  <!-- Or Individuals (EMAIL) -->
-  <label class="form-label">Or Select Individuals</label>
+  <!-- Individuals (EMAIL) -->
+  <label class="form-label">Select Individuals</label>
   <button type="button" id="toggle-email-user-dropdown" class="dropdown-toggle-btn">
     <span id="email-selected-summary-label" class="d-inline">Select Users</span>
   </button>
@@ -174,7 +161,6 @@
   <input type="hidden" name="subject" id="send-subject">
   <input type="hidden" name="message" id="send-message">
   <input type="hidden" name="sendgrid_id" id="send-templateId">
-  <input type="hidden" name="selected_group" id="send-groupId">
   <input type="hidden" name="uploaded_file_urls" id="send-uploaded_file_urls">
   {% if draft_id %}<input type="hidden" name="draft_id" value="{{ draft_id }}">{% endif %}
 </form>
@@ -189,7 +175,7 @@ function emailComposer() {
     loadingAI: false,
     aiPrompt: '',
     aiMessage: '',
-    form: { subject: '', message: '', templateId: '', groupId: '' },
+    form: { subject: '', message: '', templateId: '' },
     templates: [],
     groups:    [],
     previewSubject: '',
@@ -201,13 +187,11 @@ function emailComposer() {
       const msg  = "{{ draft.message|default:''|escapejs }}";
       const mode = "{{ draft.mode|default:''|escapejs }}";
       const tmpl = "{{ draft.sendgrid_template|default:''|escapejs }}";
-      const grp  = "{{ draft.selected_group|default:''|escapejs }}";
       const hasDraft = "{{ draft_id|default:''|escapejs }}";
 
       if (subj) this.form.subject = subj;
       if (msg)  this.form.message = msg;
       if (tmpl) this.form.templateId = tmpl;
-      if (grp)  this.form.groupId = grp;
 
       // If editing a draft, default to compose mode
       this.mode = mode || (hasDraft ? 'text' : 'template');
@@ -247,19 +231,12 @@ function emailComposer() {
                   .map(el => el.value);
     },
 
-    // find selected group value (from Django radios)
-    getSelectedGroupId() {
-      const g = document.querySelector('#email-groupBox input[name="selected_group"]:checked');
-      return g ? g.value : '';
-    },
-
     async saveDraft() {
       const fd = new FormData();
       fd.set('subject', this.form.subject);
       fd.set('message', this.form.message);
       fd.set('email_mode', this.mode);
       fd.set('sendgrid_id', this.form.templateId);
-      fd.set('selected_group', this.getSelectedGroupId());
       const urlsEl = document.getElementById('uploaded_file_urls');
       if (urlsEl) fd.set('uploaded_file_urls', urlsEl.value);
 
@@ -306,7 +283,6 @@ function emailComposer() {
       document.getElementById('send-subject').value    = this.form.subject;
       document.getElementById('send-message').value    = this.form.message;
       document.getElementById('send-templateId').value = this.form.templateId;
-      document.getElementById('send-groupId').value    = this.getSelectedGroupId();
       document.getElementById('send-uploaded_file_urls').value =
         document.getElementById('uploaded_file_urls').value;
 
@@ -366,7 +342,6 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.classList.toggle('open');
     });
   }
-  wireDropdown('#toggle-email-group', '#email-groupBox');
   wireDropdown('#toggle-email-user-dropdown', '#email-user-dropdownBox');
 
   // update "X users selected"

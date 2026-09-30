@@ -5,9 +5,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import models
 from django.db.models import CharField, IntegerField, Value
-from django.forms import RadioSelect
 from django.forms.widgets import Select
 
+from arl.msg.helpers import sms_compose_greeting
 from arl.msg.models import EmailTemplate, WhatsAppTemplate
 from arl.user.models import CustomUser, Store
 
@@ -27,13 +27,6 @@ class SMSForm(forms.Form):
         help_text="",
     )
 
-    selected_group = forms.ModelChoiceField(
-        queryset=Group.objects.none(),  # Set dynamically in __init__
-        required=False,
-        label="Select Group to Send SMS",
-        widget=RadioSelect,
-    )
-
     selected_users = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -43,16 +36,13 @@ class SMSForm(forms.Form):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        employer = getattr(user, "employer", None) if user else None
+        self.preview_greeting = sms_compose_greeting(employer)
 
         if user and user.employer:
             employer = user.employer
 
-            # ✅ Populate groups for this employer
-            self.fields["selected_group"].queryset = Group.objects.filter(
-                user__employer=employer
-            ).distinct()
-
-            # ✅ Populate users for this employer
+            # Individual recipients only. Group sends are disabled.
             self.fields["selected_users"].queryset = CustomUser.objects.filter(
                 employer=employer, is_active=True
             ).order_by("first_name", "last_name")
@@ -419,13 +409,6 @@ class EmailForm(forms.Form):
         label="Select Template",
     )
 
-    selected_group = forms.ModelChoiceField(
-        queryset=Group.objects.none(),
-        widget=forms.RadioSelect,
-        required=False,
-        label="Select Group",
-    )
-
     selected_users = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
         widget=forms.CheckboxSelectMultiple,
@@ -443,7 +426,6 @@ class EmailForm(forms.Form):
             self.fields["subject"].required = False
             self.fields["message"].required = False
             self.fields["sendgrid_id"].required = False
-            self.fields["selected_group"].required = False
             self.fields["selected_users"].required = False
 
         if user and hasattr(user, "employer"):
@@ -458,12 +440,6 @@ class EmailForm(forms.Form):
             )
             self.fields["sendgrid_id"].label_from_instance = lambda t: (
                 t.name or f"Template {t.pk}"
-            )
-
-            self.fields["selected_group"].queryset = (
-                Group.objects.filter(user__employer=employer)
-                .distinct()
-                .order_by("name")
             )
 
             self.fields["selected_users"].queryset = User.objects.filter(
@@ -498,18 +474,10 @@ class EmailForm(forms.Form):
         message = cleaned_data.get("message")
         sendgrid_id = cleaned_data.get("sendgrid_id")
 
-        selected_group = cleaned_data.get("selected_group")
         selected_users = cleaned_data.get("selected_users")
 
-        # Validate group/user selection
-        if not selected_group and not selected_users:
-            raise forms.ValidationError(
-                "You must select either a group or at least one user."
-            )
-        if selected_group and selected_users:
-            raise forms.ValidationError(
-                "You cannot select both a group and individual users."
-            )
+        if not selected_users:
+            raise forms.ValidationError("You must select at least one user.")
 
         # Validate mode-based inputs
         if mode == "text":
