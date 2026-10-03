@@ -53,6 +53,8 @@ _OVERALL_CHIP = {
     "not_sent": ("Not Sent", "urgent", "No documents have been sent"),
 }
 
+HRDOC_PILLS_PER_ROW = 3
+
 
 def get_recipient_pill_class(status):
     status = (status or "").lower()
@@ -191,6 +193,36 @@ def _step_display_name(step):
     )
 
 
+def _chunk_steps(steps, size=HRDOC_PILLS_PER_ROW):
+    if not steps:
+        return [[]]
+    return [steps[i : i + size] for i in range(0, len(steps), size)]
+
+
+def _build_pill_rows(steps):
+    pill_rows = []
+    for index, chunk in enumerate(_chunk_steps(steps)):
+        pill_rows.append(
+            {
+                "steps": chunk,
+                "empty_slots": [None] * (HRDOC_PILLS_PER_ROW - len(chunk)),
+                "show_overall": index == 0,
+                "show_who": index == 0,
+            }
+        )
+    return pill_rows
+
+
+def _document_header_slots(audit_columns, size=HRDOC_PILLS_PER_ROW):
+    slots = []
+    for index in range(size):
+        if index < len(audit_columns):
+            slots.append(audit_columns[index])
+        else:
+            slots.append({"id": None, "name": "", "sort": ""})
+    return slots
+
+
 def _build_audit_columns(flow_steps, extra_column_envelopes):
     columns = []
     for step in flow_steps:
@@ -246,7 +278,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
             "audit_search": search_query,
             "audit_incomplete_only": incomplete_only,
             "audit_sort": "",
-            "hrdoc_chip_count": 1,
+            "document_header_slots": _document_header_slots([]),
         }
 
     flow_steps = list(
@@ -429,6 +461,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                 "employee": employee,
                 "step_results": step_results,
                 "steps": step_results,
+                "pill_rows": _build_pill_rows(step_results),
                 "completed_count": completed_count,
                 "total_required": total_required,
                 "overall_status": overall_status,
@@ -480,10 +513,10 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
         "flow": flow,
         "rows": rows,
         "audit_columns": header_columns,
+        "document_header_slots": _document_header_slots(header_columns),
         "audit_search": search_query,
         "audit_incomplete_only": incomplete_only,
         "audit_sort": sort,
-        "hrdoc_chip_count": len(audit_columns),
     }
 
 

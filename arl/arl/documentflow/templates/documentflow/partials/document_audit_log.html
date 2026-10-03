@@ -104,7 +104,7 @@
       Searching…
     </div>
 
-    <div class="hrdoc-list" id="hrdoc-list" style="--hrdoc-chips: {{ hrdoc_chip_count|default:1 }}">
+    <div class="hrdoc-list" id="hrdoc-list">
       {% if resend_notice %}
         <div class="hrdoc-notice is-{{ resend_notice.tone }}" role="status">{{ resend_notice.text }}</div>
       {% endif %}
@@ -118,14 +118,18 @@
             aria-pressed="{% if audit_sort == 'name' %}true{% else %}false{% endif %}"
             title="{% if audit_sort == 'name' %}Sorted by name. Click to restore issues.{% else %}Sort by name{% endif %}"
             onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">Name</button>
-          {% for column in audit_columns %}
-            <button
-              type="button"
-              class="hrdoc-col-sort{% if audit_sort == column.sort %} is-active{% endif %}"
-              data-sort="{% if audit_sort == column.sort %}{% else %}{{ column.sort }}{% endif %}"
-              aria-pressed="{% if audit_sort == column.sort %}true{% else %}false{% endif %}"
-              title="{{ column.name }}"
-              onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">{{ column.name }}</button>
+          {% for column in document_header_slots %}
+            {% if column.sort %}
+              <button
+                type="button"
+                class="hrdoc-col-sort{% if audit_sort == column.sort %} is-active{% endif %}"
+                data-sort="{% if audit_sort == column.sort %}{% else %}{{ column.sort }}{% endif %}"
+                aria-pressed="{% if audit_sort == column.sort %}true{% else %}false{% endif %}"
+                title="{{ column.name }}"
+                onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">{{ column.name }}</button>
+            {% else %}
+              <span aria-hidden="true"></span>
+            {% endif %}
           {% endfor %}
           <span>Overall</span>
           <span>Actions</span>
@@ -139,43 +143,55 @@
                 id="hrdoc-fold-{{ employee.pk }}"
                 class="hrdoc-fold-check">
 
-              <div class="hrdoc-scan">
-                <div class="hrdoc-who">
-                  <div class="hrdoc-name">{{ employee.get_full_name|default:employee.username }}</div>
-                  {% if employee.email %}
-                    <div class="hrdoc-meta">{{ employee.email }}</div>
-                  {% endif %}
-                  {% if employee.store_id %}
-                    <div class="hrdoc-meta">Store {{ employee.store.number }}</div>
-                  {% endif %}
-                </div>
+              {% for pill_row in row.pill_rows %}
+                <div class="hrdoc-scan{% if not pill_row.show_who %} hrdoc-scan-continuation{% endif %}">
+                  <div class="hrdoc-who">
+                    {% if pill_row.show_who %}
+                      <div class="hrdoc-name">{{ employee.get_full_name|default:employee.username }}</div>
+                      {% if employee.email %}
+                        <div class="hrdoc-meta">{{ employee.email }}</div>
+                      {% endif %}
+                      {% if employee.store_id %}
+                        <div class="hrdoc-meta">Store {{ employee.store.number }}</div>
+                      {% endif %}
+                    {% endif %}
+                  </div>
 
-                {% for step in row.steps %}
-                  <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
-                    <span class="hrdoc-dot" aria-hidden="true"></span>
-                    <span class="hrdoc-chip-text">
-                      <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
-                      <span class="hrdoc-chip-label">{{ step.label }}</span>
+                  {% for step in pill_row.steps %}
+                    <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
+                      <span class="hrdoc-dot" aria-hidden="true"></span>
+                      <span class="hrdoc-chip-text">
+                        <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
+                        <span class="hrdoc-chip-label">{{ step.label }}</span>
+                      </span>
                     </span>
-                  </span>
-                {% endfor %}
+                  {% endfor %}
 
-                <span class="hrdoc-chip hrdoc-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
-                  <span class="hrdoc-dot" aria-hidden="true"></span>
-                  <span class="hrdoc-chip-text">
-                    <span class="hrdoc-chip-kicker">Overall</span>
-                    <span class="hrdoc-chip-label">{{ row.overall_chip.label }}</span>
-                  </span>
-                </span>
+                  {% for _ in pill_row.empty_slots %}
+                    <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                  {% endfor %}
 
-                <div class="hrdoc-actions">
-                  <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
-                    <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
-                    <span aria-hidden="true">Details</span>
-                    <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
-                  </label>
+                  {% if pill_row.show_overall %}
+                    <span class="hrdoc-chip hrdoc-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
+                      <span class="hrdoc-dot" aria-hidden="true"></span>
+                      <span class="hrdoc-chip-text">
+                        <span class="hrdoc-chip-kicker">Overall</span>
+                        <span class="hrdoc-chip-label">{{ row.overall_chip.label }}</span>
+                      </span>
+                    </span>
+                  {% else %}
+                    <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                  {% endif %}
+
+                  <div class="hrdoc-actions">
+                    <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
+                      <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
+                      <span aria-hidden="true">Details</span>
+                      <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
+                    </label>
+                  </div>
                 </div>
-              </div>
+              {% endfor %}
 
               <div class="hrdoc-fold-body">
                 <div class="hrdoc-facts">
@@ -505,11 +521,23 @@
 
 .hrdoc-scan {
   display: grid;
-  grid-template-columns: minmax(190px, 1.15fr) repeat(var(--hrdoc-chips, 1), minmax(140px, 164px)) 104px;
+  grid-template-columns:
+    minmax(190px, 1.15fr)
+    repeat(3, minmax(140px, 164px))
+    minmax(140px, 164px)
+    104px;
   column-gap: 12px;
   align-items: center;
-  min-width: calc(190px + (var(--hrdoc-chips, 1) * 152px) + 116px);
+  min-width: calc(190px + (3 * 152px) + 152px + 116px);
   padding: 0 20px;
+}
+
+.hrdoc-scan-continuation {
+  padding-top: 0;
+}
+
+.hrdoc-scan-continuation .hrdoc-who {
+  min-height: 0;
 }
 
 .hrdoc-scan-head {
@@ -638,6 +666,11 @@
   color: #6b7280;
 }
 .hrdoc-chip.is-muted .hrdoc-dot { background: #a3aab4; }
+
+.hrdoc-chip-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .hrdoc-actions {
   display: flex;
