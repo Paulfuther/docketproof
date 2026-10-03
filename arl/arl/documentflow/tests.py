@@ -183,6 +183,44 @@ class DocumentAuditTests(TestCase):
             all(step["status"] == "not_sent" for step in row["step_results"])
         )
 
+    def test_envelope_on_non_default_flow_still_matches_step_template(self):
+        other_flow = DocumentFlow.objects.create(
+            employer=self.employer,
+            name="Old flow",
+            is_active=True,
+            is_default=False,
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=self.handbook_template,
+            template_name=self.handbook_template.template_name,
+            flow=other_flow,
+            envelope_id="env-wrong-flow",
+            status="sent",
+        )
+
+        audit = build_document_audit(self.employer)
+        handbook = self._step_result(audit, self.handbook_step.id)
+
+        self.assertEqual(handbook["status"], "sent")
+        self.assertEqual(handbook["label"], "Sent")
+
+    def test_template_name_only_legacy_send_matches_flow_step(self):
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template_name=self.handbook_template.template_name,
+            envelope_id="env-name-only",
+            status="sent",
+        )
+
+        audit = build_document_audit(self.employer)
+        handbook = self._step_result(audit, self.handbook_step.id)
+
+        self.assertEqual(handbook["status"], "sent")
+        self.assertEqual(handbook["label"], "Sent")
+
     def test_recipient_pills_appear_for_legacy_manual_send(self):
         envelope = SentDocuSignEnvelope.objects.create(
             employer=self.employer,

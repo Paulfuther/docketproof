@@ -13,10 +13,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def normalize_template_name(value):
-    return (value or "").strip().lower()
-
-
 def get_recipient_pill_class(status):
     status = (status or "").lower()
 
@@ -130,13 +126,14 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         ]
     )
 
-    by_template_pk, by_docusign_template_id = build_flow_step_lookup(flow_steps)
+    by_template_pk, by_docusign_template_id, by_template_name, flow_step_ids = (
+        build_flow_step_lookup(flow_steps)
+    )
 
-    # Include envelopes linked to this flow and legacy manual sends that match a step template.
+    # Include every tracked envelope for these employees; match to flow steps at read time.
     sent_envelopes = (
         SentDocuSignEnvelope.objects
-        .filter(user__in=employees)
-        .filter(Q(flow=flow) | Q(flow__isnull=True, employer=employer))
+        .filter(employer=employer, user__in=employees)
         .select_related("flow_step", "template", "user", "employer")
         .prefetch_related(
             Prefetch(
@@ -147,18 +144,33 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         .order_by("sent_at", "id")
     )
 
-    # Keep the newest envelope per (user, flow_step), including template-matched legacy rows.
+    # Keep the newest envelope per (user, flow_step), including legacy unlinked rows.
     sent_map = {}
+    envelopes_to_link = []
     for env in sent_envelopes:
         step_id = resolve_envelope_flow_step_id(
-            env, by_template_pk, by_docusign_template_id
+            env,
+            by_template_pk,
+            by_docusign_template_id,
+            by_template_name,
+            flow_step_ids,
         )
         if not env.user_id or not step_id:
             continue
+        if env.flow_step_id != step_id or env.flow_id != flow.id:
+            env.flow = flow
+            env.flow_step_id = step_id
+            envelopes_to_link.append(env)
         key = (env.user_id, step_id)
         existing = sent_map.get(key)
         if not existing or env.sent_at >= existing.sent_at:
             sent_map[key] = env
+
+    if envelopes_to_link:
+        SentDocuSignEnvelope.objects.bulk_update(
+            envelopes_to_link,
+            ["flow", "flow_step"],
+        )
 
     rows = []
 

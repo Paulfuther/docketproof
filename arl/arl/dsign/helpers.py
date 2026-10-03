@@ -88,18 +88,43 @@ def get_access_token():
     return access_token
 
 
+def _resolve_docusign_template(envelope_args):
+    raw_template = envelope_args.get("template_id")
+    employer = Employer.objects.filter(id=envelope_args.get("employer_id")).first()
+    user = CustomUser.objects.filter(id=envelope_args.get("user_id")).first()
+    if not employer and user:
+        employer = user.employer
+
+    template = raw_template if isinstance(raw_template, DocuSignTemplate) else None
+    docusign_template_id = raw_template
+
+    if template is None and isinstance(raw_template, str):
+        if employer:
+            template = DocuSignTemplate.objects.filter(
+                employer=employer,
+                template_id=raw_template,
+            ).first()
+        if template is None:
+            template = DocuSignTemplate.objects.filter(template_id=raw_template).first()
+        docusign_template_id = raw_template
+
+    if template is not None:
+        docusign_template_id = template.template_id
+
+    return employer, user, template, docusign_template_id
+
+
 def create_docusign_envelope(envelope_args):
     print("envelop args in helper :", envelope_args)
     try:
         access_token = get_access_token().access_token
         print("access token :", access_token)
 
-        template = envelope_args["template_id"]
+        employer, user, template, docusign_template_id = _resolve_docusign_template(
+            envelope_args
+        )
 
         print("template :", template)
-        if isinstance(template, str):
-            template = DocuSignTemplate.objects.filter(template_id=template).first()
-
         if not template:
             print("⚠️ No matching template found. Using default name.")
             template_name = "Default Template Name"
@@ -110,7 +135,7 @@ def create_docusign_envelope(envelope_args):
         # Create the envelope definition
         envelope_definition = EnvelopeDefinition(
             status="sent",  # requests that the envelope be created and sent.
-            template_id=envelope_args["template_id"],
+            template_id=docusign_template_id,
             auto_navigation=False,
         )
 
@@ -171,21 +196,19 @@ def create_docusign_envelope(envelope_args):
         envelope_id = results.envelope_id
 
         # -- Get envelope id for tracking --
-        user = CustomUser.objects.filter(id=envelope_args.get("user_id")).first()
-        employer = Employer.objects.filter(id=envelope_args.get("employer_id")).first()
         flow = DocumentFlow.objects.filter(id=envelope_args.get("flow_id")).first()
         flow_step = DocumentFlowStep.objects.filter(
             id=envelope_args.get("flow_step_id")
         ).first()
 
-        template_obj = template if isinstance(template, DocuSignTemplate) else None
         if employer and not flow_step:
             resolved_flow, resolved_step = get_flow_step_for_template(
-                employer, template_obj or envelope_args.get("template_id")
+                employer,
+                template or docusign_template_id or template_name,
             )
-            if not flow:
+            if resolved_step:
                 flow = resolved_flow
-            flow_step = resolved_step
+                flow_step = resolved_step
 
         # -- add a guard
         if not employer:
