@@ -6,6 +6,20 @@ from django.urls import reverse_lazy
 
 SESSION_GSA_PREVIEW_USER_ID = "gsa_preview_user_id"
 
+# Multi-tenant hub routes keep record-hub markup and manager nav even when the
+# signed-in user is also in the GSA group (e.g. test fixtures without invites).
+STAFF_HUB_URL_NAMES = frozenset(
+    {
+        "salt_log_list",
+        "salt_log_edit",
+        "salt_log_update",
+        "incidents",
+        "incident_edit_list",
+        "incident_list",
+        "update_incident",
+    }
+)
+
 
 def is_gsa_account(user):
     return bool(
@@ -65,9 +79,16 @@ def is_gsa_preview_active(request):
 
 
 def shows_gsa_chrome(request):
-    if is_gsa_account(request.user):
+    if is_gsa_preview_active(request):
         return True
-    return is_gsa_preview_active(request)
+    if not is_gsa_account(request.user):
+        return False
+    url_name = getattr(getattr(request, "resolver_match", None), "url_name", None)
+    if url_name in STAFF_HUB_URL_NAMES:
+        return False
+    if request.user.has_perm("incident.add_incident"):
+        return False
+    return True
 
 
 def gsa_actor(request):

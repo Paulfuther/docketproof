@@ -115,10 +115,6 @@ class SaltLogForm(forms.ModelForm):
         )
         self.fields["date_salted"].input_formats = ["%Y-%m-%d"]
 
-        if user:
-            self.fields["user_employer"].initial = self.get_user_employer(user)
-            self.fields["user_employer"].disabled = True
-
         self.fields["time_salted"].required = False
         self.fields["time_salted"].label = "Time salted"
         self.fields["time_salted"].widget = forms.TimeInput(
