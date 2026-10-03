@@ -19,21 +19,37 @@
 
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-body">
-      <h2 class="h6 mb-2">Current tracker</h2>
-      {% if latest_event %}
-        <p class="mb-1">{{ latest_event.get_status_type_display }}</p>
-        <p class="text-muted small mb-0">
-          {% if latest_event.effective_date %}Effective {{ latest_event.effective_date|date:"F j, Y" }}{% endif %}
-          {% if latest_event.expiry_date %} · Expires {{ latest_event.expiry_date|date:"F j, Y" }}{% endif %}
-          {% if latest_event.reference_number %} · {{ latest_event.reference_number }}{% endif %}
-        </p>
-      {% else %}
-        <p class="text-muted mb-0">No immigration update on file yet.</p>
-      {% endif %}
-      <p class="text-muted small mt-2 mb-0">
-        Permit expiry: {% if permit_expiry %}{{ permit_expiry|date:"F j, Y" }}{% else %}not set{% endif %}
+      <h2 class="h6 mb-3">Current tracker</h2>
+      <dl class="row g-2 mb-0 employee-tracker-details">
+        <dt class="col-sm-5 text-muted">Latest status</dt>
+        <dd class="col-sm-7 mb-0">
+          {% if latest_event %}{{ latest_event.get_status_type_display }}{% else %}Not on file{% endif %}
+        </dd>
+
+        <dt class="col-sm-5 text-muted">Effective date</dt>
+        <dd class="col-sm-7 mb-0">
+          {% if latest_event.effective_date %}{{ latest_event.effective_date|date:"F j, Y" }}{% else %}Not on file{% endif %}
+        </dd>
+
+        <dt class="col-sm-5 text-muted">Reference number</dt>
+        <dd class="col-sm-7 mb-0">
+          {% if latest_event.reference_number %}{{ latest_event.reference_number }}{% else %}Not on file{% endif %}
+        </dd>
+
+        <dt class="col-sm-5 text-muted">SIN expiration</dt>
+        <dd class="col-sm-7 mb-0">
+          {% if sin_expiration %}{{ sin_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+        </dd>
+
+        <dt class="col-sm-5 text-muted">Work permit expiration</dt>
+        <dd class="col-sm-7 mb-0">
+          {% if work_permit_expiration %}{{ work_permit_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+        </dd>
+      </dl>
+      <p class="text-muted small mt-3 mb-0">
+        Permit expiry: {% if permit_expiry %}{{ permit_expiry|date:"F j, Y" }}{% else %}Not on file{% endif %}
         {% if extension_requested %}
-          · Extension requested{% if extension_date %} {{ extension_date|date:"F j, Y" }}{% endif %}
+          · Extension requested{% if extension_date %} {{ extension_date|date:"F j, Y" }}{% else %} (date not on file){% endif %}
         {% endif %}
       </p>
     </div>
@@ -86,5 +102,6 @@
 
 <style>
   .employee-page { max-width: 860px; }
+  .employee-tracker-details dt { font-weight: 500; }
 </style>
 {% endblock %}

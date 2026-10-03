@@ -265,6 +265,8 @@ def _immigration_context(user):
     return {
         "status_choices": IMMIGRATION_STATUS_CHOICES,
         "latest_event": latest,
+        "sin_expiration": user.sin_expiration_date,
+        "work_permit_expiration": user.work_permit_expiration_date,
         "permit_expiry": user.work_permit_expiration_date,
         "extension_requested": user.work_permit_extension_requested,
         "extension_date": user.work_permit_extension_date,

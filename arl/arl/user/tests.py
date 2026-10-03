@@ -790,6 +790,35 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         follow = self.client.get(reverse("employee_immigration_upload"))
         self.assertContains(follow, "Work Permit Extension")
         self.assertContains(follow, "IRCC-42")
+        self.assertContains(follow, "Work permit expiration")
+        self.assertContains(follow, "March 1, 2027")
+        self.assertContains(follow, "Permit expiry:")
+        self.assertContains(follow, "March 1, 2027")
+
+    def test_immigration_page_shows_existing_tracker_dates(self):
+        self.employee.sin_expiration_date = date(2026, 12, 1)
+        self.employee.work_permit_expiration_date = date(2027, 6, 1)
+        self.employee.save(
+            update_fields=["sin_expiration_date", "work_permit_expiration_date"]
+        )
+        self.client.force_login(self.employee)
+
+        response = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(response, "SIN expiration")
+        self.assertContains(response, "December 1, 2026")
+        self.assertContains(response, "Work permit expiration")
+        self.assertContains(response, "June 1, 2027")
+        self.assertContains(response, "Permit expiry:")
+        self.assertContains(response, "June 1, 2027")
+
+    def test_immigration_page_shows_not_on_file_for_missing_tracker_dates(self):
+        self.client.force_login(self.employee)
+
+        response = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(response, "SIN expiration")
+        self.assertContains(response, "Work permit expiration")
+        self.assertContains(response, "Permit expiry:")
+        self.assertContains(response, "Not on file")
 
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
     def test_new_work_permit_clears_the_extension_flag(self, store_file):
