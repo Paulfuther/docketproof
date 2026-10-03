@@ -148,6 +148,12 @@ class DocumentAuditTests(TestCase):
         row = audit["rows"][0]
         return next(step for step in row["step_results"] if step["step_id"] == step_id)
 
+    def _column_result(self, audit, column_key):
+        row = audit["rows"][0]
+        return next(
+            step for step in row["step_results"] if step["column_key"] == column_key
+        )
+
     def test_manual_gsa_send_without_flow_links_shows_in_audit(self):
         SentDocuSignEnvelope.objects.create(
             employer=self.employer,
@@ -165,7 +171,7 @@ class DocumentAuditTests(TestCase):
         self.assertEqual(handbook["label"], "Sent")
         self.assertEqual(handbook["pill_class"], "primary")
 
-    def test_manual_send_not_in_default_flow_has_no_audit_column(self):
+    def test_manual_send_not_in_default_flow_gets_its_own_column(self):
         SentDocuSignEnvelope.objects.create(
             employer=self.employer,
             user=self.employee,
@@ -177,11 +183,18 @@ class DocumentAuditTests(TestCase):
 
         audit = build_document_audit(self.employer)
         row = audit["rows"][0]
-
-        self.assertEqual(len(row["step_results"]), 2)
-        self.assertTrue(
-            all(step["status"] == "not_sent" for step in row["step_results"])
+        extra = self._column_result(
+            audit, f"extra-tpl-{self.other_template.id}"
         )
+
+        self.assertEqual(len(row["step_results"]), 3)
+        self.assertEqual(extra["status"], "sent")
+        self.assertEqual(extra["label"], "Sent")
+        self.assertFalse(extra["is_flow_step"])
+        handbook = self._step_result(audit, self.handbook_step.id)
+        offer = self._step_result(audit, self.offer_step.id)
+        self.assertEqual(handbook["status"], "not_sent")
+        self.assertEqual(offer["status"], "not_sent")
 
     def test_envelope_on_non_default_flow_still_matches_step_template(self):
         other_flow = DocumentFlow.objects.create(
@@ -249,3 +262,79 @@ class DocumentAuditTests(TestCase):
         self.assertEqual(len(handbook["recipient_pills"]), 1)
         self.assertEqual(handbook["recipient_pills"][0]["label"], "Opened")
         self.assertEqual(handbook["recipient_pills"][0]["pill_class"], "warning")
+
+    def test_second_quiz_keeps_its_own_column(self):
+        quiz_one = DocuSignTemplate.objects.create(
+            employer=self.employer,
+            template_id="tpl-quiz-one",
+            template_name="Safety Quiz",
+            is_ready_to_send=True,
+        )
+        quiz_two = DocuSignTemplate.objects.create(
+            employer=self.employer,
+            template_id="tpl-quiz-two",
+            template_name="Onboarding Quiz",
+            is_ready_to_send=True,
+        )
+        quiz_step = DocumentFlowStep.objects.create(
+            flow=self.flow,
+            template=quiz_one,
+            step_order=3,
+            label="Safety Quiz",
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=quiz_one,
+            template_name=quiz_one.template_name,
+            flow=self.flow,
+            flow_step=quiz_step,
+            envelope_id="env-quiz-one",
+            status="completed",
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=quiz_two,
+            template_name=quiz_two.template_name,
+            flow=self.flow,
+            flow_step=quiz_step,
+            envelope_id="env-quiz-two",
+            status="sent",
+        )
+
+        audit = build_document_audit(self.employer)
+        quiz_one_col = self._column_result(audit, f"step-{quiz_step.id}")
+        quiz_two_col = self._column_result(
+            audit, f"extra-tpl-{quiz_two.id}"
+        )
+
+        self.assertEqual(quiz_one_col["status"], "completed")
+        self.assertEqual(quiz_one_col["label"], "Complete")
+        self.assertEqual(quiz_two_col["status"], "sent")
+        self.assertEqual(quiz_two_col["label"], "Sent")
+
+    def test_employee_address_update_shows_as_sent_column(self):
+        address_template = DocuSignTemplate.objects.create(
+            employer=self.employer,
+            template_id="tpl-address",
+            template_name="employee address update",
+            is_ready_to_send=True,
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=address_template,
+            template_name=address_template.template_name,
+            envelope_id="env-address",
+            status="delivered",
+        )
+
+        audit = build_document_audit(self.employer)
+        address_col = self._column_result(
+            audit, f"extra-tpl-{address_template.id}"
+        )
+
+        self.assertEqual(address_col["step_name"], "employee address update")
+        self.assertEqual(address_col["status"], "delivered")
+        self.assertEqual(address_col["label"], "Opened")

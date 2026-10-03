@@ -1,7 +1,8 @@
 from django.db.models import Prefetch, Q
 from arl.documentflow.helpers import (
-    build_flow_step_lookup,
-    resolve_envelope_flow_step_id,
+    build_extra_column,
+    build_flow_step_column,
+    resolve_envelope_column,
 )
 from arl.documentflow.models import (
     DocumentFlow,
@@ -126,12 +127,11 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         ]
     )
 
-    by_template_pk, by_docusign_template_id, by_template_name, flow_step_ids = (
-        build_flow_step_lookup(flow_steps)
-    )
+    flow_step_ids = {step.id for step in flow_steps}
+    audit_columns = [build_flow_step_column(step) for step in flow_steps]
 
-    # Include every tracked envelope for these employees; match to flow steps at read time.
-    sent_envelopes = (
+    # Include every tracked envelope for these employees.
+    sent_envelopes = list(
         SentDocuSignEnvelope.objects
         .filter(employer=employer, user__in=employees)
         .select_related("flow_step", "template", "user", "employer")
@@ -144,32 +144,30 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         .order_by("sent_at", "id")
     )
 
-    # Keep the newest envelope per (user, flow_step), including legacy unlinked rows.
+    extra_column_envelopes = {}
     sent_map = {}
-    envelopes_to_link = []
     for env in sent_envelopes:
-        step_id = resolve_envelope_flow_step_id(
-            env,
-            by_template_pk,
-            by_docusign_template_id,
-            by_template_name,
-            flow_step_ids,
-        )
-        if not env.user_id or not step_id:
+        if not env.user_id:
             continue
-        if env.flow_step_id != step_id or env.flow_id != flow.id:
-            env.flow = flow
-            env.flow_step_id = step_id
-            envelopes_to_link.append(env)
-        key = (env.user_id, step_id)
-        existing = sent_map.get(key)
+        column_key, _matched_step = resolve_envelope_column(
+            env, flow_steps, flow_step_ids
+        )
+        if column_key.startswith("extra-") and column_key not in extra_column_envelopes:
+            extra_column_envelopes[column_key] = env
+        map_key = (env.user_id, column_key)
+        existing = sent_map.get(map_key)
         if not existing or env.sent_at >= existing.sent_at:
-            sent_map[key] = env
+            sent_map[map_key] = env
 
-    if envelopes_to_link:
-        SentDocuSignEnvelope.objects.bulk_update(
-            envelopes_to_link,
-            ["flow", "flow_step"],
+    for column_key in sorted(
+        extra_column_envelopes,
+        key=lambda key: (
+            extra_column_envelopes[key].sent_at,
+            extra_column_envelopes[key].id,
+        ),
+    ):
+        audit_columns.append(
+            build_extra_column(column_key, extra_column_envelopes[column_key])
         )
 
     rows = []
@@ -179,18 +177,12 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         completed_count = 0
         total_required = len(flow_steps)
 
-        for step in flow_steps:
-            template_name = step.template.template_name if step.template else ""
-            template_id = step.template.template_id if step.template else ""
+        for column in audit_columns:
+            template_name = column["template_name"]
+            template_id = column["template_id"]
+            step_name = column["step_name"]
 
-            step_name = (
-                getattr(step, "display_name", None)
-                or getattr(step, "name", None)
-                or template_name
-                or f"Step {step.step_order}"
-            )
-
-            sent_envelope = sent_map.get((employee.id, step.id))
+            sent_envelope = sent_map.get((employee.id, column["column_key"]))
 
             if sent_envelope:
                 envelope_status = (sent_envelope.status or "").lower()
@@ -223,16 +215,18 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
                 )
 
                 is_complete = envelope_status == "completed"
-                if is_complete:
+                if column["is_flow_step"] and is_complete:
                     completed_count += 1
 
                 step_results.append(
                     {
-                        "step_id": step.id,
-                        "step_order": step.step_order,
+                        "column_key": column["column_key"],
+                        "step_id": column["step_id"],
+                        "step_order": column["step_order"],
                         "step_name": step_name,
                         "template_name": template_name,
                         "template_id": template_id,
+                        "is_flow_step": column["is_flow_step"],
                         "status": envelope_status,
                         "label": get_step_pill_label(envelope_status),
                         "pill_class": get_step_pill_class(envelope_status),
@@ -243,13 +237,17 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
                     }
                 )
             else:
+                if not column["is_flow_step"]:
+                    continue
                 step_results.append(
                     {
-                        "step_id": step.id,
-                        "step_order": step.step_order,
+                        "column_key": column["column_key"],
+                        "step_id": column["step_id"],
+                        "step_order": column["step_order"],
                         "step_name": step_name,
                         "template_name": template_name,
                         "template_id": template_id,
+                        "is_flow_step": column["is_flow_step"],
                         "status": "not_sent",
                         "label": "Not Sent",
                         "pill_class": "danger",
@@ -288,6 +286,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
 
     return {
         "flow": flow,
+        "audit_columns": audit_columns,
         "rows": rows,
         "audit_search": search_query,
         "audit_incomplete_only": incomplete_only,
