@@ -18,8 +18,12 @@ from arl.documentflow.models import (
     SentDocuSignRecipient,
 )
 from arl.documentflow.services_immigration import (
+    IMMIGRATION_UPLOAD_EMAIL_GROUP,
     build_immigration_audit,
     build_immigration_tracker,
+    immigration_upload_recipient_emails,
+    resolve_immigration_email_group_name,
+    send_immigration_upload_notification,
 )
 from arl.user.services import set_user_sin
 from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
@@ -756,13 +760,22 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         data["file"] = upload
         return self.client.post(reverse("employee_immigration_upload"), data)
 
+    @patch("arl.user.employee_views.send_immigration_upload_email_task.delay")
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
-    def test_upload_updates_the_existing_immigration_tracker(self, store_file):
+    def test_upload_updates_the_existing_immigration_tracker(
+        self, store_file, queue_email
+    ):
         self.client.force_login(self.employee)
         response = self._upload()
 
         self.assertRedirects(response, reverse("employee_immigration_upload"))
         store_file.assert_called_once()
+        queue_email.assert_called_once()
+        payload = queue_email.call_args.args[0]
+        self.assertEqual(payload["employer_id"], self.employer.id)
+        self.assertEqual(payload["document_title"], "Work permit extension")
+        self.assertEqual(payload["status_label"], "Work Permit Extension")
+        self.assertTrue(payload["file_content_b64"])
 
         event = ImmigrationStatusEvent.objects.get(user=self.employee)
         self.assertEqual(event.status_type, "work_permit_extension")
@@ -851,6 +864,75 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(response, "Expiring", count=2)
         self.assertContains(response, "btn-immigration-save")
         self.assertNotContains(response, "btn-primary")
+
+    def test_resolve_immigration_email_group_name_prefers_canonical_group(self):
+        Group.objects.create(name=IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        self.assertEqual(
+            resolve_immigration_email_group_name(),
+            IMMIGRATION_UPLOAD_EMAIL_GROUP,
+        )
+
+    def test_resolve_immigration_email_group_name_matches_single_variant(self):
+        Group.objects.create(name="ImmigrationEmail")
+        self.assertEqual(resolve_immigration_email_group_name(), "ImmigrationEmail")
+
+    def test_immigration_upload_recipient_emails_are_scoped_to_employer(self):
+        group = Group.objects.create(name=IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        recipient = self._user(
+            "imm",
+            "Imm",
+            "Notify",
+            "+14161234570",
+            self.employer,
+        )
+        recipient.groups.add(group)
+        outsider = self._user(
+            "other",
+            "Other",
+            "Employer",
+            "+14161234571",
+            self.other_employer,
+        )
+        outsider.groups.add(group)
+
+        emails = immigration_upload_recipient_emails(self.employer.id)
+        self.assertEqual(emails, [recipient.email])
+
+    @patch("arl.documentflow.services_immigration.create_master_email")
+    def test_send_immigration_upload_notification_attaches_file(self, send_email):
+        Group.objects.create(name=IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        recipient = self._user(
+            "imm2",
+            "Imm",
+            "Mail",
+            "+14161234572",
+            self.employer,
+        )
+        recipient.groups.add(Group.objects.get(name=IMMIGRATION_UPLOAD_EMAIL_GROUP))
+
+        result = send_immigration_upload_notification(
+            employer_id=self.employer.id,
+            employee_name="Ada Lovelace",
+            company_name=self.employer.name,
+            document_title="Work permit extension",
+            status_label="Work Permit Extension",
+            file_name="permit.pdf",
+            content_type="application/pdf",
+            file_bytes=b"%PDF-1.4 permit",
+            effective_date="2026-03-01",
+            expiry_date="2027-03-01",
+            reference_number="IRCC-42",
+            notes="Submitted online",
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["group_name"], IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        send_email.assert_called_once()
+        kwargs = send_email.call_args.kwargs
+        self.assertEqual(kwargs["to_email"], [recipient.email])
+        self.assertEqual(len(kwargs["attachments"]), 1)
+        self.assertEqual(kwargs["attachments"][0]["filename"], "permit.pdf")
+        self.assertEqual(kwargs["attachments"][0]["type"], "application/pdf")
 
     def test_immigration_page_shows_valid_permit_status(self):
         set_user_sin(self.employee, "900000001", validate_luhn=True, save=True)

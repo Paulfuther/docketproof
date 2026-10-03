@@ -1,14 +1,25 @@
+import base64
 import csv
+import logging
 from datetime import date, datetime
 from io import StringIO
 
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import CharField, Q
 from django.db.models.functions import Cast
 from django.utils import timezone
 
+from arl.msg.helpers import create_master_email
+from arl.setup.models import TenantApiKeys
+from arl.user.models import CustomUser
+
 from .constants import IMMIGRATION_STATUS_TYPES
 from .models import ImmigrationStatusEvent
+
+logger = logging.getLogger(__name__)
+
+IMMIGRATION_UPLOAD_EMAIL_GROUP = "immigration_email"
 
 # User-facing label when a checkbox or an overrides-permit event
 # keeps the employee work-authorized. The status code stays
@@ -885,3 +896,134 @@ def update_immigration_tracker(
     )
     _sync_employee_immigration_dates(employee, status_type, effective, expiry)
     return event
+
+
+def resolve_immigration_email_group_name():
+    """
+    Return the Django auth group that receives immigration upload emails.
+
+    Prefer the canonical ``immigration_email`` group. If it is missing, use the
+    only group whose name contains both "immigration" and "email".
+    """
+    if Group.objects.filter(name=IMMIGRATION_UPLOAD_EMAIL_GROUP).exists():
+        return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+    exact_insensitive = Group.objects.filter(
+        name__iexact=IMMIGRATION_UPLOAD_EMAIL_GROUP
+    ).first()
+    if exact_insensitive:
+        return exact_insensitive.name
+
+    candidates = [
+        group.name
+        for group in Group.objects.all()
+        if "immigration" in group.name.lower() and "email" in group.name.lower()
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+
+def immigration_upload_recipient_emails(employer_id):
+    group_name = resolve_immigration_email_group_name()
+    return list(
+        CustomUser.objects.filter(
+            is_active=True,
+            employer_id=employer_id,
+            groups__name=group_name,
+        )
+        .exclude(email="")
+        .values_list("email", flat=True)
+        .distinct()
+    )
+
+
+def _format_tracker_date(value):
+    if not value:
+        return "Not provided"
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
+
+
+def send_immigration_upload_notification(
+    *,
+    employer_id,
+    employee_name,
+    company_name,
+    document_title,
+    status_label,
+    file_name,
+    content_type,
+    file_bytes,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+):
+    """
+    Email active users in the immigration upload notification group with the
+    uploaded document attached.
+    """
+    group_name = resolve_immigration_email_group_name()
+    to_emails = immigration_upload_recipient_emails(employer_id)
+    if not to_emails:
+        logger.warning(
+            "No active recipients in group '%s' for employer ID %s",
+            group_name,
+            employer_id,
+        )
+        return {
+            "status": "skipped",
+            "group_name": group_name,
+            "message": "No recipients configured.",
+        }
+
+    tenant_api_key = TenantApiKeys.objects.filter(employer_id=employer_id).first()
+    sender_email = (
+        tenant_api_key.verified_sender_email
+        if tenant_api_key and tenant_api_key.verified_sender_email
+        else None
+    )
+
+    subject = f"Immigration document uploaded — {employee_name}"
+    body = (
+        "<p>An immigration document was uploaded from the GSA immigration page.</p>"
+        f"<p><strong>Employee:</strong> {employee_name}<br>"
+        f"<strong>Company:</strong> {company_name}<br>"
+        f"<strong>Document title:</strong> {document_title}<br>"
+        f"<strong>Immigration status:</strong> {status_label}<br>"
+        f"<strong>Effective date:</strong> {_format_tracker_date(effective_date)}<br>"
+        f"<strong>Expiry date:</strong> {_format_tracker_date(expiry_date)}<br>"
+        f"<strong>Reference number:</strong> {reference_number or 'Not provided'}<br>"
+        f"<strong>Notes:</strong> {notes or 'Not provided'}</p>"
+        "<p>The uploaded file is attached.</p>"
+    )
+    attachments = [
+        {
+            "content": base64.b64encode(file_bytes).decode("utf-8"),
+            "filename": file_name,
+            "type": content_type or "application/octet-stream",
+        }
+    ]
+
+    create_master_email(
+        to_email=to_emails,
+        sendgrid_id=None,
+        template_data={"subject": subject, "name": to_emails[0]},
+        attachments=attachments,
+        verified_sender=sender_email,
+        html_content=body,
+    )
+
+    logger.info(
+        "Immigration upload email sent to %s recipient(s) in group '%s'",
+        len(to_emails),
+        group_name,
+    )
+    return {
+        "status": "success",
+        "group_name": group_name,
+        "recipient_count": len(to_emails),
+    }

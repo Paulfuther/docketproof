@@ -9,7 +9,10 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.crypto import get_random_string
 
+import base64
+
 from arl.celery import app
+from arl.documentflow.services_immigration import send_immigration_upload_notification
 from arl.msg.helpers import create_master_email
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser, Employer, NewHireInvite
@@ -109,6 +112,39 @@ def create_newhire_data_email(email_data):
             f"Error creating new hire email for {email_data.get('email')}: {str(e)}"
         )
         return f"Error creating new hire email: {str(e)}"
+
+
+@app.task(name="send_immigration_upload_email")
+def send_immigration_upload_email_task(payload):
+    """
+    Notify the immigration email group that a GSA immigration document was
+    uploaded. Payload is a dict with employer/employee metadata and a
+    base64-encoded file body.
+    """
+    try:
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+
+        file_content_b64 = payload.get("file_content_b64") or ""
+        file_bytes = base64.b64decode(file_content_b64.encode("ascii"))
+
+        return send_immigration_upload_notification(
+            employer_id=payload["employer_id"],
+            employee_name=payload["employee_name"],
+            company_name=payload["company_name"],
+            document_title=payload["document_title"],
+            status_label=payload["status_label"],
+            file_name=payload["file_name"],
+            content_type=payload.get("content_type"),
+            file_bytes=file_bytes,
+            effective_date=payload.get("effective_date"),
+            expiry_date=payload.get("expiry_date"),
+            reference_number=payload.get("reference_number", ""),
+            notes=payload.get("notes", ""),
+        )
+    except Exception as exc:
+        logger.exception("Immigration upload email task failed")
+        return {"status": "error", "message": str(exc)}
 
 
 @app.task(name="save_user_to_db")

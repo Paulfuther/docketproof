@@ -1,3 +1,4 @@
+import base64
 import logging
 import mimetypes
 import os
@@ -22,7 +23,7 @@ from arl.user.gsa_access import (
     is_gsa_preview_active,
     shows_gsa_chrome,
 )
-from arl.documentflow.constants import IMMIGRATION_STATUS_CHOICES
+from arl.documentflow.constants import IMMIGRATION_STATUS_CHOICES, IMMIGRATION_STATUS_TYPES
 from arl.documentflow.models import SentDocuSignEnvelope
 from arl.documentflow.services import get_step_pill_class, get_step_pill_label
 from arl.documentflow.services_immigration import (
@@ -31,6 +32,7 @@ from arl.documentflow.services_immigration import (
     update_immigration_tracker,
 )
 from arl.dsign.models import SignedDocumentFile
+from arl.user.tasks import send_immigration_upload_email_task
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +418,9 @@ def employee_immigration_upload(request):
     try:
         from arl.bucket.helpers import upload_to_linode_object_storage
 
+        uploaded.seek(0)
+        file_bytes = uploaded.read()
+        uploaded.seek(0)
         upload_to_linode_object_storage(uploaded, object_key)
         with transaction.atomic():
             document = SignedDocumentFile.objects.create(
@@ -445,6 +450,31 @@ def employee_immigration_upload(request):
         logger.exception("Immigration upload failed for user %s", user.pk)
         return _reject(
             "The file could not be saved. Your immigration record was not changed."
+        )
+
+    try:
+        status_label = IMMIGRATION_STATUS_TYPES.get(status_type, {}).get(
+            "label", status_type
+        )
+        send_immigration_upload_email_task.delay(
+            {
+                "employer_id": user.employer_id,
+                "employee_name": user.get_full_name() or user.username,
+                "company_name": user.employer.name,
+                "document_title": title,
+                "status_label": status_label,
+                "file_name": filename,
+                "content_type": content_type,
+                "file_content_b64": base64.b64encode(file_bytes).decode("ascii"),
+                "effective_date": request.POST.get("immigration_effective_date") or "",
+                "expiry_date": request.POST.get("immigration_expiry_date") or "",
+                "reference_number": reference,
+                "notes": notes,
+            }
+        )
+    except Exception:
+        logger.exception(
+            "Immigration upload email could not be queued for user %s", user.pk
         )
 
     messages.success(request, "Immigration document saved. Your tracker is updated.")
