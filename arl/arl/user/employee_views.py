@@ -2,6 +2,7 @@ import logging
 import mimetypes
 import os
 import uuid
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -131,11 +132,45 @@ def _redirect_unless_gsa(request):
     return redirect("home")
 
 
+def _refresh_after_embedded_signing(request):
+    """DocuSign returns here after an in-app signature. Use the webhook handler."""
+    event = (request.GET.get("event") or "").strip().lower()
+    if event != "signing_complete":
+        return
+    envelope_pk = request.GET.get("envelope")
+    if not envelope_pk:
+        return
+    try:
+        envelope = SentDocuSignEnvelope.objects.select_related(
+            "template", "user", "employer", "flow", "flow_step"
+        ).get(pk=envelope_pk, user=request.user)
+    except (SentDocuSignEnvelope.DoesNotExist, ValueError):
+        return
+    if request.user.employer_id and envelope.employer_id != request.user.employer_id:
+        return
+    try:
+        from arl.dsign.tasks import refresh_sent_envelope_from_docusign
+
+        result = refresh_sent_envelope_from_docusign(envelope)
+    except Exception:
+        logger.exception(
+            "Could not refresh envelope %s after in-app signing", envelope_pk
+        )
+        return
+    if isinstance(result, dict) and result.get("error"):
+        logger.error(
+            "In-app signing refresh for envelope %s failed: %s",
+            envelope.envelope_id,
+            result.get("error"),
+        )
+
+
 @login_required
 def employee_home(request):
     denied = _redirect_unless_gsa(request)
     if denied:
         return denied
+    _refresh_after_embedded_signing(request)
     user = request.user
     signed_documents = SignedDocumentFile.objects.none()
     unsigned_pills = []
@@ -191,10 +226,13 @@ def employee_open_unsigned_document(request, envelope_id):
     try:
         from arl.dsign.helpers import get_recipient_view_url
 
+        return_url = request.build_absolute_uri(
+            f"{reverse('employee_home')}?{urlencode({'envelope': envelope.pk})}"
+        )
         signing_url = get_recipient_view_url(
             user=request.user,
             envelope_id=envelope.envelope_id,
-            return_url=request.build_absolute_uri(reverse("employee_home")),
+            return_url=return_url,
         )
     except Exception:
         logger.exception("Unsigned document %s could not be opened", envelope.pk)

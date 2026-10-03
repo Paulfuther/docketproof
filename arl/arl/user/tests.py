@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,7 +17,7 @@ from arl.documentflow.models import (
     SentDocuSignRecipient,
 )
 from arl.documentflow.services_immigration import build_immigration_audit
-from arl.dsign.models import SignedDocumentFile
+from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
 from arl.quiz.models import Checklist, ChecklistTemplate, ChecklistTemplateItem
 from arl.user.models import EmployeeDocument, Employer, Store
 from arl.user.views import handle_new_hire_registration
@@ -356,6 +357,9 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertEqual(response.url, "https://sign.example/handbook")
         get_url.assert_called_once()
         self.assertEqual(get_url.call_args.kwargs["envelope_id"], "env-handbook")
+        self.assertIn(
+            f"envelope={own.pk}", get_url.call_args.kwargs["return_url"]
+        )
 
     @patch("arl.dsign.helpers.EnvelopesApi")
     @patch("arl.dsign.helpers.create_api_client")
@@ -366,6 +370,24 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         token.return_value.access_token = "token"
         envelopes_api.return_value.create_recipient_view.return_value.url = (
             "https://sign.example/hey-there"
+        )
+        envelopes_api.return_value.list_recipients.return_value = SimpleNamespace(
+            signers=[
+                SimpleNamespace(
+                    recipient_id="3",
+                    role_name="GSA",
+                    name="Han On Envelope",
+                    email="han.on.envelope@example.com",
+                    client_user_id=None,
+                ),
+                SimpleNamespace(
+                    recipient_id="2",
+                    role_name="Manager",
+                    name="Pat Manager",
+                    email="pat.manager@example.com",
+                    client_user_id=None,
+                ),
+            ]
         )
         self.employee.email = "han.login@example.com"
         self.employee.first_name = "Han"
@@ -411,9 +433,180 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertEqual(view.email, "han.on.envelope@example.com")
         self.assertEqual(view.user_name, "Han On Envelope")
         self.assertEqual(view.recipient_id, "3")
-        self.assertFalse(view.client_user_id)
+        self.assertEqual(view.client_user_id, "docketproof-3")
         self.assertNotEqual(view.email, self.employee.email)
-        self.assertNotEqual(str(view.client_user_id), str(self.employee.id))
+        self.assertNotEqual(view.client_user_id, str(self.employee.id))
+        updated = envelopes_api.return_value.update_recipients.call_args.kwargs
+        self.assertEqual(updated["resend_envelope"], "false")
+        updated_signer = updated["recipients"].signers[0]
+        self.assertEqual(updated_signer.recipient_id, "3")
+        self.assertEqual(updated_signer.email, "han.on.envelope@example.com")
+        self.assertEqual(updated_signer.name, "Han On Envelope")
+        self.assertEqual(updated_signer.client_user_id, "docketproof-3")
+        self.assertEqual(updated_signer.embedded_recipient_start_url, "SIGN_AT_DOCUSIGN")
+        self.assertEqual(len(updated["recipients"].signers), 1)
+
+    @patch("arl.dsign.helpers.EnvelopesApi")
+    @patch("arl.dsign.helpers.create_api_client")
+    @patch("arl.dsign.helpers.get_access_token")
+    def test_open_reuses_the_client_user_id_already_on_the_recipient(
+        self, token, api_client, envelopes_api
+    ):
+        token.return_value.access_token = "token"
+        envelopes_api.return_value.create_recipient_view.return_value.url = (
+            "https://sign.example/mortgage"
+        )
+        envelopes_api.return_value.list_recipients.return_value = SimpleNamespace(
+            signers=[
+                SimpleNamespace(
+                    recipient_id="1",
+                    role_name="GSA",
+                    name="Ada Lovelace",
+                    email="ada@example.com",
+                    client_user_id="already-on-envelope",
+                )
+            ]
+        )
+        envelope = SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template_name="mortgage",
+            envelope_id="env-mortgage",
+            status="sent",
+        )
+        SentDocuSignRecipient.objects.create(
+            sent_envelope=envelope,
+            recipient_id="1",
+            role_name="GSA",
+            name="Ada Lovelace",
+            email="ada@example.com",
+            status="sent",
+        )
+
+        from arl.dsign.helpers import get_recipient_view_url
+
+        get_recipient_view_url(
+            self.employee, envelope.envelope_id, "https://app.example/employee/"
+        )
+        envelopes_api.return_value.update_recipients.assert_not_called()
+        view = envelopes_api.return_value.create_recipient_view.call_args.kwargs[
+            "recipient_view_request"
+        ]
+        self.assertEqual(view.client_user_id, "already-on-envelope")
+        self.assertEqual(view.email, "ada@example.com")
+        self.assertEqual(view.recipient_id, "1")
+
+    @patch("arl.dsign.helpers.EnvelopesApi")
+    @patch("arl.dsign.helpers.create_api_client")
+    @patch("arl.dsign.helpers.get_access_token")
+    def test_in_app_envelope_without_a_stored_recipient_keeps_its_client_user_id(
+        self, token, api_client, envelopes_api
+    ):
+        token.return_value.access_token = "token"
+        envelopes_api.return_value.create_recipient_view.return_value.url = (
+            "https://sign.example/in-app"
+        )
+
+        from arl.dsign.helpers import get_recipient_view_url
+
+        get_recipient_view_url(
+            self.employee, "brand-new-envelope", "https://app.example/hr/"
+        )
+        envelopes_api.return_value.list_recipients.assert_not_called()
+        envelopes_api.return_value.update_recipients.assert_not_called()
+        view = envelopes_api.return_value.create_recipient_view.call_args.kwargs[
+            "recipient_view_request"
+        ]
+        self.assertEqual(view.client_user_id, str(self.employee.id))
+        self.assertEqual(view.email, self.employee.email)
+
+    @patch("arl.dsign.tasks.notify_hr")
+    @patch("arl.dsign.tasks.fetch_and_upload_signed_documents")
+    @patch("arl.dsign.tasks.EnvelopesApi")
+    @patch("arl.dsign.tasks.get_access_token")
+    def test_in_app_signing_return_uses_the_webhook_completion_path(
+        self, token, envelopes_api, upload, notify_hr
+    ):
+        token.return_value.access_token = "token"
+        template = DocuSignTemplate.objects.create(
+            employer=self.employer,
+            template_id="tpl-hey",
+            template_name="Hey there",
+        )
+        envelope = SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=template,
+            template_name="Hey there",
+            envelope_id="4a492f0c-cafe-885f-81bc-65ed7fa203ab",
+            status="sent",
+        )
+        SentDocuSignRecipient.objects.create(
+            sent_envelope=envelope,
+            recipient_id="3",
+            role_name="GSA",
+            name="Ada Lovelace",
+            email="ada@example.com",
+            status="sent",
+        )
+        envelopes_api.return_value.get_envelope.return_value = SimpleNamespace(
+            status="completed",
+            completed_date_time="2026-10-03T18:00:00Z",
+        )
+        envelopes_api.return_value.list_recipients.return_value = SimpleNamespace(
+            signers=[
+                SimpleNamespace(
+                    recipient_id="3",
+                    recipient_id_guid="",
+                    role_name="GSA",
+                    name="Ada Lovelace",
+                    email="ada@example.com",
+                    routing_order=1,
+                    status="completed",
+                    sent_date_time=None,
+                    delivered_date_time=None,
+                    signed_date_time="2026-10-03T18:00:00Z",
+                )
+            ]
+        )
+
+        def save_signed(envelope_id, user_id, employer_id, template_name, **kwargs):
+            SignedDocumentFile.objects.create(
+                user_id=user_id,
+                employer_id=employer_id,
+                envelope_id=envelope_id,
+                file_name="hey-there.pdf",
+                file_path="DOCUMENTS/acme/hey-there.pdf",
+                template_name=template_name,
+            )
+
+        upload.side_effect = save_signed
+        self.client.force_login(self.employee)
+        home = self.client.get(
+            reverse("employee_home"),
+            {"event": "signing_complete", "envelope": envelope.pk},
+        )
+        envelope.refresh_from_db()
+        self.assertEqual(envelope.status, "completed")
+        self.assertContains(home, "No unsigned documents.")
+        self.assertContains(home, "Hey there")
+        upload.assert_called_once()
+        notify_hr.delay.assert_called_once()
+
+        untouched = SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template_name="Still unsigned",
+            envelope_id="env-still",
+            status="sent",
+        )
+        cancelled = self.client.get(
+            reverse("employee_home"),
+            {"event": "cancel", "envelope": untouched.pk},
+        )
+        untouched.refresh_from_db()
+        self.assertEqual(untouched.status, "sent")
+        self.assertContains(cancelled, "Still unsigned")
 
     def test_employee_can_start_the_existing_checklist(self):
         store = Store.objects.create(number=10, employer=self.employer)

@@ -15,7 +15,8 @@ from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from docusign_esign import (ApiClient, EnvelopeDefinition, EnvelopesApi,
                             RecipientEmailNotification, RecipientViewRequest,
-                            SignerAttachment, TemplateRole, TemplatesApi)
+                            Recipients, Signer, SignerAttachment, TemplateRole,
+                            TemplatesApi)
 from docusign_esign.client.api_exception import ApiException
 from docusign_esign.models.envelope import Envelope
 
@@ -968,9 +969,77 @@ def _stored_gsa_recipient(user, envelope_id):
     return (open_signers or signers)[0]
 
 
-def _recipient_view_request(user, envelope_id, return_url):
+def _signer_on_envelope(envelopes_api, envelope_id, stored):
+    """The DocuSign signer that matches the GSA row already saved for this envelope."""
+    listed = envelopes_api.list_recipients(
+        account_id=settings.DOCUSIGN_ACCOUNT_ID,
+        envelope_id=envelope_id,
+    )
+    signers = list(getattr(listed, "signers", None) or [])
+    match = next(
+        (
+            signer
+            for signer in signers
+            if str(getattr(signer, "recipient_id", "") or "") == str(stored.recipient_id)
+        ),
+        None,
+    )
+    if match is None:
+        logger.error(
+            "Stored GSA recipient %s is not on DocuSign envelope %s.",
+            stored.recipient_id,
+            envelope_id,
+        )
+        raise ValueError("Stored GSA recipient is not on this envelope.")
+    return match
+
+
+def _embedded_client_user_id(signer):
+    """Id already on this signer, or one to attach so the view is a signing session."""
+    existing = (getattr(signer, "client_user_id", None) or "").strip()
+    if existing:
+        return existing, False
+    # A recipient view with no clientUserId is only a document view. DocuSign
+    # then hides the Sign Here tab the email ceremony shows.
+    return f"docketproof-{signer.recipient_id}", True
+
+
+def _ensure_embedded_signer(envelopes_api, envelope_id, signer):
+    """Give a remote signer an embedded id without moving their tabs."""
+    client_user_id, must_set = _embedded_client_user_id(signer)
+    if not must_set:
+        return client_user_id
+    envelopes_api.update_recipients(
+        account_id=settings.DOCUSIGN_ACCOUNT_ID,
+        envelope_id=envelope_id,
+        resend_envelope="false",
+        recipients=Recipients(
+            signers=[
+                Signer(
+                    recipient_id=str(signer.recipient_id),
+                    name=signer.name,
+                    email=signer.email,
+                    client_user_id=client_user_id,
+                    # Keep the email link a DocuSign signing session.
+                    embedded_recipient_start_url="SIGN_AT_DOCUSIGN",
+                )
+            ]
+        ),
+    )
+    logger.info(
+        "DocuSign envelope %s recipient %s can sign in the app. "
+        "Sign Here stays on that recipient. Email signing stays at DocuSign.",
+        envelope_id,
+        signer.recipient_id,
+    )
+    return client_user_id
+
+
+def _recipient_view_request(envelopes_api, user, envelope_id, return_url):
     stored = _stored_gsa_recipient(user, envelope_id)
     if stored is not None:
+        signer = _signer_on_envelope(envelopes_api, envelope_id, stored)
+        client_user_id = _ensure_embedded_signer(envelopes_api, envelope_id, signer)
         logger.info(
             "DocuSign recipient view for envelope %s uses stored recipient %s (%s).",
             envelope_id,
@@ -979,10 +1048,11 @@ def _recipient_view_request(user, envelope_id, return_url):
         )
         return RecipientViewRequest(
             authentication_method="none",
+            client_user_id=client_user_id,
             recipient_id=str(stored.recipient_id),
             return_url=return_url,
-            user_name=stored.name,
-            email=stored.email,
+            user_name=signer.name or stored.name,
+            email=signer.email or stored.email,
         )
     # In-app signing creates the envelope with this client user id and has no
     # stored recipient row yet.
@@ -1002,9 +1072,11 @@ def get_recipient_view_url(user, envelope_id, return_url):
     api_client = create_api_client(base_path, access_token)
 
     envelopes_api = EnvelopesApi(api_client)
-    recipient_view_request = _recipient_view_request(user, envelope_id, return_url)
-
+    recipient_view_request = None
     try:
+        recipient_view_request = _recipient_view_request(
+            envelopes_api, user, envelope_id, return_url
+        )
         results = envelopes_api.create_recipient_view(
             account_id=settings.DOCUSIGN_ACCOUNT_ID,
             envelope_id=envelope_id,
@@ -1015,7 +1087,7 @@ def get_recipient_view_url(user, envelope_id, return_url):
             "DocuSign create_recipient_view failed for envelope %s "
             "recipient_id=%s status=%s body=%s",
             envelope_id,
-            recipient_view_request.recipient_id,
+            getattr(recipient_view_request, "recipient_id", None),
             getattr(exc, "status", None),
             getattr(exc, "body", None),
         )
