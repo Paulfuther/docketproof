@@ -4,7 +4,11 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
-from arl.documentflow.models import DocumentFlow, DocumentFlowStep, SentDocuSignEnvelope
+from arl.documentflow.models import (
+    DocumentFlow,
+    DocumentFlowStep,
+    SentDocuSignEnvelope,
+)
 import requests
 from django.conf import settings
 from django.db.models import Q
@@ -929,27 +933,93 @@ def create_envelope_for_in_app_signing(user, template_id, employer):
     return envelope_summary.envelope_id
 
 
+def _stored_gsa_recipient(user, envelope_id):
+    """GSA signer already saved for this envelope. Do not invent one from the user."""
+    envelope = (
+        SentDocuSignEnvelope.objects.filter(envelope_id=envelope_id)
+        .prefetch_related("recipients")
+        .first()
+    )
+    if envelope is None:
+        return None
+    if envelope.user_id and envelope.user_id != user.id:
+        raise ValueError("This envelope belongs to a different user.")
+    signers = [
+        recipient
+        for recipient in envelope.recipients.all()
+        if (recipient.role_name or "").strip().lower() == "gsa"
+        and recipient.recipient_id
+        and recipient.email
+        and recipient.name
+    ]
+    if not signers:
+        logger.error(
+            "No stored GSA recipient for envelope %s (user %s). "
+            "Refusing to guess a name, email, or client user id.",
+            envelope_id,
+            user.id,
+        )
+        raise ValueError("No stored GSA recipient for this envelope.")
+    open_signers = [
+        recipient
+        for recipient in signers
+        if (recipient.status or "").lower() not in {"completed", "declined", "voided"}
+    ]
+    return (open_signers or signers)[0]
+
+
+def _recipient_view_request(user, envelope_id, return_url):
+    stored = _stored_gsa_recipient(user, envelope_id)
+    if stored is not None:
+        logger.info(
+            "DocuSign recipient view for envelope %s uses stored recipient %s (%s).",
+            envelope_id,
+            stored.recipient_id,
+            stored.role_name,
+        )
+        return RecipientViewRequest(
+            authentication_method="none",
+            recipient_id=str(stored.recipient_id),
+            return_url=return_url,
+            user_name=stored.name,
+            email=stored.email,
+        )
+    # In-app signing creates the envelope with this client user id and has no
+    # stored recipient row yet.
+    return RecipientViewRequest(
+        authentication_method="none",
+        client_user_id=str(user.id),
+        recipient_id="1",
+        return_url=return_url,
+        user_name=f"{user.first_name} {user.last_name}",
+        email=user.email,
+    )
+
+
 def get_recipient_view_url(user, envelope_id, return_url):
     access_token = get_access_token().access_token
     base_path = settings.DOCUSIGN_BASE_PATH
     api_client = create_api_client(base_path, access_token)
 
     envelopes_api = EnvelopesApi(api_client)
+    recipient_view_request = _recipient_view_request(user, envelope_id, return_url)
 
-    recipient_view_request = RecipientViewRequest(
-        authentication_method="none",
-        client_user_id=str(user.id),  # Important for embedded signing
-        recipient_id="1",  # DocuSign assigns 1 to the first recipient by default
-        return_url=return_url,
-        user_name=f"{user.first_name} {user.last_name}",
-        email=user.email,
-    )
-
-    results = envelopes_api.create_recipient_view(
-        account_id=settings.DOCUSIGN_ACCOUNT_ID,
-        envelope_id=envelope_id,
-        recipient_view_request=recipient_view_request,
-    )
+    try:
+        results = envelopes_api.create_recipient_view(
+            account_id=settings.DOCUSIGN_ACCOUNT_ID,
+            envelope_id=envelope_id,
+            recipient_view_request=recipient_view_request,
+        )
+    except ApiException as exc:
+        logger.exception(
+            "DocuSign create_recipient_view failed for envelope %s "
+            "recipient_id=%s status=%s body=%s",
+            envelope_id,
+            recipient_view_request.recipient_id,
+            getattr(exc, "status", None),
+            getattr(exc, "body", None),
+        )
+        raise
 
     return results.url
 

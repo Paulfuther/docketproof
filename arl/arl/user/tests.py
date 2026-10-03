@@ -10,7 +10,11 @@ from django.http import HttpResponse
 from django.test import TestCase
 from django.urls import reverse
 
-from arl.documentflow.models import ImmigrationStatusEvent, SentDocuSignEnvelope
+from arl.documentflow.models import (
+    ImmigrationStatusEvent,
+    SentDocuSignEnvelope,
+    SentDocuSignRecipient,
+)
 from arl.documentflow.services_immigration import build_immigration_audit
 from arl.dsign.models import SignedDocumentFile
 from arl.quiz.models import Checklist, ChecklistTemplate, ChecklistTemplateItem
@@ -352,6 +356,64 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertEqual(response.url, "https://sign.example/handbook")
         get_url.assert_called_once()
         self.assertEqual(get_url.call_args.kwargs["envelope_id"], "env-handbook")
+
+    @patch("arl.dsign.helpers.EnvelopesApi")
+    @patch("arl.dsign.helpers.create_api_client")
+    @patch("arl.dsign.helpers.get_access_token")
+    def test_open_uses_the_stored_gsa_recipient_not_the_user_email(
+        self, token, api_client, envelopes_api
+    ):
+        token.return_value.access_token = "token"
+        envelopes_api.return_value.create_recipient_view.return_value.url = (
+            "https://sign.example/hey-there"
+        )
+        self.employee.email = "han.login@example.com"
+        self.employee.first_name = "Han"
+        self.employee.last_name = "Login"
+        self.employee.save(update_fields=["email", "first_name", "last_name"])
+        envelope = SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template_name="Hey there",
+            envelope_id="4a492f0c-cafe-885f-81bc-65ed7fa203ab",
+            status="sent",
+        )
+        SentDocuSignRecipient.objects.create(
+            sent_envelope=envelope,
+            recipient_id="3",
+            role_name="GSA",
+            name="Han On Envelope",
+            email="han.on.envelope@example.com",
+            routing_order=1,
+            status="sent",
+        )
+        SentDocuSignRecipient.objects.create(
+            sent_envelope=envelope,
+            recipient_id="2",
+            role_name="Manager",
+            name="Pat Manager",
+            email="pat.manager@example.com",
+            routing_order=2,
+            status="sent",
+        )
+
+        from arl.dsign.helpers import get_recipient_view_url
+
+        url = get_recipient_view_url(
+            self.employee,
+            envelope.envelope_id,
+            "https://app.example/employee/",
+        )
+        self.assertEqual(url, "https://sign.example/hey-there")
+        view = envelopes_api.return_value.create_recipient_view.call_args.kwargs[
+            "recipient_view_request"
+        ]
+        self.assertEqual(view.email, "han.on.envelope@example.com")
+        self.assertEqual(view.user_name, "Han On Envelope")
+        self.assertEqual(view.recipient_id, "3")
+        self.assertFalse(view.client_user_id)
+        self.assertNotEqual(view.email, self.employee.email)
+        self.assertNotEqual(str(view.client_user_id), str(self.employee.id))
 
     def test_employee_can_start_the_existing_checklist(self):
         store = Store.objects.create(number=10, employer=self.employer)
