@@ -68,13 +68,12 @@
 <style>
   .employee-page { max-width: 860px; }
   .employee-section-links {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     gap: 0.5rem;
   }
   .employee-section-links .btn {
-    flex: 1 1 0;
-    min-width: 11rem;
+    width: 100%;
     text-align: center;
     white-space: nowrap;
   }
