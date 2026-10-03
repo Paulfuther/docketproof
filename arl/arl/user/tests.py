@@ -163,6 +163,10 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         docs_page = self.client.get(reverse("documents_dashboard"))
         self.assertEqual(docs_page.status_code, 200)
         self.assertEqual(self.client.get(reverse("hr_document_view")).status_code, 200)
+        checklist = self.client.get(reverse("checklist_dashboard"))
+        self.assertContains(checklist, "col-lg-6")
+        self.assertNotContains(checklist, "Back to documents")
+        self.assertNotContains(checklist, "employee-page")
 
     @patch("arl.user.views.request_verification_token", side_effect=TwilioException("down"))
     def test_phone_code_failure_does_not_start_a_session(self, send_code):
@@ -658,6 +662,13 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         dashboard = self.client.get(reverse("checklist_dashboard"))
         self.assertEqual(dashboard.status_code, 200)
         self.assertContains(dashboard, "Opening checklist")
+        self.assertContains(dashboard, "Back to documents")
+        self.assertContains(dashboard, "employee-page")
+        self.assertNotContains(dashboard, "col-lg-6")
+        documents = self.client.get(reverse("employee_home"))
+        self.assertContains(documents, "Back to documents")
+        immigration = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(immigration, "Back to documents")
 
         started = self.client.post(
             reverse("checklist_from_template", args=[template.id]),
