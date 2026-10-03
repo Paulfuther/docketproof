@@ -138,6 +138,15 @@ def list_s3_objects(folder_name):
         return []
 
 
+def read_s3_object_bytes(file_path):
+    """Read an object from Linode/S3 storage and return its raw bytes."""
+    bucket = conn.get_bucket(settings.LINODE_BUCKET_NAME)
+    key = bucket.get_key(file_path)
+    if not key:
+        raise FileNotFoundError(f"File not found in storage: {file_path}")
+    return key.get_contents_as_string()
+
+
 def download_from_s3(request, file_path, custom_filename=None):
     try:
         # 🔒 Connect to the bucket

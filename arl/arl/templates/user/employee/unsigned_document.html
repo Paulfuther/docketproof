@@ -1,0 +1,72 @@
+{% extends "base/base.html" %}
+{% block title %}{{ document_name }}{% endblock %}
+
+{% block template %}
+{% include "base/navbar.html" %}
+
+<div class="container employee-page">
+  <div class="pt-5 mt-4 mb-3">
+    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+    <h1 class="h4 mt-2 mb-1">{{ document_name }}</h1>
+    <p class="text-muted mb-0">This document is unsigned. Open it to review and sign.</p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} mb-3" role="alert">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="employee-doc-pill is-{{ pill_class }}">
+          <span class="employee-doc-pill-name">{{ document_name }}</span>
+          <span class="employee-doc-pill-status">{{ pill_label }}</span>
+        </span>
+      </div>
+      <dl class="row mb-4 small">
+        <dt class="col-sm-3 text-muted">Document</dt>
+        <dd class="col-sm-9" data-document-name="{{ document_name }}">{{ document_name }}</dd>
+        <dt class="col-sm-3 text-muted">Reference</dt>
+        <dd class="col-sm-9" data-envelope="{{ envelope.envelope_id }}">{{ envelope.envelope_id }}</dd>
+        {% if envelope.sent_at %}
+          <dt class="col-sm-3 text-muted">Sent</dt>
+          <dd class="col-sm-9">{{ envelope.sent_at|date:"F j, Y" }}</dd>
+        {% endif %}
+      </dl>
+      <form method="post" action="{% url 'employee_open_unsigned_document' envelope.id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">Open this document</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .employee-page { max-width: 860px; }
+  .employee-doc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    max-width: 100%;
+    padding: 0.35rem 0.45rem 0.35rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .employee-doc-pill-status {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .employee-doc-pill.is-primary { background: #cfe2ff; color: #084298; border-color: #b6d4fe; }
+  .employee-doc-pill.is-warning { background: #fff3cd; color: #664d03; border-color: #ffecb5; }
+  .employee-doc-pill.is-success { background: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+  .employee-doc-pill.is-danger { background: #f8d7da; color: #842029; border-color: #f5c2c7; }
+  .employee-doc-pill.is-dark { background: #e2e3e5; color: #41464b; border-color: #d3d6d8; }
+</style>
+{% endblock %}

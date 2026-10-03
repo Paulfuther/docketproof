@@ -104,7 +104,7 @@
       Searching…
     </div>
 
-    <div class="hrdoc-list" id="hrdoc-list" style="--hrdoc-chips: {{ hrdoc_chip_count|default:1 }}">
+    <div class="hrdoc-list" id="hrdoc-list">
       {% if resend_notice %}
         <div class="hrdoc-notice is-{{ resend_notice.tone }}" role="status">{{ resend_notice.text }}</div>
       {% endif %}
@@ -118,14 +118,18 @@
             aria-pressed="{% if audit_sort == 'name' %}true{% else %}false{% endif %}"
             title="{% if audit_sort == 'name' %}Sorted by name. Click to restore issues.{% else %}Sort by name{% endif %}"
             onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">Name</button>
-          {% for column in audit_columns %}
-            <button
-              type="button"
-              class="hrdoc-col-sort{% if audit_sort == column.sort %} is-active{% endif %}"
-              data-sort="{% if audit_sort == column.sort %}{% else %}{{ column.sort }}{% endif %}"
-              aria-pressed="{% if audit_sort == column.sort %}true{% else %}false{% endif %}"
-              title="{{ column.name }}"
-              onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">{{ column.name }}</button>
+          {% for column in document_header_slots %}
+            {% if column.sort %}
+              <button
+                type="button"
+                class="hrdoc-col-sort{% if audit_sort == column.sort %} is-active{% endif %}"
+                data-sort="{% if audit_sort == column.sort %}{% else %}{{ column.sort }}{% endif %}"
+                aria-pressed="{% if audit_sort == column.sort %}true{% else %}false{% endif %}"
+                title="{{ column.name }}"
+                onclick="var s=document.getElementById('audit_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">{{ column.name }}</button>
+            {% else %}
+              <span aria-hidden="true"></span>
+            {% endif %}
           {% endfor %}
           <span>Overall</span>
           <span>Actions</span>
@@ -139,92 +143,193 @@
                 id="hrdoc-fold-{{ employee.pk }}"
                 class="hrdoc-fold-check">
 
-              <div class="hrdoc-scan">
-                <div class="hrdoc-who">
-                  <div class="hrdoc-name">{{ employee.get_full_name|default:employee.username }}</div>
-                  {% if employee.email %}
-                    <div class="hrdoc-meta">{{ employee.email }}</div>
-                  {% endif %}
-                  {% if employee.store_id %}
-                    <div class="hrdoc-meta">Store {{ employee.store.number }}</div>
-                  {% endif %}
-                </div>
+              {% for pill_row in row.pill_rows %}
+                <div class="hrdoc-scan{% if not pill_row.show_who %} hrdoc-scan-continuation{% endif %}">
+                  <div class="hrdoc-who">
+                    {% if pill_row.show_who %}
+                      <div class="hrdoc-name">{{ employee.get_full_name|default:employee.username }}</div>
+                      {% if employee.email %}
+                        <div class="hrdoc-meta">{{ employee.email }}</div>
+                      {% endif %}
+                      {% if employee.store_id %}
+                        <div class="hrdoc-meta">Store {{ employee.store.number }}</div>
+                      {% endif %}
+                    {% endif %}
+                  </div>
 
-                {% for step in row.steps %}
-                  <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
-                    <span class="hrdoc-dot" aria-hidden="true"></span>
-                    <span class="hrdoc-chip-text">
-                      <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
-                      <span class="hrdoc-chip-label">{{ step.label }}</span>
+                  {% if pill_row.show_overall %}
+                    {% for step in pill_row.steps %}
+                      <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
+                        <span class="hrdoc-dot" aria-hidden="true"></span>
+                        <span class="hrdoc-chip-text">
+                          <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
+                          <span class="hrdoc-chip-label">{{ step.label }}</span>
+                        </span>
+                      </span>
+                    {% endfor %}
+
+                    {% for _ in pill_row.empty_slots %}
+                      <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                    {% endfor %}
+
+                    <span class="hrdoc-chip hrdoc-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
+                      <span class="hrdoc-dot" aria-hidden="true"></span>
+                      <span class="hrdoc-chip-text">
+                        <span class="hrdoc-chip-kicker">Overall</span>
+                        <span class="hrdoc-chip-label">{{ row.overall_chip.label }}</span>
+                      </span>
                     </span>
-                  </span>
-                {% endfor %}
+                  {% else %}
+                    {% for step in pill_row.steps %}
+                      <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
+                        <span class="hrdoc-dot" aria-hidden="true"></span>
+                        <span class="hrdoc-chip-text">
+                          <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
+                          <span class="hrdoc-chip-label">{{ step.label }}</span>
+                        </span>
+                      </span>
+                    {% endfor %}
 
-                <span class="hrdoc-chip hrdoc-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
-                  <span class="hrdoc-dot" aria-hidden="true"></span>
-                  <span class="hrdoc-chip-text">
-                    <span class="hrdoc-chip-kicker">Overall</span>
-                    <span class="hrdoc-chip-label">{{ row.overall_chip.label }}</span>
-                  </span>
-                </span>
+                    {% for _ in pill_row.empty_slots %}
+                      <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                    {% endfor %}
+                  {% endif %}
 
-                <div class="hrdoc-actions">
-                  <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
-                    <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
-                    <span aria-hidden="true">Details</span>
-                    <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
-                  </label>
+                  {% if pill_row.show_overall %}
+                    <div class="hrdoc-actions hrdoc-actions-desktop">
+                      <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
+                        <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
+                        <span aria-hidden="true">Details</span>
+                        <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
+                      </label>
+                    </div>
+                  {% else %}
+                    <div class="hrdoc-actions hrdoc-actions-desktop" aria-hidden="true"></div>
+                  {% endif %}
                 </div>
+              {% endfor %}
+
+              <div class="hrdoc-actions hrdoc-actions-mobile">
+                <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
+                  <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
+                  <span aria-hidden="true">Details</span>
+                  <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
+                </label>
               </div>
 
               <div class="hrdoc-fold-body">
-                <div class="hrdoc-facts">
-                  {% for step in row.steps %}
-                    <div>
-                      <div class="hrdoc-fact-label">{{ step.step_name }}</div>
-                      <div class="hrdoc-fact-value">{{ step.label }}</div>
-                      {% if step.sent_at %}
-                        <div class="hrdoc-fact-sub">Sent {{ step.sent_at|date:"F j, Y" }}</div>
-                      {% endif %}
-                      {% for rec in step.recipient_pills %}
-                        <div class="hrdoc-fact-sub">
-                          {{ rec.name }}{% if rec.role_name %} ({{ rec.role_name }}){% endif %} — {{ rec.label }}
+                <div class="hrdoc-details">
+                  {% for pill_row in row.pill_rows %}
+                    <div class="hrdoc-scan hrdoc-detail-scan{% if not pill_row.show_who %} hrdoc-scan-continuation{% endif %}">
+                      <span class="hrdoc-who hrdoc-detail-spacer" aria-hidden="true"></span>
+
+                      {% if pill_row.show_overall %}
+                        {% for step in pill_row.steps %}
+                          <div class="hrdoc-fact-cell">
+                            <div class="hrdoc-fact-label">{{ step.step_name }}</div>
+                            <div class="hrdoc-fact-value">{{ step.label }}</div>
+                            {% if step.status == "completed" and step.completed_at %}
+                              <div class="hrdoc-fact-sub">Completed {{ step.completed_at|date:"F j, Y, g:i A" }}</div>
+                            {% elif step.sent_at %}
+                              <div class="hrdoc-fact-sub">Sent {{ step.sent_at|date:"F j, Y" }}</div>
+                            {% endif %}
+                            {% for rec in step.recipient_pills %}
+                              <div class="hrdoc-fact-sub">
+                                {{ rec.name }}{% if rec.role_name %} ({{ rec.role_name }}){% endif %} — {{ rec.label }}
+                              </div>
+                            {% endfor %}
+                            {% if step.signed_document_id %}
+                              <a
+                                href="{% url 'download_signed_document' step.signed_document_id %}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="hrdoc-doc-link">
+                                View
+                              </a>
+                            {% endif %}
+                            {% if step.can_resend %}
+                              <button
+                                type="button"
+                                class="hrdoc-resend hrdoc-resend-detail"
+                                hx-post="{% url 'resend_hr_documents' employee.pk %}"
+                                hx-vals='{"step_id": "{{ step.step_id }}"}'
+                                hx-target="#hrdoc-list"
+                                hx-select="#hrdoc-list"
+                                hx-swap="outerHTML"
+                                hx-include="#hrdoc-toolbar"
+                                hx-indicator="#hrdoc-loading"
+                                hx-disabled-elt="this"
+                                hx-confirm="Resend {{ step.step_name }} to {{ employee.get_full_name|default:employee.username }}?">
+                                Resend {{ step.step_name }}
+                              </button>
+                            {% elif step.status == "not_sent" %}
+                              <div class="hrdoc-fact-sub">Not sent yet. Resend starts after DocuSign has an envelope.</div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+
+                        {% for _ in pill_row.empty_slots %}
+                          <span class="hrdoc-fact-spacer" aria-hidden="true"></span>
+                        {% endfor %}
+
+                        <div class="hrdoc-fact-cell hrdoc-fact-overall">
+                          <div class="hrdoc-fact-label">Overall</div>
+                          <div class="hrdoc-fact-value">{{ row.overall_chip.label }}</div>
+                          <div class="hrdoc-fact-sub">{{ row.completed_count }}/{{ row.total_required }} complete</div>
                         </div>
-                      {% endfor %}
-                      {% if step.signed_document_id %}
-                        <a
-                          href="{% url 'download_signed_document' step.signed_document_id %}"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="hrdoc-doc-link">
-                          View
-                        </a>
+                      {% else %}
+                        {% for step in pill_row.steps %}
+                          <div class="hrdoc-fact-cell">
+                            <div class="hrdoc-fact-label">{{ step.step_name }}</div>
+                            <div class="hrdoc-fact-value">{{ step.label }}</div>
+                            {% if step.status == "completed" and step.completed_at %}
+                              <div class="hrdoc-fact-sub">Completed {{ step.completed_at|date:"F j, Y, g:i A" }}</div>
+                            {% elif step.sent_at %}
+                              <div class="hrdoc-fact-sub">Sent {{ step.sent_at|date:"F j, Y" }}</div>
+                            {% endif %}
+                            {% for rec in step.recipient_pills %}
+                              <div class="hrdoc-fact-sub">
+                                {{ rec.name }}{% if rec.role_name %} ({{ rec.role_name }}){% endif %} — {{ rec.label }}
+                              </div>
+                            {% endfor %}
+                            {% if step.signed_document_id %}
+                              <a
+                                href="{% url 'download_signed_document' step.signed_document_id %}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="hrdoc-doc-link">
+                                View
+                              </a>
+                            {% endif %}
+                            {% if step.can_resend %}
+                              <button
+                                type="button"
+                                class="hrdoc-resend hrdoc-resend-detail"
+                                hx-post="{% url 'resend_hr_documents' employee.pk %}"
+                                hx-vals='{"step_id": "{{ step.step_id }}"}'
+                                hx-target="#hrdoc-list"
+                                hx-select="#hrdoc-list"
+                                hx-swap="outerHTML"
+                                hx-include="#hrdoc-toolbar"
+                                hx-indicator="#hrdoc-loading"
+                                hx-disabled-elt="this"
+                                hx-confirm="Resend {{ step.step_name }} to {{ employee.get_full_name|default:employee.username }}?">
+                                Resend {{ step.step_name }}
+                              </button>
+                            {% elif step.status == "not_sent" %}
+                              <div class="hrdoc-fact-sub">Not sent yet. Resend starts after DocuSign has an envelope.</div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+
+                        {% for _ in pill_row.empty_slots %}
+                          <span class="hrdoc-fact-spacer" aria-hidden="true"></span>
+                        {% endfor %}
                       {% endif %}
-                      {% if step.can_resend %}
-                        <button
-                          type="button"
-                          class="hrdoc-resend hrdoc-resend-detail"
-                          hx-post="{% url 'resend_hr_documents' employee.pk %}"
-                          hx-vals='{"step_id": "{{ step.step_id }}"}'
-                          hx-target="#hrdoc-list"
-                          hx-select="#hrdoc-list"
-                          hx-swap="outerHTML"
-                          hx-include="#hrdoc-toolbar"
-                          hx-indicator="#hrdoc-loading"
-                          hx-disabled-elt="this"
-                          hx-confirm="Resend {{ step.step_name }} to {{ employee.get_full_name|default:employee.username }}?">
-                          Resend {{ step.step_name }}
-                        </button>
-                      {% elif step.status == "not_sent" %}
-                        <div class="hrdoc-fact-sub">Not sent yet. Resend starts after DocuSign has an envelope.</div>
-                      {% endif %}
+
+                      <span class="hrdoc-actions hrdoc-detail-spacer" aria-hidden="true"></span>
                     </div>
                   {% endfor %}
-                  <div>
-                    <div class="hrdoc-fact-label">Overall</div>
-                    <div class="hrdoc-fact-value">{{ row.overall_chip.label }}</div>
-                    <div class="hrdoc-fact-sub">{{ row.completed_count }}/{{ row.total_required }} complete</div>
-                  </div>
                 </div>
               </div>
             </article>
@@ -244,6 +349,10 @@
   border-radius: 18px;
   padding: 20px 18px 28px;
   color: #1a1f36;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .hrdoc-title {
@@ -429,6 +538,8 @@
 .hrdoc-list-wrap {
   position: relative;
   margin-top: 22px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-loading {
@@ -471,7 +582,9 @@
   border: 1px solid #eef1f6;
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
-  overflow-x: auto;
+  overflow-x: clip;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-notice {
@@ -505,11 +618,25 @@
 
 .hrdoc-scan {
   display: grid;
-  grid-template-columns: minmax(190px, 1.15fr) repeat(var(--hrdoc-chips, 1), minmax(140px, 164px)) 104px;
+  grid-template-columns:
+    minmax(0, 1.15fr)
+    repeat(3, minmax(0, 1fr))
+    minmax(0, 1fr)
+    minmax(72px, 104px);
   column-gap: 12px;
   align-items: center;
-  min-width: calc(190px + (var(--hrdoc-chips, 1) * 152px) + 116px);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0 20px;
+}
+
+.hrdoc-scan-continuation {
+  padding-top: 0;
+}
+
+.hrdoc-scan-continuation .hrdoc-who {
+  min-height: 0;
 }
 
 .hrdoc-scan-head {
@@ -529,6 +656,8 @@
 
 .hrdoc-row {
   position: relative;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-row + .hrdoc-row {
@@ -571,8 +700,9 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 164px;
-  height: 30px;
-  padding: 0 10px;
+  height: auto;
+  min-height: 44px;
+  padding: 6px 10px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -587,12 +717,22 @@
 
 .hrdoc-chip-text {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
 }
 
 .hrdoc-chip-kicker {
-  display: none;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  opacity: 0.85;
 }
 
 .hrdoc-dot {
@@ -607,6 +747,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .hrdoc-chip.is-ok {
@@ -639,12 +780,21 @@
 }
 .hrdoc-chip.is-muted .hrdoc-dot { background: #a3aab4; }
 
+.hrdoc-chip-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .hrdoc-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.hrdoc-actions-mobile {
+  display: none;
 }
 
 .hrdoc-resend {
@@ -679,6 +829,11 @@
 
 .hrdoc-resend-detail {
   margin-top: 8px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  height: auto;
+  min-height: 28px;
 }
 
 .hrdoc-fold-check {
@@ -717,11 +872,13 @@
   transition: transform 0.15s ease;
 }
 
-.hrdoc-fold-check:checked ~ .hrdoc-scan .hrdoc-chevron {
+.hrdoc-fold-check:checked ~ .hrdoc-scan .hrdoc-chevron,
+.hrdoc-fold-check:checked ~ .hrdoc-actions-mobile .hrdoc-chevron {
   transform: rotate(90deg);
 }
 
-.hrdoc-fold-check:focus-visible ~ .hrdoc-scan .hrdoc-details-toggle {
+.hrdoc-fold-check:focus-visible ~ .hrdoc-scan .hrdoc-details-toggle,
+.hrdoc-fold-check:focus-visible ~ .hrdoc-actions-mobile .hrdoc-details-toggle {
   outline: 2px solid #93c5fd;
   outline-offset: 3px;
   border-radius: 6px;
@@ -733,16 +890,53 @@
   padding: 14px 16px;
   background: #f8fafc;
   border-radius: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
 .hrdoc-fold-check:checked ~ .hrdoc-fold-body {
   display: block;
 }
 
-.hrdoc-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px 24px;
+.hrdoc-details {
+  width: 100%;
+  min-width: 0;
+}
+
+.hrdoc-detail-scan {
+  padding-top: 0;
+  padding-bottom: 10px;
+  align-items: start;
+}
+
+.hrdoc-detail-scan:first-child {
+  padding-top: 4px;
+}
+
+.hrdoc-detail-scan:last-child {
+  padding-bottom: 0;
+}
+
+.hrdoc-detail-spacer {
+  display: block;
+  min-width: 0;
+}
+
+.hrdoc-fact-cell {
+  min-width: 0;
+  justify-self: center;
+  width: 100%;
+  max-width: 164px;
+  box-sizing: border-box;
+}
+
+.hrdoc-fact-spacer {
+  display: block;
+  min-width: 0;
+  justify-self: center;
+  width: 100%;
+  max-width: 164px;
 }
 
 .hrdoc-fact-label {
@@ -916,9 +1110,19 @@
     padding: 14px 14px 12px;
   }
 
-  .hrdoc-who,
-  .hrdoc-actions {
+  .hrdoc-who {
     grid-column: 1 / -1;
+  }
+
+  .hrdoc-actions-desktop {
+    display: none;
+  }
+
+  .hrdoc-actions-mobile {
+    display: flex;
+    justify-content: stretch;
+    margin-top: 0;
+    padding: 0 14px 14px;
   }
 
   .hrdoc-chip {
@@ -958,18 +1162,9 @@
     line-height: 1.2;
   }
 
-  .hrdoc-actions {
-    justify-content: stretch;
-    margin-top: 4px;
-  }
-
-  .hrdoc-actions .hrdoc-resend,
-  .hrdoc-details-toggle {
+  .hrdoc-actions-mobile .hrdoc-details-toggle {
     flex: 1 1 0;
     min-width: 0;
-  }
-
-  .hrdoc-details-toggle {
     box-sizing: border-box;
     justify-content: center;
     min-height: 36px;
@@ -983,8 +1178,20 @@
     margin: 0 12px 12px;
   }
 
-  .hrdoc-facts {
-    grid-template-columns: 1fr;
+  .hrdoc-detail-scan {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 14px 12px;
+  }
+
+  .hrdoc-detail-spacer,
+  .hrdoc-detail-scan .hrdoc-who,
+  .hrdoc-fact-spacer {
+    display: none;
+  }
+
+  .hrdoc-fact-cell {
+    max-width: none;
+    justify-self: stretch;
   }
 
   .hrdoc-empty {
