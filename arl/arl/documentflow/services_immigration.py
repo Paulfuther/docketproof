@@ -1,5 +1,10 @@
-from datetime import date
+from datetime import date, datetime
+
+from django.db import transaction
 from django.db.models import Q
+
+from arl.documentflow.constants import IMMIGRATION_STATUS_TYPES
+from arl.documentflow.models import ImmigrationStatusEvent
 
 
 def _get_sin_value(user):
@@ -306,3 +311,90 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
         "immigration_search": search_query,
         "immigration_flagged_only": flagged_only,
     }
+
+
+def _coerce_date(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return datetime.strptime(cleaned, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("Use a valid date.") from exc
+    raise ValueError("Use a valid date.")
+
+
+def _sync_employee_immigration_dates(employee, status_type, effective_date, expiry_date):
+    """Write permit status and dates onto the employee the audit already reads."""
+    meta = IMMIGRATION_STATUS_TYPES.get(status_type, {})
+    fields = []
+
+    if status_type == "new_work_permit":
+        employee.work_permit_extension_requested = False
+        fields.append("work_permit_extension_requested")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+    elif meta.get("overrides_permit"):
+        employee.work_permit_extension_requested = True
+        fields.append("work_permit_extension_requested")
+        if effective_date:
+            employee.work_permit_extension_date = effective_date
+            fields.append("work_permit_extension_date")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+
+    if fields:
+        employee.save(update_fields=fields)
+
+
+@transaction.atomic
+def update_immigration_tracker(
+    *,
+    employee,
+    employer,
+    created_by,
+    document_file,
+    status_type,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+):
+    """
+    Append an ImmigrationStatusEvent for an uploaded file and refresh the
+    employee permit fields. This is the same tracker the HR audit reads.
+    """
+    status_type = (status_type or "").strip()
+    if status_type not in IMMIGRATION_STATUS_TYPES:
+        raise ValueError("Choose a valid immigration status.")
+    if document_file is None:
+        raise ValueError("A document file is required.")
+    if employee.employer_id != employer.id:
+        raise ValueError("Employee is not part of this employer.")
+
+    effective = _coerce_date(effective_date)
+    expiry = _coerce_date(expiry_date)
+
+    event = ImmigrationStatusEvent.objects.create(
+        user=employee,
+        employer=employer,
+        status_type=status_type,
+        effective_date=effective,
+        expiry_date=expiry,
+        reference_number=(reference_number or "").strip(),
+        notes=notes or "",
+        document_file=document_file,
+        created_by=created_by,
+        is_active=True,
+    )
+    _sync_employee_immigration_dates(employee, status_type, effective, expiry)
+    return event

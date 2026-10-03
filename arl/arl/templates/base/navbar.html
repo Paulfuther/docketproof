@@ -53,7 +53,7 @@
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% if user.is_authenticated and user.is_employee_account %}{% url 'employee_home' %}{% else %}{% url 'home' %}{% endif %}">
       <span>
         {% if user.is_authenticated and user.employer %}
           <span class=" d-none d-sm-inline">{{ user.employer.name }}</span>
@@ -69,7 +69,34 @@
     <div class="collapse navbar-collapse" id="mainNavbar">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-        {% if user.is_authenticated %}
+        {% if user.is_authenticated and user.is_employee_account %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
+            <i class="material-symbols-outlined">description</i> Documents
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+            <i class="material-symbols-outlined">checklist</i> Checklists
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
+            <i class="material-symbols-outlined">badge</i> Immigration
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'help_page' %}">
+            <i class="material-symbols-outlined">info</i> Help
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'logout' %}">
+            <i class="material-symbols-outlined">logout</i> Logout
+          </a>
+        </li>
+
+        {% elif user.is_authenticated %}
         <!-- HR -->
         <li class="nav-item">
           <a class="nav-link" href="{% url 'hr_dashboard' %}">

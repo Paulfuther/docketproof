@@ -1,6 +1,12 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
+from .employee_views import (
+    employee_home,
+    employee_immigration_upload,
+    employee_open_unsigned_document,
+    employee_unsigned_document,
+)
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -63,6 +69,22 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("home/", home_view, name="home"),
+    path("employee/", employee_home, name="employee_home"),
+    path(
+        "employee/documents/unsigned/<int:envelope_id>/",
+        employee_unsigned_document,
+        name="employee_unsigned_document",
+    ),
+    path(
+        "employee/documents/unsigned/<int:envelope_id>/open/",
+        employee_open_unsigned_document,
+        name="employee_open_unsigned_document",
+    ),
+    path(
+        "employee/immigration/",
+        employee_immigration_upload,
+        name="employee_immigration_upload",
+    ),
     path("fetch_managers/", fetch_managers, name="fetch_managers"),
     path('task-results/', TaskResultListView.as_view(), name='task_results'),
     path('verify-phone/<str:phone_number>/', verify_twilio_phone_number, name='verify_twilio_phone'),

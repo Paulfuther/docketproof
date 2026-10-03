@@ -449,31 +449,61 @@ def check_verification(request):
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
 
+# Employees stay signed in for two weeks. The cookie is not cleared when the
+# browser closes. Staff still verify before any session is created.
+EMPLOYEE_SESSION_SECONDS = 60 * 60 * 24 * 14
+
+
+def _is_privileged_account(user):
+    """Staff and superusers verify before a session exists."""
+    return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+
+
+def _redirect_after_login(user):
+    if getattr(user, "is_employee_account", False):
+        return redirect("employee_home")
+    return redirect("home")
+
+
+def _start_session(request, user):
+    login(request, user)
+    request.session.set_expiry(EMPLOYEE_SESSION_SECONDS)
+
+
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("home")
+        return _redirect_after_login(request.user)
 
     if request.method == "POST":
-        form = AuthenticationForm(request, request.POST)
+        form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            if user.phone_number:
-                print(f"DEBUG: Phone number before sending: {str(user.phone_number)}")
-                try:
-                    phone_number = str(user.phone_number)  # Ensure string conversion
-                    request.session["user_id"] = user.id
-                    request_verification_token(phone_number)  # ✅ Pass string to Twilio
-                    request.session["phone_number"] = (
-                        phone_number  # ✅ Ensure session stores string
-                    )
-                    return redirect("verification_page")
-                except TwilioException:
-                    return render(
-                        request,
-                        "user/login.html",
-                        {"form": form, "verification_error": True},
-                    )
-            return redirect("home")
+            # Employees and managers use the existing Django user. A Twilio
+            # outage must not stop them from staying signed in.
+            if not _is_privileged_account(user):
+                _start_session(request, user)
+                return _redirect_after_login(user)
+
+            if not user.phone_number:
+                return render(
+                    request,
+                    "user/login.html",
+                    {"form": form, "verification_error": True},
+                )
+            try:
+                phone_number = str(user.phone_number)
+                request_verification_token(phone_number)
+                request.session["user_id"] = user.id
+                request.session["phone_number"] = phone_number
+                return redirect("verification_page")
+            except TwilioException:
+                request.session.pop("user_id", None)
+                request.session.pop("phone_number", None)
+                return render(
+                    request,
+                    "user/login.html",
+                    {"form": form, "verification_error": True},
+                )
     else:
         form = AuthenticationForm(request)
 
@@ -501,8 +531,8 @@ def verification_page(request):
             print("testing", token, phone_number)
             try:
                 if check_verification_token(phone_number, token):
-                    login(request, user)
-                    return redirect("home")
+                    _start_session(request, user)
+                    return _redirect_after_login(user)
                 else:
                     return render(
                         request,
@@ -527,6 +557,10 @@ def logout_view(request):
 
 
 def home_view(request):
+    if request.user.is_authenticated and getattr(
+        request.user, "is_employee_account", False
+    ):
+        return redirect("employee_home")
     return render(request, "user/home.html")
 
 
@@ -1249,9 +1283,27 @@ def hr_document_view(request):
     )
 
 
+def user_can_download_signed_document(user, doc):
+    """Owner, or a staff/manager/employer account in the same company."""
+    if not user.is_authenticated or not user.is_active:
+        return False
+    if doc.user_id and doc.user_id == user.id:
+        return True
+    if user.is_superuser:
+        return True
+    if not user.employer_id or doc.employer_id != user.employer_id:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+
+
+@login_required
 def download_signed_document(request, doc_id):
     try:
         doc = get_object_or_404(SignedDocumentFile, id=doc_id)
+        if not user_can_download_signed_document(request.user, doc):
+            return HttpResponseForbidden("You cannot download this document.")
 
         # get original filename + ext
         original_name = doc.file_name or os.path.basename(doc.file_path) or "document"

@@ -1,0 +1,90 @@
+{% extends "base/base.html" %}
+{% block title %}Immigration upload{% endblock %}
+
+{% block template %}
+{% include "base/navbar.html" %}
+
+<div class="container employee-page">
+  <div class="pt-5 mt-4 mb-3">
+    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+    <h1 class="h4 mt-2 mb-1">Update immigration documents</h1>
+    <p class="text-muted mb-0">This updates your existing immigration record, including status, dates, and the file.</p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} mb-3" role="alert">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <h2 class="h6 mb-2">Current tracker</h2>
+      {% if latest_event %}
+        <p class="mb-1">{{ latest_event.get_status_type_display }}</p>
+        <p class="text-muted small mb-0">
+          {% if latest_event.effective_date %}Effective {{ latest_event.effective_date|date:"F j, Y" }}{% endif %}
+          {% if latest_event.expiry_date %} · Expires {{ latest_event.expiry_date|date:"F j, Y" }}{% endif %}
+          {% if latest_event.reference_number %} · {{ latest_event.reference_number }}{% endif %}
+        </p>
+      {% else %}
+        <p class="text-muted mb-0">No immigration update on file yet.</p>
+      {% endif %}
+      <p class="text-muted small mt-2 mb-0">
+        Permit expiry: {% if permit_expiry %}{{ permit_expiry|date:"F j, Y" }}{% else %}not set{% endif %}
+        {% if extension_requested %}
+          · Extension requested{% if extension_date %} {{ extension_date|date:"F j, Y" }}{% endif %}
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label" for="document_title">Document title</label>
+          <input class="form-control" id="document_title" name="document_title" type="text" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="immigration_status_type">Immigration status</label>
+          <select class="form-select" id="immigration_status_type" name="immigration_status_type" required>
+            <option value="">Select a status</option>
+            {% for code, label in status_choices %}
+              <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="immigration_effective_date">Effective date</label>
+            <input class="form-control" id="immigration_effective_date" name="immigration_effective_date" type="date">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="immigration_expiry_date">Expiry date</label>
+            <input class="form-control" id="immigration_expiry_date" name="immigration_expiry_date" type="date">
+          </div>
+        </div>
+        <div class="mb-3 mt-3">
+          <label class="form-label" for="immigration_reference_number">Reference number</label>
+          <input class="form-control" id="immigration_reference_number" name="immigration_reference_number" type="text" placeholder="IRCC file or application number">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="notes">Notes</label>
+          <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="file">File</label>
+          <input class="form-control" id="file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif,application/pdf,image/*" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Save to immigration tracker</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endblock %}

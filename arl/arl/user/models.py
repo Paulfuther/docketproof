@@ -168,6 +168,13 @@ class CustomUser(AbstractUser):
     def is_storage(self):
         return self.groups.filter(name="storage").exists()
 
+    @property
+    def is_employee_account(self):
+        """Front-line employee, not a staff, employer, or manager account."""
+        if self.is_staff or self.is_superuser:
+            return False
+        return not self.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+
 
 class SMSOptOut(models.Model):
     user = models.OneToOneField(
