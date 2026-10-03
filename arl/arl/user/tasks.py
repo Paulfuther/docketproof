@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.crypto import get_random_string
 
-import base64
+from django.db import transaction
 
 from arl.celery import app
 from arl.documentflow.services_immigration import send_immigration_upload_notification
@@ -118,33 +118,57 @@ def create_newhire_data_email(email_data):
 def send_immigration_upload_email_task(payload):
     """
     Notify the immigration email group that a GSA immigration document was
-    uploaded. Payload is a dict with employer/employee metadata and a
-    base64-encoded file body.
+    uploaded. Payload carries document_file_id so the worker can load the
+    attachment from storage instead of shipping file bytes through Celery.
     """
     try:
         if isinstance(payload, str):
             payload = json.loads(payload)
 
-        file_content_b64 = payload.get("file_content_b64") or ""
-        file_bytes = base64.b64decode(file_content_b64.encode("ascii"))
-
-        return send_immigration_upload_notification(
+        result = send_immigration_upload_notification(
             employer_id=payload["employer_id"],
             employee_name=payload["employee_name"],
             company_name=payload["company_name"],
             document_title=payload["document_title"],
             status_label=payload["status_label"],
-            file_name=payload["file_name"],
-            content_type=payload.get("content_type"),
-            file_bytes=file_bytes,
+            document_file_id=payload["document_file_id"],
             effective_date=payload.get("effective_date"),
             expiry_date=payload.get("expiry_date"),
             reference_number=payload.get("reference_number", ""),
             notes=payload.get("notes", ""),
         )
+        if result.get("status") != "success":
+            logger.error("Immigration upload email task finished with %s", result)
+        return result
     except Exception as exc:
         logger.exception("Immigration upload email task failed")
         return {"status": "error", "message": str(exc)}
+
+
+def queue_immigration_upload_email(payload):
+    """Queue after commit; fall back to synchronous send if Celery is unavailable."""
+
+    def _dispatch():
+        try:
+            async_result = send_immigration_upload_email_task.delay(payload)
+            logger.info(
+                "Queued immigration upload email task id=%s for document_file_id=%s",
+                async_result.id,
+                payload.get("document_file_id"),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to queue immigration upload email for document_file_id=%s; "
+                "sending synchronously",
+                payload.get("document_file_id"),
+            )
+            result = send_immigration_upload_email_task(payload)
+            if result.get("status") != "success":
+                logger.error(
+                    "Synchronous immigration upload email failed with %s", result
+                )
+
+    transaction.on_commit(_dispatch)
 
 
 @app.task(name="save_user_to_db")

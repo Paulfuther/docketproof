@@ -760,7 +760,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         data["file"] = upload
         return self.client.post(reverse("employee_immigration_upload"), data)
 
-    @patch("arl.user.employee_views.send_immigration_upload_email_task.delay")
+    @patch("arl.user.employee_views.queue_immigration_upload_email")
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
     def test_upload_updates_the_existing_immigration_tracker(
         self, store_file, queue_email
@@ -775,7 +775,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertEqual(payload["employer_id"], self.employer.id)
         self.assertEqual(payload["document_title"], "Work permit extension")
         self.assertEqual(payload["status_label"], "Work Permit Extension")
-        self.assertTrue(payload["file_content_b64"])
+        self.assertTrue(payload["document_file_id"])
 
         event = ImmigrationStatusEvent.objects.get(user=self.employee)
         self.assertEqual(event.status_type, "work_permit_extension")
@@ -898,8 +898,11 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         emails = immigration_upload_recipient_emails(self.employer.id)
         self.assertEqual(emails, [recipient.email])
 
-    @patch("arl.documentflow.services_immigration.create_master_email")
-    def test_send_immigration_upload_notification_attaches_file(self, send_email):
+    @patch("arl.documentflow.services_immigration.create_master_email", return_value=True)
+    @patch("arl.documentflow.services_immigration.read_s3_object_bytes")
+    def test_send_immigration_upload_notification_attaches_file(
+        self, read_s3, send_email
+    ):
         Group.objects.create(name=IMMIGRATION_UPLOAD_EMAIL_GROUP)
         recipient = self._user(
             "imm2",
@@ -909,6 +912,16 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
             self.employer,
         )
         recipient.groups.add(Group.objects.get(name=IMMIGRATION_UPLOAD_EMAIL_GROUP))
+        document = SignedDocumentFile.objects.create(
+            user=self.employee,
+            employer=self.employer,
+            envelope_id="imm-doc",
+            file_name="permit.pdf",
+            file_path="DOCUMENTS/acme/permit.pdf",
+            document_title="Work permit extension",
+            is_company_document=False,
+        )
+        read_s3.return_value = b"%PDF-1.4 permit"
 
         result = send_immigration_upload_notification(
             employer_id=self.employer.id,
@@ -916,9 +929,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
             company_name=self.employer.name,
             document_title="Work permit extension",
             status_label="Work Permit Extension",
-            file_name="permit.pdf",
-            content_type="application/pdf",
-            file_bytes=b"%PDF-1.4 permit",
+            document_file_id=document.id,
             effective_date="2026-03-01",
             expiry_date="2027-03-01",
             reference_number="IRCC-42",
@@ -927,12 +938,49 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["group_name"], IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        read_s3.assert_called_once_with("DOCUMENTS/acme/permit.pdf")
         send_email.assert_called_once()
         kwargs = send_email.call_args.kwargs
         self.assertEqual(kwargs["to_email"], [recipient.email])
         self.assertEqual(len(kwargs["attachments"]), 1)
         self.assertEqual(kwargs["attachments"][0]["filename"], "permit.pdf")
         self.assertEqual(kwargs["attachments"][0]["type"], "application/pdf")
+
+    @patch("arl.documentflow.services_immigration.create_master_email", return_value=False)
+    @patch("arl.documentflow.services_immigration.read_s3_object_bytes", return_value=b"pdf")
+    def test_send_immigration_upload_notification_reports_sendgrid_failure(
+        self, read_s3, send_email
+    ):
+        Group.objects.create(name=IMMIGRATION_UPLOAD_EMAIL_GROUP)
+        recipient = self._user(
+            "imm3",
+            "Imm",
+            "Fail",
+            "+14161234573",
+            self.employer,
+        )
+        recipient.groups.add(Group.objects.get(name=IMMIGRATION_UPLOAD_EMAIL_GROUP))
+        document = SignedDocumentFile.objects.create(
+            user=self.employee,
+            employer=self.employer,
+            envelope_id="imm-doc-2",
+            file_name="permit.pdf",
+            file_path="DOCUMENTS/acme/permit-2.pdf",
+            document_title="Work permit extension",
+            is_company_document=False,
+        )
+
+        result = send_immigration_upload_notification(
+            employer_id=self.employer.id,
+            employee_name="Ada Lovelace",
+            company_name=self.employer.name,
+            document_title="Work permit extension",
+            status_label="Work Permit Extension",
+            document_file_id=document.id,
+        )
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "SendGrid send failed.")
 
     def test_immigration_page_shows_valid_permit_status(self):
         set_user_sin(self.employee, "900000001", validate_luhn=True, save=True)
@@ -947,8 +995,9 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(response, "Valid")
         self.assertContains(response, "Compliant")
 
+    @patch("arl.user.employee_views.queue_immigration_upload_email")
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
-    def test_new_work_permit_clears_the_extension_flag(self, store_file):
+    def test_new_work_permit_clears_the_extension_flag(self, store_file, queue_email):
         self.employee.work_permit_extension_requested = True
         self.employee.work_permit_extension_date = date(2026, 1, 1)
         self.employee.save(

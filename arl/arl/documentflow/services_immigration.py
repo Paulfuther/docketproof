@@ -1,6 +1,7 @@
 import base64
 import csv
 import logging
+import mimetypes
 from datetime import date, datetime
 from io import StringIO
 
@@ -10,6 +11,8 @@ from django.db.models import CharField, Q
 from django.db.models.functions import Cast
 from django.utils import timezone
 
+from arl.bucket.helpers import read_s3_object_bytes
+from arl.dsign.models import SignedDocumentFile
 from arl.msg.helpers import create_master_email
 from arl.setup.models import TenantApiKeys
 from arl.user.models import CustomUser
@@ -939,12 +942,47 @@ def immigration_upload_recipient_emails(employer_id):
     )
 
 
+def _log_immigration_recipient_miss(employer_id, group_name):
+    group_users = CustomUser.objects.filter(
+        is_active=True,
+        groups__name=group_name,
+    )
+    employer_matches = group_users.filter(employer_id=employer_id).exclude(email="")
+    logger.warning(
+        "Immigration upload email has no recipients for employer_id=%s in group '%s' "
+        "(%s active group member(s), %s with this employer and an email address)",
+        employer_id,
+        group_name,
+        group_users.count(),
+        employer_matches.count(),
+    )
+
+
 def _format_tracker_date(value):
     if not value:
         return "Not provided"
     if isinstance(value, str):
         return value
     return value.isoformat()
+
+
+def _immigration_upload_attachment(document_file_id, file_bytes=None):
+    if file_bytes is None:
+        document = SignedDocumentFile.objects.get(pk=document_file_id)
+        file_bytes = read_s3_object_bytes(document.file_path)
+        file_name = document.file_name
+    else:
+        document = SignedDocumentFile.objects.filter(pk=document_file_id).first()
+        file_name = document.file_name if document else "immigration-document"
+
+    content_type = (
+        mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    )
+    return {
+        "content": base64.b64encode(file_bytes).decode("utf-8"),
+        "filename": file_name,
+        "type": content_type,
+    }
 
 
 def send_immigration_upload_notification(
@@ -954,13 +992,12 @@ def send_immigration_upload_notification(
     company_name,
     document_title,
     status_label,
-    file_name,
-    content_type,
-    file_bytes,
+    document_file_id,
     effective_date=None,
     expiry_date=None,
     reference_number="",
     notes="",
+    file_bytes=None,
 ):
     """
     Email active users in the immigration upload notification group with the
@@ -969,11 +1006,7 @@ def send_immigration_upload_notification(
     group_name = resolve_immigration_email_group_name()
     to_emails = immigration_upload_recipient_emails(employer_id)
     if not to_emails:
-        logger.warning(
-            "No active recipients in group '%s' for employer ID %s",
-            group_name,
-            employer_id,
-        )
+        _log_immigration_recipient_miss(employer_id, group_name)
         return {
             "status": "skipped",
             "group_name": group_name,
@@ -1000,22 +1033,39 @@ def send_immigration_upload_notification(
         f"<strong>Notes:</strong> {notes or 'Not provided'}</p>"
         "<p>The uploaded file is attached.</p>"
     )
-    attachments = [
-        {
-            "content": base64.b64encode(file_bytes).decode("utf-8"),
-            "filename": file_name,
-            "type": content_type or "application/octet-stream",
-        }
-    ]
 
-    create_master_email(
+    try:
+        attachment = _immigration_upload_attachment(document_file_id, file_bytes)
+    except Exception:
+        logger.exception(
+            "Immigration upload email could not load attachment for document_file_id=%s",
+            document_file_id,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "Attachment could not be loaded from storage.",
+        }
+
+    sent = create_master_email(
         to_email=to_emails,
         sendgrid_id=None,
         template_data={"subject": subject, "name": to_emails[0]},
-        attachments=attachments,
+        attachments=[attachment],
         verified_sender=sender_email,
         html_content=body,
     )
+    if not sent:
+        logger.error(
+            "create_master_email failed for immigration upload to %s in group '%s'",
+            to_emails,
+            group_name,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "SendGrid send failed.",
+        }
 
     logger.info(
         "Immigration upload email sent to %s recipient(s) in group '%s'",
