@@ -13,10 +13,17 @@ from dropbox import DropboxOAuth2FlowNoRedirect
 from dropbox.exceptions import ApiError
 from dropbox.files import FolderMetadata, ListFolderResult
 
-from .helpers import generate_new_access_token
+from .helpers import generate_new_access_token, upload_to_dropbox
 
 app_key = settings.DROP_BOX_KEY
 app_secret = settings.DROP_BOX_SECRET
+
+
+def _request_employer(request):
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return getattr(user, "employer", None)
+    return None
 
 
 @login_required
@@ -65,7 +72,8 @@ def use_dropbox(request):
 
 @login_required(login_url="login")
 def list_folders(request, path=""):
-    new_access_token = generate_new_access_token()
+    employer = _request_employer(request)
+    new_access_token = generate_new_access_token(employer=employer)
     if new_access_token:
         try:
             # Use the new access token to create the Dropbox client
@@ -80,9 +88,14 @@ def list_folders(request, path=""):
                     try:
                         # Specify the path where the file will be uploaded
                         upload_path = f"/{folder_path}/{uploaded_file.name}"
-
-                        # Save the file in Dropbox
-                        dbx.files_upload(uploaded_file.read(), upload_path)
+                        success, message = upload_to_dropbox(
+                            uploaded_file.read(),
+                            upload_path,
+                            employer=employer,
+                            write_mode="add",
+                        )
+                        if not success:
+                            return HttpResponse("Error uploading file: " + message)
 
                         # Redirect to the same page after successful upload
                         return redirect("list_folders", path=folder_path)
@@ -149,7 +162,8 @@ def list_folders(request, path=""):
 
 @login_required(login_url="login")
 def list_files(request, folder_name):
-    new_access_token = generate_new_access_token()
+    employer = _request_employer(request)
+    new_access_token = generate_new_access_token(employer=employer)
     if new_access_token:
         dbx = dropbox.Dropbox(new_access_token)
         try:
@@ -174,9 +188,14 @@ def list_files(request, folder_name):
                 if request.method == "POST" and "file" in request.FILES:
                     file_to_upload = request.FILES["file"]
                     upload_path = f"{folder_path}/{file_to_upload.name}"
-
-                    with file_to_upload.open() as file:
-                        dbx.files_upload(file.read(), upload_path)
+                    success, message = upload_to_dropbox(
+                        file_to_upload.read(),
+                        upload_path,
+                        employer=employer,
+                        write_mode="add",
+                    )
+                    if not success:
+                        return HttpResponse("Error uploading file: " + message)
 
                 return render(
                     request,
@@ -201,7 +220,7 @@ def download_file(request):
 
     if not file_path:
         return HttpResponse("File path is missing.", status=400)
-    access_token = generate_new_access_token()
+    access_token = generate_new_access_token(employer=_request_employer(request))
     try:
         dbx = dropbox.Dropbox(access_token)
         metadata, response = dbx.files_download(file_path)
@@ -222,7 +241,7 @@ def download_file(request):
 
 @login_required(login_url="login")
 def view_folder(request):
-    new_access_token = generate_new_access_token()
+    new_access_token = generate_new_access_token(employer=_request_employer(request))
     if new_access_token:
         # Use the new access token to create the Dropbox client
         dbx = dropbox.Dropbox(new_access_token)
@@ -251,7 +270,7 @@ def view_folder(request):
 
 @login_required(login_url="login")
 def list_folder_contents(request, path=""):
-    new_access_token = generate_new_access_token()
+    new_access_token = generate_new_access_token(employer=_request_employer(request))
     if new_access_token:
         dbx = dropbox.Dropbox(new_access_token)
         try:
@@ -282,41 +301,25 @@ def list_folder_contents(request, path=""):
 
 @login_required(login_url="login")
 def upload_file(request):
+    employer = _request_employer(request)
     if request.method == "POST":
-        new_access_token = generate_new_access_token()
-        if new_access_token:
-            dbx = dropbox.Dropbox(new_access_token)
-            try:
-                # Fetch the list of folders from Dropbox
-                folder_list = dbx.files_list_folder(path="")
-                folders = [
-                    entry
-                    for entry in folder_list.entries
-                    if isinstance(entry, FolderMetadata)
-                ]
-
-                folder_path = request.POST.get("folder_path", "")
-                # Get the selected folder path from the form
-                uploaded_file = request.FILES["file"]
-                # print(uploaded_file)
-                file_path = os.path.join(folder_path, uploaded_file.name)
-                # Upload the file to Dropbox
-                with uploaded_file.open() as f:
-                    dbx.files_upload(f.read(), file_path)
-                # Redirect to list_folder_contents view
-                return redirect("list_folder_contents", path=quote(folder_path))
-            except ApiError as e:
-                return render(request, "error.html", {"error_message": str(e)})
-            except Exception as e:
-                return render(request, "error.html", {"error_message": str(e)})
-        else:
-            return render(
-                request,
-                "error.html",
-                {"error_message": "Refresh token not found in .env file."},
+        try:
+            folder_path = request.POST.get("folder_path", "")
+            uploaded_file = request.FILES["file"]
+            file_path = os.path.join(folder_path, uploaded_file.name)
+            success, message = upload_to_dropbox(
+                uploaded_file.read(),
+                file_path,
+                employer=employer,
+                write_mode="add",
             )
+            if not success:
+                return render(request, "error.html", {"error_message": message})
+            return redirect("list_folder_contents", path=quote(folder_path))
+        except Exception as e:
+            return render(request, "error.html", {"error_message": str(e)})
     else:
-        new_access_token = generate_new_access_token()
+        new_access_token = generate_new_access_token(employer=employer)
         if new_access_token:
             dbx = dropbox.Dropbox(new_access_token)
             try:
@@ -345,7 +348,9 @@ def delete_file(request):
     if request.method == "GET":
         try:
             file_path = request.GET.get("path", "")
-            new_access_token = generate_new_access_token()
+            new_access_token = generate_new_access_token(
+                employer=_request_employer(request)
+            )
             if new_access_token:
                 dbx = dropbox.Dropbox(new_access_token)
                 dbx.files_delete_v2(file_path)

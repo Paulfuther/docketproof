@@ -7,7 +7,7 @@ import pdfkit
 from django.template.loader import render_to_string
 from django.utils.text import slugify
 from arl.reclose.models import RecClose  # adjust if your model is in another app
-from arl.dbox.helpers import master_upload_file_to_dropbox
+from arl.dbox.helpers import upload_to_dropbox
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,11 @@ def generate_recclose_pdf_task(recclose_id):
         logger.info(f"📤 Uploading to Dropbox: {full_file_path}")
 
         # Upload
-        upload_result = master_upload_file_to_dropbox(
-            pdf_buffer.getvalue(), full_file_path
+        upload_result = upload_to_dropbox(
+            pdf_buffer.getvalue(),
+            full_file_path,
+            employer=entry.user_employer,
+            write_mode="add",
         )
 
         if upload_result[0]:
