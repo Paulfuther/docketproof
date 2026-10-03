@@ -7,11 +7,17 @@
 {{ form|as_crispy_errors }}
 
 
-<div class="container">
+<div class="container{% if user.is_authenticated and user.is_employee_account %} employee-page{% endif %}">
+{% if user.is_authenticated and user.is_employee_account %}
+  <div class="pt-5 mt-4 mb-3">
+    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+    <h1 class="h4 mt-2 mb-1">Incident dashboard</h1>
+  </div>
+{% else %}
   <div class="row justify-content-center pt-5 mt-5"></div>
-    <div class="row justify-content-center">
-        
+  <div class="row justify-content-center">
   <legend>🛠️ Incident Dashboard</legend>
+{% endif %}
 
   <ul class="nav nav-tabs" id="incidentTabs">
     <li class="nav-item">
@@ -243,10 +249,18 @@
     <p class="text-muted">No incidents found.</p>
     {% endif %}
   </div>
- 
+
 </div>
+{% if not user.is_authenticated or not user.is_employee_account %}
+</div>
+{% endif %}
 </div>
 
+{% if user.is_authenticated and user.is_employee_account %}
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endif %}
 
 <style>
 

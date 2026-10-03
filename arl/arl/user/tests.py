@@ -328,7 +328,7 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertContains(home, reverse("checklist_dashboard"))
         self.assertContains(home, reverse("employee_immigration_upload"))
         self.assertContains(home, reverse("create_salt_log"))
-        self.assertContains(home, reverse("create_incident"))
+        self.assertContains(home, reverse("incident_dashboard"))
 
         opened = self.client.get(
             reverse("employee_unsigned_document", args=[own.id])
@@ -886,12 +886,12 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         )
         self.manager.groups.add(manager_group)
 
-    def test_gsa_can_open_existing_salt_log_and_incident_forms(self):
+    def test_gsa_can_open_existing_salt_log_and_incident_dashboard(self):
         self.assertFalse(self.employee.has_perm("incident.add_incident"))
         self.client.force_login(self.employee)
 
         salt_log = self.client.get(reverse("create_salt_log"))
-        incident = self.client.get(reverse("create_incident"))
+        incident = self.client.get(reverse("incident_dashboard"))
 
         self.assertEqual(salt_log.status_code, 200)
         self.assertEqual(incident.status_code, 200)
@@ -900,7 +900,31 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertContains(salt_log, "Back to documents")
         self.assertContains(incident, "Back to documents")
         self.assertContains(salt_log, "Create salt log")
-        self.assertContains(incident, "Create site incident report")
+        self.assertContains(incident, "Incident dashboard")
+        self.assertContains(incident, "New Incident")
+        self.assertContains(incident, "Update Existing")
+
+    @patch("arl.incident.views.process_new_incident_reports_task.delay")
+    def test_gsa_incident_dashboard_lists_only_company_incidents(self, _process_incident):
+        from arl.incident.models import Incident
+
+        Incident.objects.create(
+            store=self.store,
+            brief_description="Our spill",
+            eventdetails="Fuel on pad",
+            user_employer=self.employer,
+        )
+        other_store = Store.objects.create(number=88, employer=self.other_employer)
+        Incident.objects.create(
+            store=other_store,
+            brief_description="Other company",
+            eventdetails="Not ours",
+            user_employer=self.other_employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("incident_dashboard"))
+        self.assertContains(response, "Our spill")
+        self.assertNotContains(response, "Other company")
 
     def test_non_gsa_still_needs_incident_permission(self):
         self.client.force_login(self.manager)
