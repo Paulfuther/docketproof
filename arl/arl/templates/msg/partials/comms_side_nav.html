@@ -1,0 +1,251 @@
+<style>
+/* ===== Sidebar (desktop) ===== */
+#commsNav {
+  min-height: 100vh;
+  height: 100%;
+  border-right: 1px solid #dee2e6;
+  background: #fff;
+  padding: .75rem .5rem;
+}
+.sidebar-legend {
+  font-size: .7rem;
+  letter-spacing: .05em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 1rem;
+}
+.comms-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem;
+  border-radius: .5rem;
+  color: inherit;
+  text-decoration: none;
+}
+.comms-nav-link .material-symbols-outlined {
+  font-size: 28px;
+  line-height: 1;
+}
+.comms-nav-link.active,
+.comms-nav-link:hover {
+  color: #0d6efd;
+  background: #f1f5ff;
+}
+
+/* Tooltip is appended to body so the narrow sidebar does not clip it.
+   pointer-events: none keeps the bubble off the next icon. */
+.comms-nav-tooltip {
+  pointer-events: none;
+}
+.comms-nav-tooltip .tooltip-inner {
+  font-size: .8125rem;
+}
+
+/* ===== Mobile nav (icons across top, short label under each) ===== */
+#commsNavMobile {
+  gap: .2rem;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-left: .35rem;
+  padding-right: .35rem;
+}
+#commsNavMobile .comms-nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .15rem;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 4.75rem;
+  padding: .35rem .1rem;
+  border-radius: .5rem;
+  text-decoration: none;
+  color: inherit;
+  text-align: center;
+  line-height: 1.05;
+}
+#commsNavMobile .comms-nav-link .material-symbols-outlined {
+  font-size: 24px;
+}
+#commsNavMobile .comms-nav-label {
+  display: block;
+  width: 100%;
+  font-size: .65rem;
+  line-height: 1.05;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+#commsNavMobile .comms-nav-link.active,
+#commsNavMobile .comms-nav-link:hover {
+  color: #0d6efd;
+  background: #f1f5ff;
+}
+</style>
+
+    <!-- ===== Desktop Sidebar ===== -->
+    <aside class="d-none d-lg-block col-lg-1 px-0">
+      <div id="commsNav" class="d-flex flex-column align-items-center py-3">
+        <div class="sidebar-legend fw-semibold mb-3">
+          <div>Comm</div><div>Center</div>
+        </div>
+        <nav class="nav flex-column align-items-center" {% if comms_nav_mode == "page" %}aria-label="Communications"{% else %}role="tablist" aria-orientation="vertical"{% endif %}>
+          {% if can_send_email %}
+            <a class="comms-nav-link {% if active_tab == 'email' %}active{% endif %}"
+               {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=email"{% else %}data-bs-toggle="tab" href="#email" role="tab"{% endif %}
+               data-title="Email" title="Email" aria-label="Email">
+              <i class="material-symbols-outlined" aria-hidden="true">mail</i>
+            </a>
+            <a class="comms-nav-link{% if active_tab == 'templates' %} active{% endif %}" href="{% url 'email_template_list' %}"
+               data-title="Manage templates" title="Manage templates" aria-label="Manage templates">
+              <i class="material-symbols-outlined" aria-hidden="true">edit_note</i>
+            </a>
+          {% endif %}
+          {% if can_send_sms %}
+            <a class="comms-nav-link {% if active_tab == 'sms' %}active{% endif %}"
+               {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=sms"{% else %}data-bs-toggle="tab" href="#sms" role="tab"{% endif %}
+               data-title="SMS" title="SMS" aria-label="SMS">
+              <i class="material-symbols-outlined" aria-hidden="true">sms</i>
+            </a>
+          {% endif %}
+          {% if can_send_docusign %}
+            <a class="comms-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
+               {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=docusign"{% else %}data-bs-toggle="tab" href="#docusign" role="tab"{% endif %}
+               data-title="DocuSign" title="DocuSign" aria-label="DocuSign">
+              <i class="material-symbols-outlined" aria-hidden="true">draw</i>
+            </a>
+          {% endif %}
+          {% if can_send_whatsapp %}
+            <a class="comms-nav-link {% if active_tab == 'whatsapp' %}active{% endif %}"
+               {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=whatsapp"{% else %}data-bs-toggle="tab" href="#whatsapp" role="tab"{% endif %}
+               data-title="WhatsApp" title="WhatsApp" aria-label="WhatsApp">
+              <i class="material-symbols-outlined" aria-hidden="true">chat</i>
+            </a>
+          {% endif %}
+          {% if can_view_email_logs %}
+          <a class="comms-nav-link {% if active_tab == 'email_log' %}active{% endif %}"
+            {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=email_log"{% else %}data-bs-toggle="tab" href="#email_log" role="tab"{% endif %}
+            data-title="Email logs" title="Email logs" aria-label="Email logs">
+            <i class="material-symbols-outlined" aria-hidden="true">history</i>
+          </a>
+          {% endif %}
+          {% if can_view_sms_logs %}
+          <a class="comms-nav-link {% if active_tab == 'sms_link_log' %}active{% endif %}"
+            {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=sms_link_log"{% else %}data-bs-toggle="tab" href="#sms_link_log" role="tab"{% endif %}
+            data-title="SMS link logs" title="SMS link logs" aria-label="SMS link logs">
+            <i class="material-symbols-outlined" aria-hidden="true">link</i>
+          </a>
+          {% endif %}
+        </nav>
+      </div>
+    </aside>
+
+    <!-- ===== Mobile Top Nav ===== -->
+    <div id="commsNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2"
+          {% if comms_nav_mode == "page" %}role="navigation" aria-label="Communications"{% else %}role="tablist" aria-orientation="horizontal"{% endif %}>
+      {% if can_send_email %}
+        <a class="comms-nav-link {% if active_tab == 'email' %}active{% endif %}"
+           {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=email"{% else %}data-bs-toggle="tab" href="#email" role="tab"{% endif %}
+           data-title="Email" title="Email" aria-label="Email">
+          <i class="material-symbols-outlined" aria-hidden="true">mail</i>
+          <span class="comms-nav-label" aria-hidden="true">Email</span>
+        </a>
+        <a class="comms-nav-link{% if active_tab == 'templates' %} active{% endif %}" href="{% url 'email_template_list' %}"
+           data-title="Manage templates" title="Manage templates" aria-label="Manage templates">
+          <i class="material-symbols-outlined" aria-hidden="true">edit_note</i>
+          <span class="comms-nav-label" aria-hidden="true">Manage templates</span>
+        </a>
+      {% endif %}
+      {% if can_send_sms %}
+        <a class="comms-nav-link {% if active_tab == 'sms' %}active{% endif %}"
+           {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=sms"{% else %}data-bs-toggle="tab" href="#sms" role="tab"{% endif %}
+           data-title="SMS" title="SMS" aria-label="SMS">
+          <i class="material-symbols-outlined" aria-hidden="true">sms</i>
+          <span class="comms-nav-label" aria-hidden="true">SMS</span>
+        </a>
+      {% endif %}
+      {% if can_send_docusign %}
+        <a class="comms-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
+           {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=docusign"{% else %}data-bs-toggle="tab" href="#docusign" role="tab"{% endif %}
+           data-title="DocuSign" title="DocuSign" aria-label="DocuSign">
+          <i class="material-symbols-outlined" aria-hidden="true">draw</i>
+          <span class="comms-nav-label" aria-hidden="true">DocuSign</span>
+        </a>
+      {% endif %}
+      {% if can_send_whatsapp %}
+        <a class="comms-nav-link {% if active_tab == 'whatsapp' %}active{% endif %}"
+           {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=whatsapp"{% else %}data-bs-toggle="tab" href="#whatsapp" role="tab"{% endif %}
+           data-title="WhatsApp" title="WhatsApp" aria-label="WhatsApp">
+          <i class="material-symbols-outlined" aria-hidden="true">chat</i>
+          <span class="comms-nav-label" aria-hidden="true">WhatsApp</span>
+        </a>
+      {% endif %}
+      {% if can_view_email_logs %}
+        <a class="comms-nav-link {% if active_tab == 'email_log' %}active{% endif %}"
+          {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=email_log"{% else %}data-bs-toggle="tab" href="#email_log" role="tab"{% endif %}
+          data-title="Email logs" title="Email logs" aria-label="Email logs">
+          <i class="material-symbols-outlined" aria-hidden="true">history</i>
+          <span class="comms-nav-label" aria-hidden="true">Email logs</span>
+        </a>
+      {% endif %}
+      {% if can_view_sms_logs %}
+          <a class="comms-nav-link {% if active_tab == 'sms_link_log' %}active{% endif %}"
+            {% if comms_nav_mode == "page" %}href="{% url 'comms' %}?tab=sms_link_log"{% else %}data-bs-toggle="tab" href="#sms_link_log" role="tab"{% endif %}
+            data-title="SMS link logs" title="SMS link logs" aria-label="SMS link logs">
+            <i class="material-symbols-outlined" aria-hidden="true">link</i>
+            <span class="comms-nav-label" aria-hidden="true">SMS link logs</span>
+          </a>
+          {% endif %}
+    </div>
+
+    <!-- ===== Content ===== -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var links = document.querySelectorAll(
+    "#commsNav .comms-nav-link[data-title], #commsNavMobile .comms-nav-link[data-title]"
+  );
+  if (!links.length) return;
+
+  // Hover tooltips only where a pointer can hover. On touch, a title
+  // attribute can swallow the first tap, so those links keep aria-label only.
+  var finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var Tooltip = window.bootstrap && window.bootstrap.Tooltip;
+
+  links.forEach(function (el) {
+    var label = (el.getAttribute("data-title") || "").trim();
+    if (!label) return;
+    if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", label);
+
+    if (!finePointer) {
+      el.removeAttribute("title");
+      return;
+    }
+    if (typeof Tooltip !== "function") {
+      if (!el.getAttribute("title")) el.setAttribute("title", label);
+      return;
+    }
+    if (Tooltip.getInstance(el)) return;
+
+    var tip = new Tooltip(el, {
+      title: label,
+      placement: el.closest("#commsNav") ? "right" : "bottom",
+      trigger: "manual",
+      container: "body",
+      customClass: "comms-nav-tooltip",
+      fallbackPlacements: ["right", "bottom", "top", "left"]
+    });
+    el.addEventListener("mouseenter", function () { tip.show(); });
+    el.addEventListener("mouseleave", function () { tip.hide(); });
+    el.addEventListener("focus", function () {
+      if (el.matches(":focus-visible")) tip.show();
+    });
+    el.addEventListener("blur", function () { tip.hide(); });
+    el.addEventListener("click", function () { tip.hide(); });
+  });
+});
+</script>

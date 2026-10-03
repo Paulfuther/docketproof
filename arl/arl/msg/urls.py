@@ -6,6 +6,10 @@ from arl.msg.views import (EmailEventList, FetchTwilioCallsView,
                            compliance_file_view, delete_draft_email,
                            edit_draft_email, email_event_summary_view,
                            email_log_view, employee_email_report_view,
+                           email_template_assets, email_template_create,
+                           email_template_delete, email_template_edit,
+                           email_template_image_proxy, email_template_list,
+                           email_template_preview,
                            fetch_shortlink_sms_data, fetch_sms_data,
                            fetch_twilio_data, generate_ai_content,
                            get_group_emails, get_task_status,
@@ -85,6 +89,39 @@ urlpatterns = [
     path("comms/draft/<int:draft_id>/", edit_draft_email, name="edit_draft_email"),
     path("comms/draft/<int:draft_id>/delete/", delete_draft_email, name="delete_draft_email"),
     path("comms/save-draft/", save_draft_ajax, name="save_draft_ajax"),
+
+
+    # ---------------------------------------------------
+    # IN-APP EMAIL TEMPLATES
+    # ---------------------------------------------------
+
+    path("comms/templates/", email_template_list, name="email_template_list"),
+    path("comms/templates/new/", email_template_create, name="email_template_create"),
+    path(
+        "comms/templates/<int:pk>/edit/",
+        email_template_edit,
+        name="email_template_edit",
+    ),
+    path(
+        "comms/templates/<int:pk>/delete/",
+        email_template_delete,
+        name="email_template_delete",
+    ),
+    path(
+        "comms/templates/<int:pk>/preview/",
+        email_template_preview,
+        name="email_template_preview",
+    ),
+    path(
+        "comms/templates/<int:pk>/assets/",
+        email_template_assets,
+        name="email_template_assets",
+    ),
+    path(
+        "comms/templates/image-proxy/",
+        email_template_image_proxy,
+        name="email_template_image_proxy",
+    ),
 
 
     # ---------------------------------------------------

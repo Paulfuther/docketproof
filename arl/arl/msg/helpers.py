@@ -13,14 +13,19 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Asm,
     Attachment,
+    ClickTracking,
+    Content,
     ContentId,
+    CustomArg,
     Disposition,
     FileContent,
     FileName,
     FileType,
     Mail,
+    OpenTracking,
     Personalization,
     To,
+    TrackingSettings,
 )
 from twilio.base.exceptions import TwilioException
 from twilio.rest import Client
@@ -80,7 +85,13 @@ def create_tobacco_email(to_email, name):
 # And the onbording of a new hire.
 # This will be the master function going forward.
 def create_master_email(
-    to_email, sendgrid_id, template_data, attachments=None, verified_sender=None
+    to_email,
+    sendgrid_id,
+    template_data,
+    attachments=None,
+    verified_sender=None,
+    custom_args=None,
+    html_content=None,
 ):
     try:
         unsubscribe_group_id = 24753
@@ -126,7 +137,21 @@ def create_master_email(
         )
 
         logger.info(f"📜 Email Template Data: {template_data}")
-        message.template_id = sendgrid_id
+        # In-app HTML is sent as content; SendGrid is transport only.
+        # Legacy dynamic templates still use template_id.
+        if html_content:
+            if template_data.get("subject"):
+                message.subject = template_data["subject"]
+            message.add_content(Content("text/html", html_content))
+            # Dynamic templates inherit account/template click tracking.
+            # Raw HTML does not, so enable it here so in-app audit/engagement
+            # events still reach the webhook.
+            tracking = TrackingSettings()
+            tracking.click_tracking = ClickTracking(enable=True, enable_text=False)
+            tracking.open_tracking = OpenTracking(enable=True)
+            message.tracking_settings = tracking
+        elif sendgrid_id:
+            message.template_id = sendgrid_id
         asm = Asm(
             group_id=unsubscribe_group_id,
         )
@@ -136,10 +161,26 @@ def create_master_email(
         personalization = Personalization()
         for email in to_email:
             personalization.add_to(To(email))
-        personalization.dynamic_template_data = template_data
+        if not html_content:
+            personalization.dynamic_template_data = template_data
 
-        if "subject" in template_data:
+        if template_data.get("subject"):
             personalization.subject = template_data["subject"]
+
+        # Unique args so Event Webhook payloads include the resolved subject
+        # (SendGrid does not always send a native `subject` field for templates).
+        if custom_args:
+            for key, value in custom_args.items():
+                if value is None:
+                    continue
+                arg = CustomArg(str(key), str(value))
+                personalization.add_custom_arg(arg)
+                # Mail-level copy so Event Webhook still sees args when
+                # SendGrid drops personalization unique_args on html_content.
+                try:
+                    message.add_custom_arg(CustomArg(str(key), str(value)))
+                except Exception:
+                    pass
 
         message.add_personalization(personalization)
 
@@ -304,6 +345,48 @@ def send_linkshortened_sms(
         return f"❌ Error sending SMS: {str(e)}"
 
 
+# Same opt-out line the compliance SMS templates already append.
+SMS_OPT_OUT_FOOTER = "Reply STOP to opt out."
+
+
+def with_sms_opt_out(body):
+    """Append the opt-out line when it is not already in the message.
+
+    Compliance templates already end with SMS_OPT_OUT_FOOTER. Compose uses
+    the same line so the preview matches what the recipient receives.
+    An empty body is left empty. A message that already contains the line
+    is not given a second copy.
+    """
+    text = (body or "").strip()
+    if not text:
+        return ""
+    if SMS_OPT_OUT_FOOTER.casefold() in text.casefold():
+        return text
+    return f"{text}\n{SMS_OPT_OUT_FOOTER}"
+
+
+def sms_compose_greeting(employer):
+    """Opening line for Communications SMS.
+
+    Uses the same employer tokens as in-app email: senior_contact_name and
+    company name (employer.name). A blank senior contact becomes
+    "your contact"; a blank company becomes "our company".
+    """
+    senior = (getattr(employer, "senior_contact_name", None) or "").strip()
+    company = (getattr(employer, "name", None) or "").strip()
+    senior = senior or "your contact"
+    company = company or "our company"
+    return f"Hello, this is {senior} from {company}."
+
+
+def compose_outbound_sms(body, employer=None):
+    """Greeting, the user's typed body, then the STOP opt-out line."""
+    greeting = sms_compose_greeting(employer)
+    text = (body or "").strip()
+    combined = f"{greeting}\n{text}" if text else greeting
+    return with_sms_opt_out(combined)
+
+
 # This function function is APPROVED for multip tenant.
 # It gets its arguments from the task
 def send_bulk_sms(
@@ -339,6 +422,9 @@ def send_bulk_sms(
         ]
 
         print("=====> To Bindings :>", bindings, "<: =====")
+
+        # Every bulk/compose SMS includes the opt-out line, even if a caller skipped it.
+        body = with_sms_opt_out(body)
 
         # ✅ Use the employer's Twilio Account SID & Auth Token
         client = Client(twilio_account_sid, twilio_auth_token)
@@ -865,18 +951,12 @@ def collect_attachments(request, max_files=5):
 
 def prepare_recipient_data(user, selected_group, selected_users):
     recipients = []
-    employer = user.employer
 
-    # ✅ Handle single group (not a loop)
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        for u in selected_group.user_set.filter(is_active=True, employer=employer):
-            recipients.append(
-                {
-                    "name": u.get_full_name(),
-                    "email": u.email,
-                    "status": "Active",
-                }
-            )
+        logger.info(
+            "Ignoring group selection on email send; only individual users are sent."
+        )
 
     if selected_users:
         for u in selected_users.order_by("first_name", "last_name"):
@@ -907,15 +987,11 @@ def prepare_sms_recipient_data(user, selected_group, selected_users):
     # We'll keep a map of user_id -> user instance so we can log names later
     user_map = {}
 
-    # 🔹 Collect recipients from selected group
+    # Group sends are disabled. A posted group must not add recipients.
     if selected_group:
-        qs = selected_group.user_set.filter(is_active=True, employer=employer)
-        for u in qs:
-            user_map[u.id] = u
-            if not u.phone_number:
-                skipped_no_phone.append(u)
-                continue
-            recipients.append({"id": u.id, "phone": u.phone_number})
+        logger.info(
+            "Ignoring group selection on SMS send; only individual users are sent."
+        )
 
     # 🔹 Collect individually selected users
     if selected_users:
@@ -1056,7 +1132,7 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
     draft.subject = cleaned_data.get("subject", "")
     draft.message = cleaned_data.get("message", "")
     draft.sendgrid_template = cleaned_data.get("sendgrid_id")
-    draft.selected_group = cleaned_data.get("selected_group")
+    draft.selected_group = None
     draft.attachment_urls = attachment_urls
     draft.save()
 
@@ -1065,13 +1141,23 @@ def save_email_draft(user, cleaned_data, attachment_urls, draft_id=None):
 
 
 def send_quick_email(user, recipients, subject, message, attachment_urls):
+    from arl.msg.email_utils import (
+        COMPOSE_TEMPLATE_NAME,
+        EMAIL_SOURCE_COMPOSE,
+        get_generic_sendgrid_template_id,
+        resolve_email_subject,
+    )
     from .tasks import master_email_send_task
 
     master_email_send_task.delay(
         recipients=recipients,
-        sendgrid_id="d-4ac0497efd864e29b4471754a9c836eb",  # Fallback SendGrid ID
+        sendgrid_id=get_generic_sendgrid_template_id(),
         employer_id=user.employer.id,
         body=message,
-        subject=subject,
+        subject=resolve_email_subject(
+            subject=subject, employer=getattr(user, "employer", None)
+        ),
         attachment_urls=attachment_urls,
+        template_name=COMPOSE_TEMPLATE_NAME,
+        source=EMAIL_SOURCE_COMPOSE,
     )

@@ -5,9 +5,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import models
 from django.db.models import CharField, IntegerField, Value
-from django.forms import RadioSelect
 from django.forms.widgets import Select
 
+from arl.msg.helpers import sms_compose_greeting
 from arl.msg.models import EmailTemplate, WhatsAppTemplate
 from arl.user.models import CustomUser, Store
 
@@ -27,13 +27,6 @@ class SMSForm(forms.Form):
         help_text="",
     )
 
-    selected_group = forms.ModelChoiceField(
-        queryset=Group.objects.none(),  # Set dynamically in __init__
-        required=False,
-        label="Select Group to Send SMS",
-        widget=RadioSelect,
-    )
-
     selected_users = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -43,16 +36,13 @@ class SMSForm(forms.Form):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        employer = getattr(user, "employer", None) if user else None
+        self.preview_greeting = sms_compose_greeting(employer)
 
         if user and user.employer:
             employer = user.employer
 
-            # ✅ Populate groups for this employer
-            self.fields["selected_group"].queryset = Group.objects.filter(
-                user__employer=employer
-            ).distinct()
-
-            # ✅ Populate users for this employer
+            # Individual recipients only. Group sends are disabled.
             self.fields["selected_users"].queryset = CustomUser.objects.filter(
                 employer=employer, is_active=True
             ).order_by("first_name", "last_name")
@@ -253,6 +243,131 @@ class StoreTargetForm(forms.ModelForm):
         self.fields["number"].label = "Store Number"
 
 
+class EmailTemplateForm(forms.ModelForm):
+    class Meta:
+        model = EmailTemplate
+        fields = [
+            "name",
+            "subject",
+            "header_image_url",
+            "header_source_url",
+            "header_display_width",
+            "header_space_below",
+            "html_body",
+            "include_in_report",
+        ]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Template name"}
+            ),
+            "subject": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. Welcome to {{company_name}}",
+                }
+            ),
+            "header_image_url": forms.HiddenInput(),
+            "header_source_url": forms.HiddenInput(),
+            "header_display_width": forms.Select(attrs={"class": "form-select"}),
+            "header_space_below": forms.Select(attrs={"class": "form-select"}),
+            "html_body": forms.Textarea(
+                attrs={
+                    "class": "form-control font-monospace",
+                    "rows": 10,
+                    "placeholder": "<p>Hello {{name}}</p>",
+                }
+            ),
+            "include_in_report": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+        }
+        labels = {
+            "include_in_report": "Include in compliance audit",
+            "header_display_width": "Header size",
+            "header_space_below": "Space under header",
+            "html_body": "HTML",
+        }
+        help_texts = {
+            "name": "Shown in the Communications template picker.",
+            "subject": "Supports merge fields: {{name}}, {{company_name}}, {{senior_contact_name}}.",
+            "header_image_url": "Optional. Uploaded to Linode and shown at the top of the email.",
+            "header_source_url": "Original photo used only to reframe the header. Not shown in the email.",
+            "header_display_width": "How wide the top picture looks.",
+            "header_space_below": "How much empty room sits between the top picture and your words.",
+            "html_body": "Raw email HTML. Most people can leave this closed.",
+            "include_in_report": "Include click/open/engagement for this template in the employee email report. One-off compose messages are not included.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from arl.msg.email_utils import (
+            EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+            EMAIL_HEADER_SPACE_DEFAULT,
+        )
+
+        self.fields["header_display_width"].required = False
+        self.fields["header_display_width"].initial = EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT
+        self.fields["header_space_below"].required = False
+        self.fields["header_space_below"].initial = EMAIL_HEADER_SPACE_DEFAULT
+        for name in (
+            "name",
+            "subject",
+            "header_display_width",
+            "header_space_below",
+            "include_in_report",
+            "html_body",
+        ):
+            self.fields[name].help_text = ""
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError("Name is required.")
+        return name
+
+    def clean_subject(self):
+        subject = (self.cleaned_data.get("subject") or "").strip()
+        if not subject:
+            raise forms.ValidationError("Subject is required.")
+        return subject
+
+    def clean_html_body(self):
+        html_body = (self.cleaned_data.get("html_body") or "").strip()
+        if not html_body:
+            raise forms.ValidationError("HTML body is required.")
+        return html_body
+
+    def clean_header_image_url(self):
+        return (self.cleaned_data.get("header_image_url") or "").strip()
+
+    def clean_header_source_url(self):
+        return (self.cleaned_data.get("header_source_url") or "").strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        header = (cleaned.get("header_image_url") or "").strip()
+        source = (cleaned.get("header_source_url") or "").strip()
+        if not header:
+            cleaned["header_source_url"] = ""
+        elif not source and getattr(self.instance, "pk", None):
+            cleaned["header_source_url"] = (
+                getattr(self.instance, "header_source_url", None) or ""
+            ).strip()
+        return cleaned
+
+    def clean_header_display_width(self):
+        from arl.msg.email_utils import resolve_header_display_width
+
+        return resolve_header_display_width(
+            self.cleaned_data.get("header_display_width")
+        )
+
+    def clean_header_space_below(self):
+        from arl.msg.email_utils import resolve_header_space_below
+
+        return resolve_header_space_below(self.cleaned_data.get("header_space_below"))
+
+
 class EmailForm(forms.Form):
     MODE_CHOICES = [
         ("text", "Write Custom Message"),
@@ -271,7 +386,12 @@ class EmailForm(forms.Form):
         max_length=255,
         required=False,
         label="Email Subject",
-        widget=forms.TextInput(attrs={"placeholder": "Enter a subject..."}),
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "Enter a subject...",
+                "class": "form-control",
+            }
+        ),
     )
 
     message = forms.CharField(
@@ -287,13 +407,6 @@ class EmailForm(forms.Form):
         widget=forms.RadioSelect,
         required=False,
         label="Select Template",
-    )
-
-    selected_group = forms.ModelChoiceField(
-        queryset=Group.objects.none(),
-        widget=forms.RadioSelect,
-        required=False,
-        label="Select Group",
     )
 
     selected_users = forms.ModelMultipleChoiceField(
@@ -313,7 +426,6 @@ class EmailForm(forms.Form):
             self.fields["subject"].required = False
             self.fields["message"].required = False
             self.fields["sendgrid_id"].required = False
-            self.fields["selected_group"].required = False
             self.fields["selected_users"].required = False
 
         if user and hasattr(user, "employer"):
@@ -326,11 +438,8 @@ class EmailForm(forms.Form):
                 .distinct()
                 .order_by("name")
             )
-
-            self.fields["selected_group"].queryset = (
-                Group.objects.filter(user__employer=employer)
-                .distinct()
-                .order_by("name")
+            self.fields["sendgrid_id"].label_from_instance = lambda t: (
+                t.name or f"Template {t.pk}"
             )
 
             self.fields["selected_users"].queryset = User.objects.filter(
@@ -365,24 +474,18 @@ class EmailForm(forms.Form):
         message = cleaned_data.get("message")
         sendgrid_id = cleaned_data.get("sendgrid_id")
 
-        selected_group = cleaned_data.get("selected_group")
         selected_users = cleaned_data.get("selected_users")
 
-        # Validate group/user selection
-        if not selected_group and not selected_users:
-            raise forms.ValidationError(
-                "You must select either a group or at least one user."
-            )
-        if selected_group and selected_users:
-            raise forms.ValidationError(
-                "You cannot select both a group and individual users."
-            )
+        if not selected_users:
+            raise forms.ValidationError("You must select at least one user.")
 
         # Validate mode-based inputs
         if mode == "text":
+            subject = (subject or "").strip()
+            cleaned_data["subject"] = subject
             if not subject or not message:
                 raise forms.ValidationError(
-                    "Subject and message are required for text mode."
+                    "Subject and message are required for compose (one-off) emails."
                 )
         elif mode == "template":
             if not sendgrid_id:
