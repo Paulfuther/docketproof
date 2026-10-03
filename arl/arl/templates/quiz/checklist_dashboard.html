@@ -7,8 +7,8 @@
 {{ form|as_crispy_errors }}
 
 
-<div class="container{% if user.is_authenticated and user.is_employee_account %} employee-page{% endif %}">
-{% if user.is_authenticated and user.is_employee_account %}
+<div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
+{% if shows_gsa_chrome %}
     <div class="pt-5 mt-4 mb-3">
         <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
         <h1 class="h4 mt-2 mb-1">Checklist Dashboard</h1>
@@ -213,7 +213,7 @@
 </div>
   </div>
 
-{% if not user.is_authenticated or not user.is_employee_account %}
+{% if not shows_gsa_chrome %}
 </div>
 </div>
 {% endif %}

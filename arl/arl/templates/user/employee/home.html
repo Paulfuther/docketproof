@@ -6,15 +6,8 @@
 
 <div class="container employee-page">
   <div class="pt-5 mt-4 mb-3">
-    <h1 class="h4 mb-1">Hello {{ user.first_name|default:user.username }}</h1>
-    <p class="text-muted mb-3">Signed documents are listed below. Open an unsigned document to finish it.</p>
-    <div class="employee-section-links">
-      <a class="btn btn-outline-primary btn-sm" href="{% url 'employee_home' %}">Documents</a>
-      <a class="btn btn-outline-primary btn-sm" href="{% url 'checklist_dashboard' %}">Checklists</a>
-      <a class="btn btn-outline-primary btn-sm" href="{% url 'employee_immigration_upload' %}">Immigration upload</a>
-      <a class="btn btn-outline-primary btn-sm" href="{% url 'create_salt_log' %}">Salt log</a>
-      <a class="btn btn-outline-primary btn-sm" href="{% url 'incident_dashboard' %}">Incident report</a>
-    </div>
+    <h1 class="h4 mb-1">Hello {{ document_owner.first_name|default:document_owner.username }}</h1>
+    <p class="text-muted mb-0">Signed documents are listed below. Open an unsigned document to finish it.</p>
   </div>
 
   {% if messages %}
@@ -67,16 +60,6 @@
 
 <style>
   .employee-page { max-width: 860px; }
-  .employee-section-links {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    gap: 0.5rem;
-  }
-  .employee-section-links .btn {
-    width: 100%;
-    text-align: center;
-    white-space: nowrap;
-  }
   .employee-doc-pill {
     display: inline-flex;
     align-items: center;

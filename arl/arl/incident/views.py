@@ -21,7 +21,11 @@ from django.views.generic.edit import CreateView, UpdateView
 from PIL import Image
 
 from arl.helpers import get_s3_images_for_incident, upload_to_linode_object_storage
-from arl.user.gsa_access import GSAOrPermissionRequiredMixin, post_form_success_url
+from arl.user.gsa_access import (
+    GSAOrPermissionRequiredMixin,
+    gsa_preview_blocks_mutation,
+    post_form_success_url,
+)
 
 from .forms import IncidentForm, MajorIncidentForm
 from .models import Incident, MajorIncident
@@ -58,7 +62,7 @@ class IncidentCreateView(
     success_url = reverse_lazy("home")
 
     def get_success_url(self):
-        return str(post_form_success_url(self.request.user))
+        return str(post_form_success_url(self.request.user, self.request))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -373,6 +377,9 @@ def incident_dashboard(request):
     form = IncidentForm(request.POST or None, request.FILES or None, user=user)
 
     if request.method == "POST":
+        blocked = gsa_preview_blocks_mutation(request)
+        if blocked:
+            return blocked
         if form.is_valid():
             form.instance.user_employer = user.employer
             form_data = form.cleaned_data

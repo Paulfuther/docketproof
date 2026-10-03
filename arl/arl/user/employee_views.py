@@ -15,6 +15,12 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods, require_POST
 
+from arl.user.gsa_access import (
+    gsa_actor,
+    gsa_preview_blocks_mutation,
+    is_gsa_preview_active,
+    shows_gsa_chrome,
+)
 from arl.documentflow.constants import IMMIGRATION_STATUS_CHOICES
 from arl.documentflow.models import SentDocuSignEnvelope
 from arl.documentflow.services import get_step_pill_class, get_step_pill_label
@@ -129,9 +135,34 @@ def _envelope_for_actor(user, envelope_id):
 
 
 def _redirect_unless_gsa(request):
-    if getattr(request.user, "is_employee_account", False):
+    if shows_gsa_chrome(request):
         return None
     return redirect("home")
+
+
+def _employee_documents_context(request, actor):
+    signed_documents = SignedDocumentFile.objects.none()
+    unsigned_envelopes = SentDocuSignEnvelope.objects.none()
+    if actor.employer_id:
+        signed_documents = SignedDocumentFile.objects.filter(
+            user=actor,
+            employer=actor.employer,
+            is_company_document=False,
+        ).order_by("-uploaded_at", "-id")
+        unsigned_envelopes = _unsigned_queryset(actor)
+    signed_page = Paginator(signed_documents, DOCUMENT_PAGE_SIZE).get_page(
+        request.GET.get("signed")
+    )
+    unsigned_page = Paginator(unsigned_envelopes, DOCUMENT_PAGE_SIZE).get_page(
+        request.GET.get("unsigned")
+    )
+    unsigned_pills = [_pill_for_envelope(envelope) for envelope in unsigned_page]
+    return {
+        "signed_page": signed_page,
+        "unsigned_page": unsigned_page,
+        "unsigned_pills": unsigned_pills,
+        "document_owner": actor,
+    }
 
 
 def _refresh_after_embedded_signing(request):
@@ -172,32 +203,15 @@ def employee_home(request):
     denied = _redirect_unless_gsa(request)
     if denied:
         return denied
-    _refresh_after_embedded_signing(request)
-    user = request.user
-    signed_documents = SignedDocumentFile.objects.none()
-    unsigned_envelopes = SentDocuSignEnvelope.objects.none()
-    if user.employer_id:
-        signed_documents = SignedDocumentFile.objects.filter(
-            user=user,
-            employer=user.employer,
-            is_company_document=False,
-        ).order_by("-uploaded_at", "-id")
-        unsigned_envelopes = _unsigned_queryset(user)
-    signed_page = Paginator(signed_documents, DOCUMENT_PAGE_SIZE).get_page(
-        request.GET.get("signed")
-    )
-    unsigned_page = Paginator(unsigned_envelopes, DOCUMENT_PAGE_SIZE).get_page(
-        request.GET.get("unsigned")
-    )
-    unsigned_pills = [_pill_for_envelope(envelope) for envelope in unsigned_page]
+    actor = gsa_actor(request)
+    if actor is None:
+        return redirect("home")
+    if not is_gsa_preview_active(request):
+        _refresh_after_embedded_signing(request)
     return render(
         request,
         "user/employee/home.html",
-        {
-            "signed_page": signed_page,
-            "unsigned_page": unsigned_page,
-            "unsigned_pills": unsigned_pills,
-        },
+        _employee_documents_context(request, actor),
     )
 
 
@@ -206,7 +220,8 @@ def employee_unsigned_document(request, envelope_id):
     denied = _redirect_unless_gsa(request)
     if denied:
         return denied
-    envelope = _envelope_for_actor(request.user, envelope_id)
+    actor = gsa_actor(request) or request.user
+    envelope = _envelope_for_actor(actor, envelope_id)
     if envelope is None:
         return HttpResponseForbidden("You cannot open this document.")
     status = (envelope.status or "").lower()
@@ -228,7 +243,11 @@ def employee_open_unsigned_document(request, envelope_id):
     denied = _redirect_unless_gsa(request)
     if denied:
         return denied
-    envelope = _envelope_for_actor(request.user, envelope_id)
+    blocked = gsa_preview_blocks_mutation(request)
+    if blocked:
+        return blocked
+    actor = gsa_actor(request) or request.user
+    envelope = _envelope_for_actor(actor, envelope_id)
     if envelope is None:
         return HttpResponseForbidden("You cannot open this document.")
     try:
@@ -238,7 +257,7 @@ def employee_open_unsigned_document(request, envelope_id):
             f"{reverse('employee_home')}?{urlencode({'envelope': envelope.pk})}"
         )
         signing_url = get_recipient_view_url(
-            user=request.user,
+            user=actor,
             envelope_id=envelope.envelope_id,
             return_url=return_url,
         )
@@ -279,7 +298,12 @@ def employee_immigration_upload(request):
     denied = _redirect_unless_gsa(request)
     if denied:
         return denied
-    user = request.user
+    actor = gsa_actor(request) or request.user
+    if request.method == "POST":
+        blocked = gsa_preview_blocks_mutation(request)
+        if blocked:
+            return blocked
+    user = actor
     if not user.employer_id:
         messages.error(request, "Your account is not linked to an employer yet.")
         return redirect("employee_home")

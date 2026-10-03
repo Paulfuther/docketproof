@@ -329,6 +329,7 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertContains(home, reverse("employee_immigration_upload"))
         self.assertContains(home, reverse("create_salt_log"))
         self.assertContains(home, reverse("incident_dashboard"))
+        self.assertNotContains(home, "employee-section-links")
 
         opened = self.client.get(
             reverse("employee_unsigned_document", args=[own.id])
@@ -947,3 +948,123 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.client.force_login(self.employee)
         response = self.client.get(reverse("salt_log_update", args=[log.pk]))
         self.assertEqual(response.status_code, 404)
+
+
+class GsaPreviewTests(EmployeeTestCase):
+    def setUp(self):
+        super().setUp()
+        SignedDocumentFile.objects.create(
+            user=self.employee,
+            employer=self.employer,
+            envelope_id="preview-signed",
+            file_name="offer.pdf",
+            file_path="DOCUMENTS/acme/offer.pdf",
+            document_title="Ada signed offer",
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template_name="Ada handbook",
+            envelope_id="env-preview",
+            status="sent",
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.coworker,
+            template_name="Ben handbook",
+            envelope_id="env-ben",
+            status="sent",
+        )
+
+    def test_staff_can_open_gsa_picker(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("gsa_preview_select"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "View as GSA")
+        self.assertContains(response, "Ada Lovelace")
+        self.assertContains(response, "Ben Wright")
+
+    def test_non_staff_cannot_open_gsa_picker(self):
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("gsa_preview_select"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+    def test_staff_preview_shows_selected_gsa_documents_and_nav(self):
+        self.client.force_login(self.staff)
+        started = self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        self.assertRedirects(started, reverse("employee_home"))
+        self.assertTrue(self.staff.is_employee_account is False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.staff.id)
+
+        home = self.client.get(reverse("employee_home"))
+        self.assertEqual(home.status_code, 200)
+        self.assertContains(home, "Ada signed offer")
+        self.assertContains(home, "Ada handbook")
+        self.assertNotContains(home, "Ben handbook")
+        self.assertContains(home, "GSA preview, read-only")
+        self.assertContains(home, "nav-link employee-section")
+        self.assertContains(home, "Salt log")
+        self.assertContains(home, "Incident report")
+        self.assertNotContains(home, "employee-section-links")
+
+    def test_staff_preview_is_read_only(self):
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        own = SentDocuSignEnvelope.objects.get(template_name="Ada handbook")
+        view = self.client.get(reverse("employee_unsigned_document", args=[own.id]))
+        self.assertEqual(view.status_code, 200)
+        self.assertContains(view, "Ada handbook")
+        sign = self.client.post(
+            reverse("employee_open_unsigned_document", args=[own.id])
+        )
+        self.assertRedirects(sign, reverse("employee_home"))
+
+        immigration = self.client.post(
+            reverse("employee_immigration_upload"),
+            {
+                "document_title": "Permit",
+                "immigration_status_type": "work_permit_extension",
+                "file": SimpleUploadedFile(
+                    "permit.pdf", b"%PDF-1.4", content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertRedirects(immigration, reverse("employee_home"))
+        self.assertFalse(ImmigrationStatusEvent.objects.exists())
+
+    def test_staff_preview_exit_returns_to_home(self):
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        ended = self.client.get(reverse("gsa_preview_exit"))
+        self.assertRedirects(ended, reverse("home"))
+        blocked = self.client.get(reverse("employee_home"))
+        self.assertRedirects(blocked, reverse("home"))
+
+    def test_staff_cannot_preview_gsa_from_another_company(self):
+        other_gsa = self._user(
+            "zoe",
+            "Zoe",
+            "Other",
+            "+14161234599",
+            self.other_employer,
+        )
+        other_gsa.groups.add(Group.objects.get(name="GSA"))
+        self.client.force_login(self.staff)
+        denied = self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": other_gsa.id},
+        )
+        self.assertEqual(denied.status_code, 200)
+        self.assertContains(denied, "not available for preview")
+        blocked = self.client.get(reverse("employee_home"))
+        self.assertRedirects(blocked, reverse("home"))

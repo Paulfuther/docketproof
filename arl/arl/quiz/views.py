@@ -40,7 +40,11 @@ from .forms import (
     TemplateItemFormSet,
 )
 from .models import Checklist, ChecklistItem, ChecklistTemplate, Quiz, SaltLog
-from arl.user.gsa_access import is_gsa_account, post_form_success_url
+from arl.user.gsa_access import (
+    gsa_preview_blocks_mutation,
+    is_gsa_account,
+    post_form_success_url,
+)
 
 from .tasks import (
     generate_checklist_pdf_task,
@@ -153,7 +157,7 @@ class SaltLogCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy("home")
 
     def get_success_url(self):
-        return str(post_form_success_url(self.request.user))
+        return str(post_form_success_url(self.request.user, self.request))
 
     def dispatch(self, request, *args, **kwargs):
         print("Dispatch method called.")
@@ -171,6 +175,9 @@ class SaltLogCreateView(LoginRequiredMixin, CreateView):
         return self.render_to_response({"form": form})
 
     def form_valid(self, form):
+        blocked = gsa_preview_blocks_mutation(self.request)
+        if blocked:
+            return blocked
         # Set the user and user_employer fields for the form instance
         form.instance.user = self.request.user
         form.instance.user_employer = self.request.user.employer
@@ -339,7 +346,7 @@ class SaltLogUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self):
         if is_gsa_account(self.request.user):
-            return str(post_form_success_url(self.request.user))
+            return str(post_form_success_url(self.request.user, self.request))
         return str(self.success_url)
 
     def dispatch(self, request, *args, **kwargs):

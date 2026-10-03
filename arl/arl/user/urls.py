@@ -7,6 +7,7 @@ from .employee_views import (
     employee_open_unsigned_document,
     employee_unsigned_document,
 )
+from .gsa_preview_views import gsa_preview_exit, gsa_preview_select
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -69,6 +70,8 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("home/", home_view, name="home"),
+    path("staff/gsa-preview/", gsa_preview_select, name="gsa_preview_select"),
+    path("staff/gsa-preview/exit/", gsa_preview_exit, name="gsa_preview_exit"),
     path("employee/", employee_home, name="employee_home"),
     path(
         "employee/documents/unsigned/<int:envelope_id>/",

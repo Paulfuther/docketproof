@@ -22,8 +22,8 @@
     </style>
 </head>
 
-<div class="container{% if user.is_authenticated and user.is_employee_account %} employee-page{% endif %}">
-{% if user.is_authenticated and user.is_employee_account %}
+<div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
+{% if shows_gsa_chrome %}
     <div class="pt-5 mt-4 mb-3">
         <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
         <h1 class="h4 mt-2 mb-1">Create site incident report</h1>
@@ -323,13 +323,13 @@
                     <button type="submit" id="submit" class="btn btn-primary ms-2 mt-2" style="margin-bottom: 20px;">Submit</button>
                 </div>
             </form>
-{% if not user.is_authenticated or not user.is_employee_account %}
+{% if not shows_gsa_chrome %}
         </div>
     </div>
 {% endif %}
 </div>
 
-{% if user.is_authenticated and user.is_employee_account %}
+{% if shows_gsa_chrome %}
 <style>
   .employee-page { max-width: 860px; }
 </style>

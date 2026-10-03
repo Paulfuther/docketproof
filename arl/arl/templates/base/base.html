@@ -3,7 +3,7 @@
 <!doctype html>
 <html lang="en">
 
-{% if user.is_authenticated and user.is_employee_account %}
+{% if shows_gsa_chrome %}
 <style>
   /* Reserve scrollbar space so the GSA nav does not shift between pages. */
   html, body { scrollbar-gutter: stable; }
