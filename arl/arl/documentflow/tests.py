@@ -338,3 +338,35 @@ class DocumentAuditTests(TestCase):
         self.assertEqual(address_col["step_name"], "employee address update")
         self.assertEqual(address_col["status"], "delivered")
         self.assertEqual(address_col["label"], "Opened")
+
+    def test_pill_rows_wrap_after_three_documents(self):
+        extra_templates = []
+        for index in range(3):
+            template = DocuSignTemplate.objects.create(
+                employer=self.employer,
+                template_id=f"tpl-extra-{index}",
+                template_name=f"Extra Form {index}",
+                is_ready_to_send=True,
+            )
+            extra_templates.append(template)
+            SentDocuSignEnvelope.objects.create(
+                employer=self.employer,
+                user=self.employee,
+                template=template,
+                template_name=template.template_name,
+                envelope_id=f"env-extra-{index}",
+                status="sent",
+            )
+
+        audit = build_document_audit(self.employer)
+        row = audit["rows"][0]
+
+        self.assertEqual(len(row["steps"]), 5)
+        self.assertEqual(len(row["pill_rows"]), 2)
+        self.assertEqual(len(row["pill_rows"][0]["steps"]), 3)
+        self.assertEqual(len(row["pill_rows"][0]["empty_slots"]), 0)
+        self.assertTrue(row["pill_rows"][0]["show_overall"])
+        self.assertEqual(len(row["pill_rows"][1]["steps"]), 2)
+        self.assertEqual(len(row["pill_rows"][1]["empty_slots"]), 1)
+        self.assertFalse(row["pill_rows"][1]["show_overall"])
+        self.assertEqual(len(audit["document_header_slots"]), 3)
