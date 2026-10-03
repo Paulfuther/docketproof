@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -17,7 +17,11 @@ from arl.documentflow.models import (
     SentDocuSignEnvelope,
     SentDocuSignRecipient,
 )
-from arl.documentflow.services_immigration import build_immigration_audit
+from arl.documentflow.services_immigration import (
+    build_immigration_audit,
+    build_immigration_tracker,
+)
+from arl.user.services import set_user_sin
 from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
 from arl.quiz.models import Checklist, ChecklistTemplate, ChecklistTemplateItem, SaltLog
 from arl.user.models import EmployeeDocument, Employer, Store
@@ -799,6 +803,8 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(follow, "IRCC-42")
         self.assertContains(follow, "Work permit expiration")
         self.assertContains(follow, "March 1, 2027")
+        self.assertContains(follow, "Overall status")
+        self.assertContains(follow, "Authorized")
         self.assertNotContains(follow, "Permit expiry:")
 
     def test_immigration_page_shows_existing_tracker_dates(self):
@@ -826,6 +832,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(response, "Not on file")
 
     def test_immigration_page_marks_soon_expiration_dates(self):
+        set_user_sin(self.employee, "900000001", validate_luhn=True, save=True)
         self.employee.sin_expiration_date = date.today() + timedelta(days=30)
         self.employee.work_permit_expiration_date = date.today() + timedelta(days=45)
         self.employee.save(
@@ -833,10 +840,30 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         )
         self.client.force_login(self.employee)
 
+        tracker = build_immigration_tracker(self.employee)
+        self.assertEqual(tracker["sin_badge"]["label"], "Expiring")
+        self.assertEqual(tracker["permit_badge"]["label"], "Expiring")
+        self.assertEqual(tracker["overall_badge"]["label"], "Expiring soon")
+
         response = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(response, "Overall status")
+        self.assertContains(response, "Expiring soon")
         self.assertContains(response, "Expiring", count=2)
         self.assertContains(response, "btn-immigration-save")
         self.assertNotContains(response, "btn-primary")
+
+    def test_immigration_page_shows_valid_permit_status(self):
+        set_user_sin(self.employee, "900000001", validate_luhn=True, save=True)
+        self.employee.sin_expiration_date = date.today() + timedelta(days=200)
+        self.employee.work_permit_expiration_date = date.today() + timedelta(days=400)
+        self.employee.save(
+            update_fields=["sin_expiration_date", "work_permit_expiration_date"]
+        )
+        self.client.force_login(self.employee)
+
+        response = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(response, "Valid")
+        self.assertContains(response, "Compliant")
 
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
     def test_new_work_permit_clears_the_extension_flag(self, store_file):

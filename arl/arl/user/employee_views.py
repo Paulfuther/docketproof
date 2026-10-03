@@ -27,6 +27,7 @@ from arl.documentflow.models import SentDocuSignEnvelope
 from arl.documentflow.services import get_step_pill_class, get_step_pill_label
 from arl.documentflow.services_immigration import (
     _coerce_date,
+    build_immigration_tracker,
     update_immigration_tracker,
 )
 from arl.dsign.models import SignedDocumentFile
@@ -345,29 +346,10 @@ def employee_open_unsigned_document(request, envelope_id):
     return redirect(signing_url)
 
 
-def _expiring_soon(expiry_date, watch_days=120):
-    if not expiry_date:
-        return False
-    return (expiry_date - timezone.localdate()).days <= watch_days
-
-
 def _immigration_context(user):
-    latest = (
-        user.immigration_status_events.filter(is_active=True)
-        .order_by("-created_at")
-        .first()
-    )
-    sin_expiration = user.sin_expiration_date
-    work_permit_expiration = user.work_permit_expiration_date
     return {
         "status_choices": IMMIGRATION_STATUS_CHOICES,
-        "latest_event": latest,
-        "sin_expiration": sin_expiration,
-        "sin_expiring_soon": _expiring_soon(sin_expiration),
-        "work_permit_expiration": work_permit_expiration,
-        "work_permit_expiring_soon": _expiring_soon(work_permit_expiration),
-        "extension_requested": user.work_permit_extension_requested,
-        "extension_date": user.work_permit_extension_date,
+        **build_immigration_tracker(user),
     }
 
 

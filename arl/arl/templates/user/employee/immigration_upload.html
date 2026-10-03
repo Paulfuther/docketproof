@@ -21,6 +21,13 @@
     <div class="card-body">
       <h2 class="h6 mb-3">Current tracker</h2>
       <dl class="row g-2 mb-0 employee-tracker-details">
+        <dt class="col-sm-5 text-muted">Overall status</dt>
+        <dd class="col-sm-7 mb-0">
+          <span class="imm-status-badge imm-status-badge--{{ overall_badge.tone }}" title="{{ overall_badge.title }}">
+            {{ overall_badge.label }}
+          </span>
+        </dd>
+
         <dt class="col-sm-5 text-muted">Latest status</dt>
         <dd class="col-sm-7 mb-0">
           {% if latest_event %}{{ latest_event.get_status_type_display }}{% else %}Not on file{% endif %}
@@ -40,11 +47,13 @@
         <dd class="col-sm-7 mb-0">
           {% if sin_expiration %}
             {{ sin_expiration|date:"F j, Y" }}
-            {% if sin_expiring_soon %}
-              <span class="imm-expiring-badge">Expiring</span>
-            {% endif %}
           {% else %}
             Not on file
+          {% endif %}
+          {% if sin_badge %}
+            <span class="imm-status-badge imm-status-badge--{{ sin_badge.tone }}" title="{{ sin_badge.title }}">
+              {{ sin_badge.label }}
+            </span>
           {% endif %}
         </dd>
 
@@ -52,11 +61,13 @@
         <dd class="col-sm-7 mb-0">
           {% if work_permit_expiration %}
             {{ work_permit_expiration|date:"F j, Y" }}
-            {% if work_permit_expiring_soon %}
-              <span class="imm-expiring-badge">Expiring</span>
-            {% endif %}
           {% else %}
             Not on file
+          {% endif %}
+          {% if permit_badge %}
+            <span class="imm-status-badge imm-status-badge--{{ permit_badge.tone }}" title="{{ permit_badge.title }}">
+              {{ permit_badge.label }}
+            </span>
           {% endif %}
         </dd>
       </dl>
@@ -116,17 +127,35 @@
 <style>
   .employee-page { max-width: 860px; }
   .employee-tracker-details dt { font-weight: 500; }
-  .imm-expiring-badge {
+  .imm-status-badge {
     display: inline-block;
     margin-left: 0.45rem;
     padding: 0.1rem 0.5rem;
     border-radius: 999px;
-    background: #fef3c7;
-    color: #b45309;
     font-size: 0.72rem;
     font-weight: 600;
     line-height: 1.35;
     vertical-align: middle;
+  }
+  .imm-status-badge--watch {
+    background: #fef3c7;
+    color: #b45309;
+  }
+  .imm-status-badge--ok {
+    background: #d1fae5;
+    color: #047857;
+  }
+  .imm-status-badge--urgent {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  .imm-status-badge--auth {
+    background: #dbeafe;
+    color: #1e3a5f;
+  }
+  .imm-status-badge--muted {
+    background: #f3f4f6;
+    color: #6b7280;
   }
   .btn-immigration-save {
     display: inline-block;

@@ -489,6 +489,137 @@ def _search_audit_employees(employees, search_query):
     return employees
 
 
+def _immigration_row_for_employee(employee):
+    override_types = permit_override_status_types()
+    latest_event = (
+        employee.immigration_status_events.filter(is_active=True)
+        .order_by("-effective_date", "-created_at")
+        .first()
+    )
+    permit_event = (
+        employee.immigration_status_events.filter(
+            is_active=True,
+            status_type__in=override_types,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    immigration_events = (
+        employee.immigration_status_events.filter(is_active=True)
+        .select_related("document_file", "created_by")
+        .order_by("-effective_date", "-created_at")
+    )
+    sin_expiry = employee.sin_expiration_date
+    sin_days = _days_until(sin_expiry)
+    sin_info = _sin_status(employee)
+    permit_expiry = employee.work_permit_expiration_date
+    permit_days = _days_until(permit_expiry)
+    permit_info = _permit_status(
+        employee,
+        sin_info,
+        permit_override=permit_event is not None,
+    )
+    overall = _overall_status(sin_info, permit_info)
+    return {
+        "employee": employee,
+        "sin_masked": employee.masked_sin(),
+        "sin_expiry": sin_expiry,
+        "sin_days": sin_days,
+        "sin_info": sin_info,
+        "permit_expiry": permit_expiry,
+        "permit_days": permit_days,
+        "permit_info": permit_info,
+        "extension_requested": employee.work_permit_extension_requested,
+        "extension_date": employee.work_permit_extension_date,
+        "overall_status": overall,
+        "is_flagged": overall.get("code") != "compliant",
+        "latest_immigration_event": latest_event,
+        "permit_event": permit_event,
+        "immigration_events": immigration_events,
+    }
+
+
+def _employee_sin_badge(sin_info):
+    code = sin_info["code"]
+    if code == "permanent":
+        return None
+    tone_map = {
+        "missing": "urgent",
+        "expired": "urgent",
+        "missing_expiry": "watch",
+        "expiring_soon": "watch",
+        "temporary": "watch",
+    }
+    label_map = {
+        "missing": "Missing SIN",
+        "expired": "Expired",
+        "missing_expiry": "Temporary SIN",
+        "expiring_soon": "Expiring",
+        "temporary": "Temporary SIN",
+    }
+    return {
+        "label": label_map.get(code, sin_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": sin_info["label"],
+    }
+
+
+def _employee_permit_badge(permit_info):
+    code = permit_info["code"]
+    if code == "not_required":
+        return None
+    tone_map = {
+        "extension_pending": "auth",
+        "missing_expiry": "urgent",
+        "expired": "urgent",
+        "expiring_soon": "watch",
+        "valid": "ok",
+    }
+    label_map = {
+        "extension_pending": "Authorized",
+        "missing_expiry": "Missing Permit Expiry",
+        "expired": "Expired",
+        "expiring_soon": "Expiring",
+        "valid": "Valid",
+    }
+    return {
+        "label": label_map.get(code, permit_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": permit_info["label"],
+    }
+
+
+def _employee_overall_badge(overall_status):
+    label, tone = _OVERALL_SCAN.get(
+        overall_status["code"],
+        (overall_status["label"], "muted"),
+    )
+    return {
+        "label": label,
+        "tone": tone,
+        "title": overall_status["label"],
+    }
+
+
+def build_immigration_tracker(user):
+    """GSA tracker summary using the same compliance rules as the HR audit."""
+    row = _immigration_row_for_employee(user)
+    return {
+        "latest_event": row["latest_immigration_event"],
+        "latest_immigration_event": row["latest_immigration_event"],
+        "sin_expiration": user.sin_expiration_date,
+        "work_permit_expiration": user.work_permit_expiration_date,
+        "extension_requested": row["extension_requested"],
+        "extension_date": row["extension_date"],
+        "sin_info": row["sin_info"],
+        "permit_info": row["permit_info"],
+        "overall_status": row["overall_status"],
+        "sin_badge": _employee_sin_badge(row["sin_info"]),
+        "permit_badge": _employee_permit_badge(row["permit_info"]),
+        "overall_badge": _employee_overall_badge(row["overall_status"]),
+    }
+
+
 def build_immigration_audit(employer, search_query="", flagged_only=False, sort=""):
     employees = (
         employer.customuser_set.filter(is_active=True)
@@ -501,63 +632,9 @@ def build_immigration_audit(employer, search_query="", flagged_only=False, sort=
     sort = _normalize_audit_sort(sort)
 
     rows = []
-    override_types = permit_override_status_types()
 
     for employee in employees:
-        latest_event = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .order_by("-effective_date", "-created_at")
-            .first()
-        )
-
-        permit_event = (
-            employee.immigration_status_events
-            .filter(
-                is_active=True,
-                status_type__in=override_types,
-            )
-            .order_by("-created_at")
-            .first()
-        )
-
-        immigration_events = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .select_related("document_file", "created_by")
-            .order_by("-effective_date", "-created_at")
-        )
-        sin_expiry = employee.sin_expiration_date
-        sin_days = _days_until(sin_expiry)
-        sin_info = _sin_status(employee)
-
-        permit_expiry = employee.work_permit_expiration_date
-        permit_days = _days_until(permit_expiry)
-
-        permit_info = _permit_status(
-            employee,
-            sin_info,
-            permit_override=permit_event is not None,
-        )
-        overall = _overall_status(sin_info, permit_info)
-
-        row = {
-            "employee": employee,
-            "sin_masked": employee.masked_sin(),
-            "sin_expiry": sin_expiry,
-            "sin_days": sin_days,
-            "sin_info": sin_info,
-            "permit_expiry": permit_expiry,
-            "permit_days": permit_days,
-            "permit_info": permit_info,
-            "extension_requested": employee.work_permit_extension_requested,
-            "extension_date": employee.work_permit_extension_date,
-            "overall_status": overall,
-            "is_flagged": overall.get("code") != "compliant",
-            "latest_immigration_event": latest_event,
-            "permit_event": permit_event,
-            "immigration_events": immigration_events,
-        }
+        row = _immigration_row_for_employee(employee)
 
         if flagged_only and not row["is_flagged"]:
             continue
