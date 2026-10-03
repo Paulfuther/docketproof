@@ -53,7 +53,7 @@
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <a class="navbar-brand d-flex align-items-center gap-2" href="{% if user.is_authenticated and user.is_employee_account %}{% url 'employee_home' %}{% else %}{% url 'home' %}{% endif %}">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% if user.is_authenticated and user.is_employee_account %}{% url 'employee_home' %}{% elif user.is_authenticated and user.is_hr_account %}{% url 'hr_employee_list' %}{% else %}{% url 'home' %}{% endif %}">
       <span>
         {% if user.is_authenticated and user.employer %}
           <span class=" d-none d-sm-inline">{{ user.employer.name }}</span>
@@ -97,6 +97,13 @@
         </li>
 
         {% elif user.is_authenticated %}
+        {% if user.is_hr_account %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'hr_employee_list' or request.resolver_match.url_name == 'hr_employee_detail' %}active{% endif %}" href="{% url 'hr_employee_list' %}">
+            <i class="material-symbols-outlined">groups</i> Employees
+          </a>
+        </li>
+        {% endif %}
         <!-- HR -->
         <li class="nav-item">
           <a class="nav-link" href="{% url 'hr_dashboard' %}">

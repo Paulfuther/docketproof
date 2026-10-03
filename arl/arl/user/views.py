@@ -456,6 +456,8 @@ EMPLOYEE_SESSION_SECONDS = 60 * 60 * 24 * 14
 def _redirect_after_login(user):
     if getattr(user, "is_employee_account", False):
         return redirect("employee_home")
+    if getattr(user, "is_hr_account", False):
+        return redirect("hr_employee_list")
     return redirect("home")
 
 
@@ -551,6 +553,8 @@ def home_view(request):
         request.user, "is_employee_account", False
     ):
         return redirect("employee_home")
+    if request.user.is_authenticated and getattr(request.user, "is_hr_account", False):
+        return redirect("hr_employee_list")
     return render(request, "user/home.html")
 
 
@@ -1274,7 +1278,7 @@ def hr_document_view(request):
 
 
 def user_can_download_signed_document(user, doc):
-    """Owner, or a staff/manager/employer account in the same company."""
+    """Owner, or a staff, manager, employer, or HR account in the same company."""
     if not user.is_authenticated or not user.is_active:
         return False
     if doc.user_id and doc.user_id == user.id:
@@ -1285,7 +1289,7 @@ def user_can_download_signed_document(user, doc):
         return False
     if user.is_staff:
         return True
-    return user.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+    return user.groups.filter(name__in=["Manager", "EMPLOYER", "HR", "CSR"]).exists()
 
 
 @login_required

@@ -1,0 +1,108 @@
+{% extends "base/base.html" %}
+{% block title %}{{ employee.first_name }} {{ employee.last_name }}{% endblock %}
+
+{% block template %}
+{% include "base/navbar.html" %}
+
+<div class="container employee-page">
+  <div class="pt-5 mt-4 mb-3">
+    <a class="small text-decoration-none" href="{% url 'hr_employee_list' %}">All employees</a>
+    <h1 class="h4 mt-2 mb-1">{{ employee.first_name }} {{ employee.last_name }}</h1>
+    <p class="text-muted mb-0">{{ employee.username }}</p>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <h2 class="h6 mb-2">Immigration status</h2>
+      {% if latest_event %}
+        <p class="mb-1">{{ latest_event.get_status_type_display }}</p>
+        <p class="text-muted small mb-0">
+          {% if latest_event.effective_date %}Effective {{ latest_event.effective_date|date:"F j, Y" }}{% endif %}
+          {% if latest_event.expiry_date %} · Expires {{ latest_event.expiry_date|date:"F j, Y" }}{% endif %}
+          {% if latest_event.reference_number %} · {{ latest_event.reference_number }}{% endif %}
+        </p>
+      {% else %}
+        <p class="text-muted mb-0">No immigration update on file yet.</p>
+      {% endif %}
+      <p class="text-muted small mt-2 mb-0">
+        Permit expiry: {% if permit_expiry %}{{ permit_expiry|date:"F j, Y" }}{% else %}not set{% endif %}
+        {% if extension_requested %}
+          · Extension requested{% if extension_date %} {{ extension_date|date:"F j, Y" }}{% endif %}
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Unsigned</h2>
+      {% if unsigned_pills %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for pill in unsigned_pills %}
+            <span class="employee-doc-pill is-{{ pill.pill_class }}">
+              <span class="employee-doc-pill-name">{{ pill.name }}</span>
+              <span class="employee-doc-pill-status">{{ pill.label }}</span>
+            </span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No unsigned documents.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Signed</h2>
+      {% if signed_documents %}
+        <ul class="list-group list-group-flush">
+          {% for doc in signed_documents %}
+            <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-3">
+              <div class="min-w-0">
+                <div class="fw-semibold text-break">{{ doc.document_title|default:doc.template_name|default:doc.file_name }}</div>
+                <div class="text-muted small">{{ doc.uploaded_at|date:"F j, Y" }}</div>
+              </div>
+              <a class="btn btn-sm btn-outline-primary flex-shrink-0" href="{% url 'download_signed_document' doc.id %}">Download</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted mb-0">No signed documents yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .employee-page { max-width: 860px; }
+  .employee-doc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    max-width: 100%;
+    padding: 0.35rem 0.45rem 0.35rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .employee-doc-pill-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .employee-doc-pill-status {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .employee-doc-pill.is-primary { background: #cfe2ff; color: #084298; border-color: #b6d4fe; }
+  .employee-doc-pill.is-warning { background: #fff3cd; color: #664d03; border-color: #ffecb5; }
+  .employee-doc-pill.is-success { background: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+  .employee-doc-pill.is-danger { background: #f8d7da; color: #842029; border-color: #f5c2c7; }
+  .employee-doc-pill.is-dark { background: #e2e3e5; color: #41464b; border-color: #d3d6d8; }
+  .employee-doc-pill.is-secondary { background: #e2e3e5; color: #41464b; border-color: #d3d6d8; }
+</style>
+{% endblock %}
