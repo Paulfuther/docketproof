@@ -1,4 +1,8 @@
 from django.db.models import Prefetch, Q
+from arl.documentflow.helpers import (
+    build_flow_step_lookup,
+    resolve_envelope_flow_step_id,
+)
 from arl.documentflow.models import (
     DocumentFlow,
     SentDocuSignEnvelope,
@@ -126,13 +130,13 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
         ]
     )
 
-    # Get all envelopes for these employees in this flow
+    by_template_pk, by_docusign_template_id = build_flow_step_lookup(flow_steps)
+
+    # Include envelopes linked to this flow and legacy manual sends that match a step template.
     sent_envelopes = (
         SentDocuSignEnvelope.objects
-        .filter(
-            user__in=employees,
-            flow=flow,
-        )
+        .filter(user__in=employees)
+        .filter(Q(flow=flow) | Q(flow__isnull=True, employer=employer))
         .select_related("flow_step", "template", "user", "employer")
         .prefetch_related(
             Prefetch(
@@ -140,14 +144,21 @@ def build_document_audit(employer, search_query="", incomplete_only=False):
                 queryset=SentDocuSignRecipient.objects.order_by("routing_order", "id"),
             )
         )
-        .order_by("completed_at", "id")
+        .order_by("sent_at", "id")
     )
 
-    # Keep the newest envelope per (user, flow_step)
+    # Keep the newest envelope per (user, flow_step), including template-matched legacy rows.
     sent_map = {}
     for env in sent_envelopes:
-        if env.user_id and env.flow_step_id:
-            sent_map[(env.user_id, env.flow_step_id)] = env
+        step_id = resolve_envelope_flow_step_id(
+            env, by_template_pk, by_docusign_template_id
+        )
+        if not env.user_id or not step_id:
+            continue
+        key = (env.user_id, step_id)
+        existing = sent_map.get(key)
+        if not existing or env.sent_at >= existing.sent_at:
+            sent_map[key] = env
 
     rows = []
 

@@ -4,6 +4,7 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
+from arl.documentflow.helpers import get_flow_step_for_template
 from arl.documentflow.models import (
     DocumentFlow,
     DocumentFlowStep,
@@ -173,7 +174,18 @@ def create_docusign_envelope(envelope_args):
         user = CustomUser.objects.filter(id=envelope_args.get("user_id")).first()
         employer = Employer.objects.filter(id=envelope_args.get("employer_id")).first()
         flow = DocumentFlow.objects.filter(id=envelope_args.get("flow_id")).first()
-        flow_step = DocumentFlowStep.objects.filter(id=envelope_args.get("flow_step_id")).first()
+        flow_step = DocumentFlowStep.objects.filter(
+            id=envelope_args.get("flow_step_id")
+        ).first()
+
+        template_obj = template if isinstance(template, DocuSignTemplate) else None
+        if employer and not flow_step:
+            resolved_flow, resolved_step = get_flow_step_for_template(
+                employer, template_obj or envelope_args.get("template_id")
+            )
+            if not flow:
+                flow = resolved_flow
+            flow_step = resolved_step
 
         # -- add a guard
         if not employer:
