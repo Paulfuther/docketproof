@@ -11,8 +11,6 @@ SESSION_GSA_PREVIEW_USER_ID = "gsa_preview_user_id"
 STAFF_HUB_URL_NAMES = frozenset(
     {
         "salt_log_list",
-        "salt_log_edit",
-        "salt_log_update",
         "incidents",
         "incident_edit_list",
         "incident_list",

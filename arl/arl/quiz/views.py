@@ -13,7 +13,6 @@ from arl.helpers import (
 from arl.user.gsa_access import (
     gsa_preview_blocks_mutation,
     is_gsa_account,
-    post_form_success_url,
 )
 from arl.user.models import Store
 from arl.utils.images import normalize_to_jpeg
@@ -337,8 +336,6 @@ def salt_log_edit(request, pk):
                         request,
                         f"Salt log submitted, but PDF task failed to queue: {exc}",
                     )
-                if is_gsa_account(request.user):
-                    return redirect(post_form_success_url(request.user, request))
                 return redirect("salt_log_list")
 
             messages.success(request, "Draft saved.")
