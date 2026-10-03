@@ -128,6 +128,8 @@ def _envelope_for_actor(user, envelope_id):
 @login_required
 def employee_home(request):
     user = request.user
+    if getattr(user, "is_company_manager", False):
+        return redirect("manager_employee_list")
     signed_documents = SignedDocumentFile.objects.none()
     unsigned_pills = []
     if user.employer_id:

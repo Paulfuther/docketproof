@@ -456,6 +456,8 @@ EMPLOYEE_SESSION_SECONDS = 60 * 60 * 24 * 14
 def _redirect_after_login(user):
     if getattr(user, "is_employee_account", False):
         return redirect("employee_home")
+    if getattr(user, "is_company_manager", False):
+        return redirect("manager_employee_list")
     return redirect("home")
 
 
@@ -551,6 +553,10 @@ def home_view(request):
         request.user, "is_employee_account", False
     ):
         return redirect("employee_home")
+    if request.user.is_authenticated and getattr(
+        request.user, "is_company_manager", False
+    ):
+        return redirect("manager_employee_list")
     return render(request, "user/home.html")
 
 

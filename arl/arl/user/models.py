@@ -175,6 +175,13 @@ class CustomUser(AbstractUser):
             return False
         return not self.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
 
+    @property
+    def is_company_manager(self):
+        """Manager or employer account scoped to one company."""
+        if not self.employer_id:
+            return False
+        return self.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+
 
 class SMSOptOut(models.Model):
     user = models.OneToOneField(

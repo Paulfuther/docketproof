@@ -1,0 +1,36 @@
+{% extends "base/base.html" %}
+{% block title %}Employees{% endblock %}
+
+{% block template %}
+{% include "base/navbar.html" %}
+
+<div class="container employee-page">
+  <div class="pt-5 mt-4 mb-3">
+    <h1 class="h4 mb-1">Employees</h1>
+    <p class="text-muted mb-0">Choose someone at {{ user.employer.name }} to see signed documents, unsigned documents, and immigration status.</p>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      {% if employees %}
+        <ul class="list-group list-group-flush">
+          {% for employee in employees %}
+            <li class="list-group-item px-0">
+              <a class="text-decoration-none d-flex justify-content-between align-items-center gap-3" href="{% url 'manager_employee_detail' employee.id %}">
+                <span class="fw-semibold text-break">{{ employee.first_name }} {{ employee.last_name }}</span>
+                <span class="text-muted small flex-shrink-0">{{ employee.username }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted mb-0">No employees at this company yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endblock %}
