@@ -21,6 +21,7 @@ from django.views.generic.edit import CreateView, UpdateView
 from PIL import Image
 
 from arl.helpers import get_s3_images_for_incident, upload_to_linode_object_storage
+from arl.user.gsa_access import GSAOrPermissionRequiredMixin, post_form_success_url
 
 from .forms import IncidentForm, MajorIncidentForm
 from .models import Incident, MajorIncident
@@ -45,7 +46,7 @@ def is_abm_incident_pdf(user):
 
 
 class IncidentCreateView(
-    PermissionRequiredMixin,
+    GSAOrPermissionRequiredMixin,
     LoginRequiredMixin,
     CreateView,
 ):
@@ -55,6 +56,9 @@ class IncidentCreateView(
     form_class = IncidentForm
     template_name = "incident/create_incident.html"
     success_url = reverse_lazy("home")
+
+    def get_success_url(self):
+        return str(post_form_success_url(self.request.user))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -456,7 +460,7 @@ class MajorIncidentUpdateView(PermissionRequiredMixin, LoginRequiredMixin, Updat
         return context
 
 
-class ProcessIncidentImagesView(PermissionRequiredMixin, LoginRequiredMixin, View):
+class ProcessIncidentImagesView(GSAOrPermissionRequiredMixin, LoginRequiredMixin, View):
     login_url = "/login/"
     permission_required = "incident.add_incident"
     raise_exception = True  # Raise exception when no access

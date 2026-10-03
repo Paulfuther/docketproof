@@ -62,7 +62,14 @@
     </style>
 </head>
 
-<div class="container">
+<div class="container{% if user.is_authenticated and user.is_employee_account %} employee-page{% endif %}">
+{% if user.is_authenticated and user.is_employee_account %}
+    <div class="pt-5 mt-4 mb-3">
+        <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+        <h1 class="h4 mt-2 mb-1">Create salt log</h1>
+    </div>
+    <div class="card shadow-sm border-0 mb-4">
+{% else %}
     <div class="row justify-content-center pt-5 mt-5"></div>
     <div class="row justify-content-center">
         <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
@@ -70,6 +77,7 @@
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">Create Salt Log</h4>
                 </div>
+{% endif %}
                 <div class="card-body">
                     <p><strong>User:</strong> {{ user.first_name }}</p>
                     
@@ -122,10 +130,21 @@
                         </div>
                     </form>
                 </div>
+{% if user.is_authenticated and user.is_employee_account %}
+        </div>
+    </div>
+{% else %}
             </div>
         </div>
     </div>
+{% endif %}
 </div>
+
+{% if user.is_authenticated and user.is_employee_account %}
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endif %}
 
 <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

@@ -22,11 +22,18 @@
     </style>
 </head>
 
-<div class="container">
+<div class="container{% if user.is_authenticated and user.is_employee_account %} employee-page{% endif %}">
+{% if user.is_authenticated and user.is_employee_account %}
+    <div class="pt-5 mt-4 mb-3">
+        <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+        <h1 class="h4 mt-2 mb-1">Create site incident report</h1>
+    </div>
+{% else %}
     <div class="row justify-content-center pt-5 mt-5"></div>
     <div class="row justify-content-center">
         <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
             <h2>Create Site Incident Report</h2>
+{% endif %}
             <form method="post" enctype="multipart/form-data" id="form" class="was-validated">
                 {% csrf_token %}
                 {{ form.user_employer|as_crispy_field }}
@@ -316,9 +323,17 @@
                     <button type="submit" id="submit" class="btn btn-primary ms-2 mt-2" style="margin-bottom: 20px;">Submit</button>
                 </div>
             </form>
+{% if not user.is_authenticated or not user.is_employee_account %}
         </div>
     </div>
+{% endif %}
 </div>
+
+{% if user.is_authenticated and user.is_employee_account %}
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endif %}
 
 {% if form.errors %}
 <div class="alert alert-danger">

@@ -4,6 +4,8 @@ import string
 from django import forms
 from django.utils.text import slugify
 
+from arl.user.models import Store
+
 from .models import Incident, MajorIncident
 
 
@@ -148,10 +150,12 @@ class IncidentForm(forms.ModelForm):
 
         if user:
             self.fields["user_employer"].initial = self.get_user_employer(user)
-            # Disable the user_employer field and set its initial value
-            self.fields['user_employer'].disabled = True
-            #self.fields['user_employer'].initial = self.get_user_employer(user)
-            #self.fields['user_employer'].widget.attrs['disabled'] = 'disabled'
+            self.fields["user_employer"].disabled = True
+            if user.employer_id:
+                self.fields["store"].queryset = Store.objects.filter(
+                    employer=user.employer
+                ).order_by("number")
+                self.fields["store"].empty_label = "Select a store…"
 
     def get_user_employer(self, user):
         employer = user.employer

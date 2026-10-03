@@ -18,7 +18,7 @@ from arl.documentflow.models import (
 )
 from arl.documentflow.services_immigration import build_immigration_audit
 from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
-from arl.quiz.models import Checklist, ChecklistTemplate, ChecklistTemplateItem
+from arl.quiz.models import Checklist, ChecklistTemplate, ChecklistTemplateItem, SaltLog
 from arl.user.models import EmployeeDocument, Employer, Store
 from arl.user.views import handle_new_hire_registration
 
@@ -327,6 +327,8 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertNotContains(home, "Already signed policy")
         self.assertContains(home, reverse("checklist_dashboard"))
         self.assertContains(home, reverse("employee_immigration_upload"))
+        self.assertContains(home, reverse("create_salt_log"))
+        self.assertContains(home, reverse("create_incident"))
 
         opened = self.client.get(
             reverse("employee_unsigned_document", args=[own.id])
@@ -867,3 +869,57 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response.url)
         self.assertFalse(ImmigrationStatusEvent.objects.exists())
+
+
+class EmployeeFormsAccessTests(EmployeeTestCase):
+    def setUp(self):
+        super().setUp()
+        self.store = Store.objects.create(number=7, employer=self.employer)
+        self.other_store = Store.objects.create(number=99, employer=self.other_employer)
+        manager_group = Group.objects.create(name="Manager")
+        self.manager = self._user(
+            "mia",
+            "Mia",
+            "Manager",
+            "+14161234571",
+            self.employer,
+        )
+        self.manager.groups.add(manager_group)
+
+    def test_gsa_can_open_existing_salt_log_and_incident_forms(self):
+        self.assertFalse(self.employee.has_perm("incident.add_incident"))
+        self.client.force_login(self.employee)
+
+        salt_log = self.client.get(reverse("create_salt_log"))
+        incident = self.client.get(reverse("create_incident"))
+
+        self.assertEqual(salt_log.status_code, 200)
+        self.assertEqual(incident.status_code, 200)
+        self.assertContains(salt_log, "employee-page")
+        self.assertContains(incident, "employee-page")
+        self.assertContains(salt_log, "Back to documents")
+        self.assertContains(incident, "Back to documents")
+        self.assertContains(salt_log, "Create salt log")
+        self.assertContains(incident, "Create site incident report")
+
+    def test_non_gsa_still_needs_incident_permission(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("create_incident"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_gsa_salt_log_form_lists_only_company_stores(self):
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("create_salt_log"))
+        self.assertContains(response, str(self.store))
+        self.assertNotContains(response, str(self.other_store))
+
+    def test_gsa_cannot_edit_coworker_salt_log(self):
+        log = SaltLog.objects.create(
+            user=self.coworker,
+            store=self.store,
+            area_salted="Back lot",
+            user_employer=self.employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("salt_log_update", args=[log.pk]))
+        self.assertEqual(response.status_code, 404)
