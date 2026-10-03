@@ -449,14 +449,8 @@ def check_verification(request):
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
 
-# Employees stay signed in for two weeks. The cookie is not cleared when the
-# browser closes. Staff still verify before any session is created.
+# After the phone code is accepted, stay signed in for two weeks.
 EMPLOYEE_SESSION_SECONDS = 60 * 60 * 24 * 14
-
-
-def _is_privileged_account(user):
-    """Staff and superusers verify before a session exists."""
-    return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
 
 
 def _redirect_after_login(user):
@@ -478,12 +472,8 @@ def login_view(request):
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            # Employees and managers use the existing Django user. A Twilio
-            # outage must not stop them from staying signed in.
-            if not _is_privileged_account(user):
-                _start_session(request, user)
-                return _redirect_after_login(user)
-
+            # Password alone never starts a session. Employees, managers,
+            # and staff all finish the existing Twilio phone check first.
             if not user.phone_number:
                 return render(
                     request,
@@ -493,9 +483,6 @@ def login_view(request):
             try:
                 phone_number = str(user.phone_number)
                 request_verification_token(phone_number)
-                request.session["user_id"] = user.id
-                request.session["phone_number"] = phone_number
-                return redirect("verification_page")
             except TwilioException:
                 request.session.pop("user_id", None)
                 request.session.pop("phone_number", None)
@@ -504,6 +491,9 @@ def login_view(request):
                     "user/login.html",
                     {"form": form, "verification_error": True},
                 )
+            request.session["user_id"] = user.id
+            request.session["phone_number"] = phone_number
+            return redirect("verification_page")
     else:
         form = AuthenticationForm(request)
 

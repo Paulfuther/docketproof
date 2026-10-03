@@ -2,6 +2,7 @@ from datetime import date
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from twilio.base.exceptions import TwilioException
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models.signals import post_save
@@ -68,20 +69,88 @@ class EmployeeTestCase(TestCase):
 
 
 class EmployeeLoginAccessTests(EmployeeTestCase):
-    @patch("arl.user.views.request_verification_token")
-    def test_employee_login_starts_a_session_without_twilio(self, send_code):
-        response = self._login("ada")
+    def _assert_password_does_not_start_session(self, response, user):
+        self.assertRedirects(
+            response, reverse("verification_page"), fetch_redirect_response=False
+        )
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.session["user_id"], user.id)
+        blocked = self.client.get(reverse("employee_home"))
+        self.assertEqual(blocked.status_code, 302)
+        self.assertIn("/login/", blocked.url)
 
-        self.assertFalse(send_code.called)
+    @patch("arl.user.views.request_verification_token")
+    def test_employee_password_does_not_start_a_session(self, send_code):
+        response = self._login("ada")
+        send_code.assert_called_once()
+        self._assert_password_does_not_start_session(response, self.employee)
+
+    @patch("arl.user.views.request_verification_token")
+    def test_manager_password_does_not_start_a_session(self, send_code):
+        manager_group = Group.objects.create(name="Manager")
+        self.employee.groups.add(manager_group)
+        self.assertFalse(self.employee.is_employee_account)
+
+        response = self._login("ada")
+        send_code.assert_called_once()
+        self._assert_password_does_not_start_session(response, self.employee)
+
+    @patch("arl.user.views.check_verification_token", return_value=False)
+    @patch("arl.user.views.request_verification_token")
+    def test_wrong_phone_code_does_not_start_a_session(self, send_code, check_code):
+        self._login("ada")
+        response = self.client.post(
+            reverse("verification_page"),
+            {"verification_code": "000000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        check_code.assert_called_once()
+
+    @patch("arl.user.views.check_verification_token", return_value=True)
+    @patch("arl.user.views.request_verification_token")
+    def test_employee_session_starts_only_after_phone_code(self, send_code, check_code):
+        self._login("ada")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        response = self.client.post(
+            reverse("verification_page"),
+            {"verification_code": "123456"},
+        )
         self.assertRedirects(
             response, reverse("employee_home"), fetch_redirect_response=False
         )
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.employee.id)
         self.assertGreater(self.client.session.get_expiry_age(), 60 * 60 * 24 * 13)
+        check_code.assert_called_once()
 
         home = self.client.get(reverse("employee_home"))
         self.assertEqual(home.status_code, 200)
         self.assertContains(home, "Signed")
+
+    @patch("arl.user.views.check_verification_token", return_value=True)
+    @patch("arl.user.views.request_verification_token")
+    def test_manager_session_starts_only_after_phone_code(self, send_code, check_code):
+        manager_group = Group.objects.create(name="Manager")
+        self.employee.groups.add(manager_group)
+
+        self._login("ada")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        response = self.client.post(
+            reverse("verification_page"),
+            {"verification_code": "123456"},
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.employee.id)
+        check_code.assert_called_once()
+
+    @patch("arl.user.views.request_verification_token", side_effect=TwilioException("down"))
+    def test_phone_code_failure_does_not_start_a_session(self, send_code):
+        response = self._login("ada")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertNotIn("user_id", self.client.session)
+        send_code.assert_called_once()
 
     @patch("arl.user.views.request_verification_token")
     def test_bad_password_and_inactive_user_do_not_get_a_session(self, send_code):
@@ -109,18 +178,6 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         )
         self.assertNotIn("_auth_user_id", self.client.session)
         self.assertEqual(self.client.session["user_id"], self.staff.id)
-
-    @patch("arl.user.views.request_verification_token")
-    def test_manager_logs_in_to_the_manager_home(self, send_code):
-        manager_group = Group.objects.create(name="Manager")
-        self.employee.groups.add(manager_group)
-
-        response = self._login("ada")
-
-        self.assertFalse(send_code.called)
-        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
-        self.assertEqual(int(self.client.session["_auth_user_id"]), self.employee.id)
-        self.assertFalse(self.employee.is_employee_account)
 
     def test_anonymous_users_cannot_open_employee_pages(self):
         urls = [
