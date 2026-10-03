@@ -799,8 +799,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(follow, "IRCC-42")
         self.assertContains(follow, "Work permit expiration")
         self.assertContains(follow, "March 1, 2027")
-        self.assertContains(follow, "Permit expiry:")
-        self.assertContains(follow, "March 1, 2027")
+        self.assertNotContains(follow, "Permit expiry:")
 
     def test_immigration_page_shows_existing_tracker_dates(self):
         self.employee.sin_expiration_date = date(2026, 12, 1)
@@ -815,8 +814,7 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         self.assertContains(response, "December 1, 2026")
         self.assertContains(response, "Work permit expiration")
         self.assertContains(response, "June 1, 2027")
-        self.assertContains(response, "Permit expiry:")
-        self.assertContains(response, "June 1, 2027")
+        self.assertNotContains(response, "Permit expiry:")
 
     def test_immigration_page_shows_not_on_file_for_missing_tracker_dates(self):
         self.client.force_login(self.employee)
@@ -824,8 +822,21 @@ class EmployeeImmigrationUploadTests(EmployeeTestCase):
         response = self.client.get(reverse("employee_immigration_upload"))
         self.assertContains(response, "SIN expiration")
         self.assertContains(response, "Work permit expiration")
-        self.assertContains(response, "Permit expiry:")
+        self.assertNotContains(response, "Permit expiry:")
         self.assertContains(response, "Not on file")
+
+    def test_immigration_page_marks_soon_expiration_dates(self):
+        self.employee.sin_expiration_date = date.today() + timedelta(days=30)
+        self.employee.work_permit_expiration_date = date.today() + timedelta(days=45)
+        self.employee.save(
+            update_fields=["sin_expiration_date", "work_permit_expiration_date"]
+        )
+        self.client.force_login(self.employee)
+
+        response = self.client.get(reverse("employee_immigration_upload"))
+        self.assertContains(response, "Expiring", count=2)
+        self.assertContains(response, "btn-immigration-save")
+        self.assertNotContains(response, "btn-primary")
 
     @patch("arl.bucket.helpers.upload_to_linode_object_storage")
     def test_new_work_permit_clears_the_extension_flag(self, store_file):
