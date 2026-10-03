@@ -128,8 +128,6 @@ def _envelope_for_actor(user, envelope_id):
 def _redirect_unless_gsa(request):
     if getattr(request.user, "is_employee_account", False):
         return None
-    if getattr(request.user, "is_hr_account", False):
-        return redirect("hr_employee_list")
     return redirect("home")
 
 

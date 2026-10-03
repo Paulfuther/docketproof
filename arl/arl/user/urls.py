@@ -7,7 +7,6 @@ from .employee_views import (
     employee_open_unsigned_document,
     employee_unsigned_document,
 )
-from .hr_employee_views import hr_employee_detail, hr_employee_list
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -94,12 +93,6 @@ urlpatterns = [
          TemplateView.as_view(template_name="user/employer_success.html"),
          name="employer_registration_success"),
     path("", landing_page, name="landing"),
-    path("hr/employees/", hr_employee_list, name="hr_employee_list"),
-    path(
-        "hr/employees/<int:user_id>/",
-        hr_employee_detail,
-        name="hr_employee_detail",
-    ),
     path("hr/dashboard/", hr_dashboard, name="hr_dashboard"),
     path("hr/invite/cancel/<int:invite_id>/", cancel_invite, name="cancel_invite"),
     path("hr/invite/resend/<int:invite_id>/", resend_invite, name="resend_invite"),
