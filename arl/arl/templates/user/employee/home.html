@@ -8,7 +8,7 @@
   <div class="pt-5 mt-4 mb-3">
     <h1 class="h4 mb-1">Hello {{ user.first_name|default:user.username }}</h1>
     <p class="text-muted mb-3">Signed documents are listed below. Open an unsigned document to finish it.</p>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="employee-section-links">
       <a class="btn btn-outline-primary btn-sm" href="{% url 'employee_home' %}">Documents</a>
       <a class="btn btn-outline-primary btn-sm" href="{% url 'checklist_dashboard' %}">Checklists</a>
       <a class="btn btn-outline-primary btn-sm" href="{% url 'employee_immigration_upload' %}">Immigration upload</a>
@@ -33,6 +33,7 @@
             </a>
           {% endfor %}
         </div>
+        {% include "user/employee/pager.html" with page=unsigned_page param="unsigned" other_param="signed" other_page=signed_page label="Unsigned documents" %}
       {% else %}
         <p class="text-muted mb-0">No unsigned documents.</p>
       {% endif %}
@@ -42,9 +43,9 @@
   <div class="card shadow-sm border-0 mb-4">
     <div class="card-body">
       <h2 class="h6 mb-3">Signed</h2>
-      {% if signed_documents %}
+      {% if signed_page.object_list %}
         <ul class="list-group list-group-flush">
-          {% for doc in signed_documents %}
+          {% for doc in signed_page %}
             <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-3">
               <div class="min-w-0">
                 <div class="fw-semibold text-break">{{ doc.document_title|default:doc.template_name|default:doc.file_name }}</div>
@@ -54,6 +55,7 @@
             </li>
           {% endfor %}
         </ul>
+        {% include "user/employee/pager.html" with page=signed_page param="signed" other_param="unsigned" other_page=unsigned_page label="Signed documents" %}
       {% else %}
         <p class="text-muted mb-0">No signed documents yet.</p>
       {% endif %}
@@ -63,6 +65,17 @@
 
 <style>
   .employee-page { max-width: 860px; }
+  .employee-section-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .employee-section-links .btn {
+    flex: 1 1 0;
+    min-width: 11rem;
+    text-align: center;
+    white-space: nowrap;
+  }
   .employee-doc-pill {
     display: inline-flex;
     align-items: center;

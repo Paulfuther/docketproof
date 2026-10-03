@@ -1,0 +1,19 @@
+{% if page.paginator.num_pages > 1 %}
+<nav class="mt-3" aria-label="{{ label }}">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    {% if page.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?{{ param }}={{ page.previous_page_number }}{% if other_page.number > 1 %}&amp;{{ other_param }}={{ other_page.number }}{% endif %}">Previous</a>
+      </li>
+    {% endif %}
+    <li class="page-item disabled">
+      <span class="page-link">{{ page.number }} of {{ page.paginator.num_pages }}</span>
+    </li>
+    {% if page.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?{{ param }}={{ page.next_page_number }}{% if other_page.number > 1 %}&amp;{{ other_param }}={{ other_page.number }}{% endif %}">Next</a>
+      </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

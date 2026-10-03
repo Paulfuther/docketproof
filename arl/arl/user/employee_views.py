@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -26,6 +27,7 @@ from arl.dsign.models import SignedDocumentFile
 logger = logging.getLogger(__name__)
 
 UNSIGNED_STATUSES = ("created", "sent", "delivered")
+DOCUMENT_PAGE_SIZE = 10
 MAX_UPLOAD_MB = 25
 ALLOWED_UPLOAD_CT = {
     "application/pdf",
@@ -173,21 +175,27 @@ def employee_home(request):
     _refresh_after_embedded_signing(request)
     user = request.user
     signed_documents = SignedDocumentFile.objects.none()
-    unsigned_pills = []
+    unsigned_envelopes = SentDocuSignEnvelope.objects.none()
     if user.employer_id:
         signed_documents = SignedDocumentFile.objects.filter(
             user=user,
             employer=user.employer,
             is_company_document=False,
-        ).order_by("-uploaded_at")
-        unsigned_pills = [
-            _pill_for_envelope(envelope) for envelope in _unsigned_queryset(user)
-        ]
+        ).order_by("-uploaded_at", "-id")
+        unsigned_envelopes = _unsigned_queryset(user)
+    signed_page = Paginator(signed_documents, DOCUMENT_PAGE_SIZE).get_page(
+        request.GET.get("signed")
+    )
+    unsigned_page = Paginator(unsigned_envelopes, DOCUMENT_PAGE_SIZE).get_page(
+        request.GET.get("unsigned")
+    )
+    unsigned_pills = [_pill_for_envelope(envelope) for envelope in unsigned_page]
     return render(
         request,
         "user/employee/home.html",
         {
-            "signed_documents": signed_documents,
+            "signed_page": signed_page,
+            "unsigned_page": unsigned_page,
             "unsigned_pills": unsigned_pills,
         },
     )

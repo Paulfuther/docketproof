@@ -153,10 +153,11 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         )
         self._assert_old_home_after_phone_code(response, self.employee)
         check_code.assert_called_once()
-        self.assertContains(self.client.get(reverse("home")), reverse("hr_dashboard"))
-        self.assertContains(
-            self.client.get(reverse("home")), reverse("documents_dashboard")
-        )
+        home = self.client.get(reverse("home"))
+        self.assertNotContains(home, "nav-link employee-section")
+        self.assertNotContains(home, "scrollbar-gutter")
+        self.assertContains(home, reverse("hr_dashboard"))
+        self.assertContains(home, reverse("documents_dashboard"))
         hr_page = self.client.get(reverse("hr_dashboard"))
         self.assertEqual(hr_page.status_code, 200)
         docs_page = self.client.get(reverse("documents_dashboard"))
@@ -336,6 +337,42 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         )
         self.assertEqual(denied.status_code, 403)
         self.assertNotContains(denied, "Coworker secret", status_code=403)
+        self.assertContains(home, "nav-link employee-section")
+        self.assertContains(home, "scrollbar-gutter: stable")
+
+    def test_document_lists_are_paginated(self):
+        for index in range(11):
+            SignedDocumentFile.objects.create(
+                user=self.employee,
+                employer=self.employer,
+                envelope_id=f"signed-{index}",
+                file_name=f"signed-{index}.pdf",
+                file_path=f"DOCUMENTS/acme/signed-{index}.pdf",
+                document_title=f"Signed item {index:02d}",
+            )
+            SentDocuSignEnvelope.objects.create(
+                employer=self.employer,
+                user=self.employee,
+                template_name=f"Unsigned item {index:02d}",
+                envelope_id=f"unsigned-{index}",
+                status="sent",
+            )
+        self.client.force_login(self.employee)
+        first = self.client.get(reverse("employee_home"))
+        self.assertContains(first, "Signed item 10")
+        self.assertContains(first, "Unsigned item 10")
+        self.assertNotContains(first, "Signed item 00")
+        self.assertNotContains(first, "Unsigned item 00")
+        self.assertContains(first, "1 of 2")
+        second = self.client.get(
+            reverse("employee_home"), {"signed": 2, "unsigned": 2}
+        )
+        self.assertContains(second, "Signed item 00")
+        self.assertContains(second, "Unsigned item 00")
+        self.assertNotContains(second, "Signed item 10")
+        self.assertNotContains(second, "Unsigned item 10")
+        self.assertContains(second, "signed=1")
+        self.assertContains(second, "unsigned=1")
 
     @patch(
         "arl.dsign.helpers.get_recipient_view_url",

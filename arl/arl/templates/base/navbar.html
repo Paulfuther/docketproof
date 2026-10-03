@@ -67,21 +67,39 @@
     
 
     <div class="collapse navbar-collapse" id="mainNavbar">
+      {% if user.is_authenticated and user.is_employee_account %}
+      <style>
+        .navbar-nav .nav-link.employee-section {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+          width: 10.5rem;
+          white-space: nowrap;
+          font-weight: 500;
+          border-bottom: 2px solid transparent;
+        }
+        .navbar-nav .nav-link.employee-section.active {
+          font-weight: 500;
+          border-bottom-color: #0d6efd;
+        }
+      </style>
+      {% endif %}
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
         {% if user.is_authenticated and user.is_employee_account %}
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
             <i class="material-symbols-outlined">description</i> Documents
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
             <i class="material-symbols-outlined">checklist</i> Checklists
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
             <i class="material-symbols-outlined">badge</i> Immigration
           </a>
         </li>
