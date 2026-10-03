@@ -508,12 +508,17 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
         {"id": column["id"], "name": column["name"], "sort": column["sort"]}
         for column in audit_columns
     ]
+    flow_header_columns = [
+        {"id": column["id"], "name": column["name"], "sort": column["sort"]}
+        for column in audit_columns
+        if column["is_flow_step"]
+    ]
 
     return {
         "flow": flow,
         "rows": rows,
         "audit_columns": header_columns,
-        "document_header_slots": _document_header_slots(header_columns),
+        "document_header_slots": _document_header_slots(flow_header_columns),
         "audit_search": search_query,
         "audit_incomplete_only": incomplete_only,
         "audit_sort": sort,

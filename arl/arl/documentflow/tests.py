@@ -370,3 +370,30 @@ class DocumentAuditTests(TestCase):
         self.assertEqual(len(row["pill_rows"][1]["empty_slots"]), 1)
         self.assertFalse(row["pill_rows"][1]["show_overall"])
         self.assertEqual(len(audit["document_header_slots"]), 3)
+        self.assertEqual(
+            [slot["name"] for slot in audit["document_header_slots"]],
+            ["Handbook", "Offer"],
+        )
+        self.assertEqual(audit["document_header_slots"][2]["name"], "")
+
+    def test_document_header_slots_ignore_extra_documents(self):
+        extra_template = DocuSignTemplate.objects.create(
+            employer=self.employer,
+            template_id="tpl-extra-header",
+            template_name="Employee Address Update",
+            is_ready_to_send=True,
+        )
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=extra_template,
+            template_name=extra_template.template_name,
+            envelope_id="env-extra-header",
+            status="sent",
+        )
+
+        audit = build_document_audit(self.employer)
+        header_names = [slot["name"] for slot in audit["document_header_slots"]]
+
+        self.assertEqual(header_names, ["Handbook", "Offer", ""])
+        self.assertEqual(len(audit["rows"][0]["steps"]), 3)
