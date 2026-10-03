@@ -184,11 +184,13 @@
                   {% endif %}
 
                   <div class="hrdoc-actions">
-                    <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
-                      <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
-                      <span aria-hidden="true">Details</span>
-                      <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
-                    </label>
+                    {% if pill_row.show_overall %}
+                      <label class="hrdoc-details-toggle" for="hrdoc-fold-{{ employee.pk }}">
+                        <span class="hrdoc-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
+                        <span aria-hidden="true">Details</span>
+                        <span class="hrdoc-chevron" aria-hidden="true">&gt;</span>
+                      </label>
+                    {% endif %}
                   </div>
                 </div>
               {% endfor %}
@@ -260,6 +262,10 @@
   border-radius: 18px;
   padding: 20px 18px 28px;
   color: #1a1f36;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .hrdoc-title {
@@ -445,6 +451,8 @@
 .hrdoc-list-wrap {
   position: relative;
   margin-top: 22px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-loading {
@@ -487,7 +495,9 @@
   border: 1px solid #eef1f6;
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
-  overflow-x: auto;
+  overflow-x: clip;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-notice {
@@ -522,13 +532,15 @@
 .hrdoc-scan {
   display: grid;
   grid-template-columns:
-    minmax(190px, 1.15fr)
-    repeat(3, minmax(140px, 164px))
-    minmax(140px, 164px)
-    104px;
+    minmax(0, 1.15fr)
+    repeat(3, minmax(0, 1fr))
+    minmax(0, 1fr)
+    minmax(72px, 104px);
   column-gap: 12px;
   align-items: center;
-  min-width: calc(190px + (3 * 152px) + 152px + 116px);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0 20px;
 }
 
@@ -557,6 +569,8 @@
 
 .hrdoc-row {
   position: relative;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hrdoc-row + .hrdoc-row {
@@ -724,6 +738,11 @@
 
 .hrdoc-resend-detail {
   margin-top: 8px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  height: auto;
+  min-height: 28px;
 }
 
 .hrdoc-fold-check {
@@ -778,6 +797,9 @@
   padding: 14px 16px;
   background: #f8fafc;
   border-radius: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
 .hrdoc-fold-check:checked ~ .hrdoc-fold-body {
@@ -786,8 +808,14 @@
 
 .hrdoc-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
+  gap: 14px 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hrdoc-facts > div {
+  min-width: 0;
 }
 
 .hrdoc-fact-label {
