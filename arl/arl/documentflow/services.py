@@ -54,6 +54,7 @@ _OVERALL_CHIP = {
 }
 
 HRDOC_PILLS_PER_ROW = 3
+HRDOC_CONTINUATION_PILLS_PER_ROW = 4
 
 
 def get_recipient_pill_class(status):
@@ -193,23 +194,42 @@ def _step_display_name(step):
     )
 
 
-def _chunk_steps(steps, size=HRDOC_PILLS_PER_ROW):
-    if not steps:
-        return [[]]
-    return [steps[i : i + size] for i in range(0, len(steps), size)]
-
-
 def _build_pill_rows(steps):
+    """First row: three document pills plus Overall. Later rows use four doc slots."""
+    if not steps:
+        return [
+            {
+                "steps": [],
+                "empty_slots": [None] * HRDOC_PILLS_PER_ROW,
+                "show_overall": True,
+                "show_who": True,
+            }
+        ]
+
     pill_rows = []
-    for index, chunk in enumerate(_chunk_steps(steps)):
+    first_chunk = steps[:HRDOC_PILLS_PER_ROW]
+    pill_rows.append(
+        {
+            "steps": first_chunk,
+            "empty_slots": [None] * (HRDOC_PILLS_PER_ROW - len(first_chunk)),
+            "show_overall": True,
+            "show_who": True,
+        }
+    )
+
+    remaining = steps[HRDOC_PILLS_PER_ROW:]
+    for index in range(0, len(remaining), HRDOC_CONTINUATION_PILLS_PER_ROW):
+        chunk = remaining[index : index + HRDOC_CONTINUATION_PILLS_PER_ROW]
         pill_rows.append(
             {
                 "steps": chunk,
-                "empty_slots": [None] * (HRDOC_PILLS_PER_ROW - len(chunk)),
-                "show_overall": index == 0,
-                "show_who": index == 0,
+                "empty_slots": [None]
+                * (HRDOC_CONTINUATION_PILLS_PER_ROW - len(chunk)),
+                "show_overall": False,
+                "show_who": False,
             }
         )
+
     return pill_rows
 
 

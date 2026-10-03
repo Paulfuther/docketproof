@@ -157,21 +157,21 @@
                     {% endif %}
                   </div>
 
-                  {% for step in pill_row.steps %}
-                    <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
-                      <span class="hrdoc-dot" aria-hidden="true"></span>
-                      <span class="hrdoc-chip-text">
-                        <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
-                        <span class="hrdoc-chip-label">{{ step.label }}</span>
-                      </span>
-                    </span>
-                  {% endfor %}
-
-                  {% for _ in pill_row.empty_slots %}
-                    <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
-                  {% endfor %}
-
                   {% if pill_row.show_overall %}
+                    {% for step in pill_row.steps %}
+                      <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
+                        <span class="hrdoc-dot" aria-hidden="true"></span>
+                        <span class="hrdoc-chip-text">
+                          <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
+                          <span class="hrdoc-chip-label">{{ step.label }}</span>
+                        </span>
+                      </span>
+                    {% endfor %}
+
+                    {% for _ in pill_row.empty_slots %}
+                      <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                    {% endfor %}
+
                     <span class="hrdoc-chip hrdoc-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
                       <span class="hrdoc-dot" aria-hidden="true"></span>
                       <span class="hrdoc-chip-text">
@@ -180,7 +180,19 @@
                       </span>
                     </span>
                   {% else %}
-                    <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                    {% for step in pill_row.steps %}
+                      <span class="hrdoc-chip is-{{ step.tone }}" title="{{ step.title }}">
+                        <span class="hrdoc-dot" aria-hidden="true"></span>
+                        <span class="hrdoc-chip-text">
+                          <span class="hrdoc-chip-kicker">{{ step.step_name }}</span>
+                          <span class="hrdoc-chip-label">{{ step.label }}</span>
+                        </span>
+                      </span>
+                    {% endfor %}
+
+                    {% for _ in pill_row.empty_slots %}
+                      <span class="hrdoc-chip hrdoc-chip-empty" aria-hidden="true"></span>
+                    {% endfor %}
                   {% endif %}
 
                   <div class="hrdoc-actions">

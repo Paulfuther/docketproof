@@ -367,14 +367,13 @@ class DocumentAuditTests(TestCase):
         self.assertEqual(len(row["pill_rows"][0]["empty_slots"]), 0)
         self.assertTrue(row["pill_rows"][0]["show_overall"])
         self.assertEqual(len(row["pill_rows"][1]["steps"]), 2)
-        self.assertEqual(len(row["pill_rows"][1]["empty_slots"]), 1)
+        self.assertEqual(len(row["pill_rows"][1]["empty_slots"]), 2)
         self.assertFalse(row["pill_rows"][1]["show_overall"])
         self.assertEqual(len(audit["document_header_slots"]), 3)
         self.assertEqual(
             [slot["name"] for slot in audit["document_header_slots"]],
-            ["Handbook", "Offer"],
+            ["Employee Handbook", "Offer Letter", ""],
         )
-        self.assertEqual(audit["document_header_slots"][2]["name"], "")
 
     def test_document_header_slots_ignore_extra_documents(self):
         extra_template = DocuSignTemplate.objects.create(
@@ -395,5 +394,36 @@ class DocumentAuditTests(TestCase):
         audit = build_document_audit(self.employer)
         header_names = [slot["name"] for slot in audit["document_header_slots"]]
 
-        self.assertEqual(header_names, ["Handbook", "Offer", ""])
+        self.assertEqual(header_names, ["Employee Handbook", "Offer Letter", ""])
         self.assertEqual(len(audit["rows"][0]["steps"]), 3)
+
+    def test_pill_rows_use_four_slots_on_continuation_rows(self):
+        extra_templates = []
+        for index in range(7):
+            template = DocuSignTemplate.objects.create(
+                employer=self.employer,
+                template_id=f"tpl-wrap-{index}",
+                template_name=f"Extra Form {index}",
+                is_ready_to_send=True,
+            )
+            extra_templates.append(template)
+            SentDocuSignEnvelope.objects.create(
+                employer=self.employer,
+                user=self.employee,
+                template=template,
+                template_name=template.template_name,
+                envelope_id=f"env-wrap-{index}",
+                status="sent",
+            )
+
+        audit = build_document_audit(self.employer)
+        pill_rows = audit["rows"][0]["pill_rows"]
+
+        self.assertEqual(len(audit["rows"][0]["steps"]), 9)
+        self.assertEqual(len(pill_rows), 3)
+        self.assertEqual(len(pill_rows[0]["steps"]), 3)
+        self.assertTrue(pill_rows[0]["show_overall"])
+        self.assertEqual(len(pill_rows[1]["steps"]), 4)
+        self.assertEqual(pill_rows[1]["empty_slots"], [])
+        self.assertEqual(len(pill_rows[2]["steps"]), 2)
+        self.assertEqual(len(pill_rows[2]["empty_slots"]), 2)
