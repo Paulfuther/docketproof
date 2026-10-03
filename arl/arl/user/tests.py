@@ -666,7 +666,7 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertContains(dashboard, "employee-page")
         self.assertNotContains(dashboard, "col-lg-6")
         documents = self.client.get(reverse("employee_home"))
-        self.assertContains(documents, "Back to documents")
+        self.assertNotContains(documents, "Back to documents")
         immigration = self.client.get(reverse("employee_immigration_upload"))
         self.assertContains(immigration, "Back to documents")
 
