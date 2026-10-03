@@ -72,6 +72,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'arl.user.context_processors.gsa_preview',
             ],
             "builtins":[
                 "arl.blog.templatetags.tag_cloud"

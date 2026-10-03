@@ -1,6 +1,13 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
+from .employee_views import (
+    employee_home,
+    employee_immigration_upload,
+    employee_open_unsigned_document,
+    employee_unsigned_document,
+)
+from .gsa_preview_views import gsa_preview_exit, gsa_preview_select
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -14,7 +21,9 @@ from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     update_user_roles, setup_totp, verify_totp,
                     employee_docs_search,
                     employee_quick_search,
-                    immigration_audit_partial)
+                    immigration_audit_partial,
+                    immigration_audit_export,
+                    resend_hr_documents)
 from django.views.generic import TemplateView
 
 
@@ -63,6 +72,24 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("home/", home_view, name="home"),
+    path("staff/gsa-preview/", gsa_preview_select, name="gsa_preview_select"),
+    path("staff/gsa-preview/exit/", gsa_preview_exit, name="gsa_preview_exit"),
+    path("employee/", employee_home, name="employee_home"),
+    path(
+        "employee/documents/unsigned/<int:envelope_id>/",
+        employee_unsigned_document,
+        name="employee_unsigned_document",
+    ),
+    path(
+        "employee/documents/unsigned/<int:envelope_id>/open/",
+        employee_open_unsigned_document,
+        name="employee_open_unsigned_document",
+    ),
+    path(
+        "employee/immigration/",
+        employee_immigration_upload,
+        name="employee_immigration_upload",
+    ),
     path("fetch_managers/", fetch_managers, name="fetch_managers"),
     path('task-results/', TaskResultListView.as_view(), name='task_results'),
     path('verify-phone/<str:phone_number>/', verify_twilio_phone_number, name='verify_twilio_phone'),
@@ -74,6 +101,11 @@ urlpatterns = [
     path("hr/dashboard/", hr_dashboard, name="hr_dashboard"),
     path("hr/invite/cancel/<int:invite_id>/", cancel_invite, name="cancel_invite"),
     path("hr/invite/resend/<int:invite_id>/", resend_invite, name="resend_invite"),
+    path(
+        "hr/documents/resend/<int:user_id>/",
+        resend_hr_documents,
+        name="resend_hr_documents",
+    ),
     path("hr/documents/", hr_document_view, name="hr_document_view"),
     path("hr/documents/fetch/<int:user_id>/", fetch_signed_docs_by_user, name="fetch_signed_docs_by_user"),
     path("hr/documents/download/<int:doc_id>/", download_signed_document, name="download_signed_document"),
@@ -84,4 +116,9 @@ urlpatterns = [
     path("hr/employee-quick-search/", employee_quick_search, name="employee_quick_search"),
     path("hr/immigration-audit/", immigration_audit_partial, name="immigration_audit_partial",
 ),
+    path(
+        "hr/immigration-audit/export/",
+        immigration_audit_export,
+        name="immigration_audit_export",
+    ),
 ]

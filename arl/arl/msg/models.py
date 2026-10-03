@@ -6,6 +6,14 @@ from django.db import models
 from django.utils import timezone
 from django.utils.timezone import now
 from arl.user.models import CustomUser, Employer
+from arl.msg.email_utils import (
+    EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
+    EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+    EMAIL_HEADER_SPACE_CHOICES,
+    EMAIL_HEADER_SPACE_DEFAULT,
+    EMAIL_SOURCE_CHOICES,
+    email_source_label,
+)
 
 from arl.bucket.helpers import conn, upload_to_linode_object_storage
 
@@ -41,6 +49,18 @@ class EmailEvent(models.Model):
     sg_message_id = models.CharField(max_length=255)
     sg_template_id = models.CharField(max_length=255)
     sg_template_name = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=EMAIL_SOURCE_CHOICES,
+        blank=True,
+        default="",
+        help_text="in_app, sendgrid, or compose — from unique args when SendGrid has no template.",
+    )
+    app_template_id = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="EmailTemplate.pk for in-app/legacy template sends (audit join).",
+    )
     subject = models.CharField(max_length=255, blank=True, null=True)
     timestamp = models.DateTimeField()
     url = models.URLField()
@@ -48,6 +68,28 @@ class EmailEvent(models.Model):
 
     def __str__(self):
         return f"{self.email} - {self.event}"
+
+    @property
+    def source_label(self):
+        return email_source_label(self.source, sendgrid_id=self.sg_template_id)
+
+    @property
+    def display_template_name(self):
+        name = (self.sg_template_name or "").strip()
+        if name:
+            return name
+        from arl.msg.email_utils import resolve_stored_template_name
+
+        return resolve_stored_template_name(app_template_id=self.app_template_id)
+
+    @property
+    def display_template_id(self):
+        sid = (self.sg_template_id or "").strip()
+        if sid:
+            return sid
+        if self.app_template_id:
+            return str(self.app_template_id)
+        return ""
 
     class Meta:
         ordering = ["-timestamp"]
@@ -68,9 +110,25 @@ class EmailLog(models.Model):
     )
     sender_email = models.EmailField(help_text="The verified sender email used")
     template_id = models.CharField(
-        max_length=100, help_text="SendGrid Template ID used"
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="SendGrid template ID when one was used (empty for in-app HTML)",
     )
     template_name = models.CharField(max_length=255, blank=True, null=True)
+    source = models.CharField(
+        max_length=20,
+        choices=EMAIL_SOURCE_CHOICES,
+        blank=True,
+        default="",
+        help_text="in_app, sendgrid, or compose",
+    )
+    subject = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Resolved subject that was sent (user input or template subject)",
+    )
     sent_at = models.DateTimeField(default=now)
     status = models.CharField(
         max_length=20,
@@ -84,6 +142,10 @@ class EmailLog(models.Model):
     def __str__(self):
         return f"EmailLog {self.id} - {self.employer.name} - {self.sent_at.strftime('%Y-%m-%d %H:%M')}"
 
+    @property
+    def source_label(self):
+        return email_source_label(self.source, sendgrid_id=self.template_id)
+
 
 class EmailTemplate(models.Model):
     employers = models.ManyToManyField(
@@ -94,11 +156,62 @@ class EmailTemplate(models.Model):
         null=True,
         help_text="The name of the email template (e.g., 'New Hire Onboarding')",
     )  # ✅ Allow same name for multiple employers
-    sendgrid_id = models.TextField()  # ✅ Store SendGrid Template ID
-    include_in_report = models.BooleanField(default=False)  # ✅ For analytics
+    sendgrid_id = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional legacy SendGrid dynamic template ID. Leave blank for in-app templates; SendGrid is used as send transport only.",
+    )
+    subject = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Email subject. Supports {{name}}, {{company_name}}, {{senior_contact_name}}.",
+    )
+    html_body = models.TextField(
+        blank=True,
+        default="",
+        help_text="In-app HTML body. Supports {{name}}, {{company_name}}, {{senior_contact_name}}. Image URLs should be public (Linode).",
+    )
+    header_image_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Optional public header image URL (Linode). Shown at the top of preview and outbound HTML.",
+    )
+    header_source_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Uncropped header original used to reframe the banner. Not sent in the email.",
+    )
+    header_display_width = models.PositiveSmallIntegerField(
+        default=EMAIL_HEADER_DISPLAY_WIDTH_DEFAULT,
+        choices=EMAIL_HEADER_DISPLAY_WIDTH_CHOICES,
+        help_text="How wide the header appears in the email, in pixels. Not stretched to the full column.",
+    )
+    header_space_below = models.PositiveSmallIntegerField(
+        default=EMAIL_HEADER_SPACE_DEFAULT,
+        choices=EMAIL_HEADER_SPACE_CHOICES,
+        help_text="Space between the header picture and the message. Outlook uses a spacer row.",
+    )
+    include_in_report = models.BooleanField(
+        default=False,
+        help_text="Include this template in the employee compliance / click-engagement report.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.name} - {', '.join([emp.name for emp in self.employers.all()])}"
+        names = ", ".join(emp.name for emp in self.employers.all())
+        label = self.name or f"Template {self.pk}"
+        return f"{label} - {names}" if names else label
+
+    @property
+    def is_in_app(self):
+        return bool((self.html_body or "").strip())
+
+    def resolved_subject(self):
+        return (self.subject or self.name or "").strip()
 
 
 class WhatsAppTemplate(models.Model):

@@ -4,14 +4,20 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
-from arl.documentflow.models import DocumentFlow, DocumentFlowStep, SentDocuSignEnvelope
+from arl.documentflow.helpers import get_flow_step_for_template
+from arl.documentflow.models import (
+    DocumentFlow,
+    DocumentFlowStep,
+    SentDocuSignEnvelope,
+)
 import requests
 from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from docusign_esign import (ApiClient, EnvelopeDefinition, EnvelopesApi,
                             RecipientEmailNotification, RecipientViewRequest,
-                            SignerAttachment, TemplateRole, TemplatesApi)
+                            Recipients, Signer, SignerAttachment, TemplateRole,
+                            TemplatesApi)
 from docusign_esign.client.api_exception import ApiException
 from docusign_esign.models.envelope import Envelope
 
@@ -82,18 +88,43 @@ def get_access_token():
     return access_token
 
 
+def _resolve_docusign_template(envelope_args):
+    raw_template = envelope_args.get("template_id")
+    employer = Employer.objects.filter(id=envelope_args.get("employer_id")).first()
+    user = CustomUser.objects.filter(id=envelope_args.get("user_id")).first()
+    if not employer and user:
+        employer = user.employer
+
+    template = raw_template if isinstance(raw_template, DocuSignTemplate) else None
+    docusign_template_id = raw_template
+
+    if template is None and isinstance(raw_template, str):
+        if employer:
+            template = DocuSignTemplate.objects.filter(
+                employer=employer,
+                template_id=raw_template,
+            ).first()
+        if template is None:
+            template = DocuSignTemplate.objects.filter(template_id=raw_template).first()
+        docusign_template_id = raw_template
+
+    if template is not None:
+        docusign_template_id = template.template_id
+
+    return employer, user, template, docusign_template_id
+
+
 def create_docusign_envelope(envelope_args):
     print("envelop args in helper :", envelope_args)
     try:
         access_token = get_access_token().access_token
         print("access token :", access_token)
 
-        template = envelope_args["template_id"]
+        employer, user, template, docusign_template_id = _resolve_docusign_template(
+            envelope_args
+        )
 
         print("template :", template)
-        if isinstance(template, str):
-            template = DocuSignTemplate.objects.filter(template_id=template).first()
-
         if not template:
             print("⚠️ No matching template found. Using default name.")
             template_name = "Default Template Name"
@@ -104,7 +135,7 @@ def create_docusign_envelope(envelope_args):
         # Create the envelope definition
         envelope_definition = EnvelopeDefinition(
             status="sent",  # requests that the envelope be created and sent.
-            template_id=envelope_args["template_id"],
+            template_id=docusign_template_id,
             auto_navigation=False,
         )
 
@@ -165,10 +196,19 @@ def create_docusign_envelope(envelope_args):
         envelope_id = results.envelope_id
 
         # -- Get envelope id for tracking --
-        user = CustomUser.objects.filter(id=envelope_args.get("user_id")).first()
-        employer = Employer.objects.filter(id=envelope_args.get("employer_id")).first()
         flow = DocumentFlow.objects.filter(id=envelope_args.get("flow_id")).first()
-        flow_step = DocumentFlowStep.objects.filter(id=envelope_args.get("flow_step_id")).first()
+        flow_step = DocumentFlowStep.objects.filter(
+            id=envelope_args.get("flow_step_id")
+        ).first()
+
+        if employer and not flow_step:
+            resolved_flow, resolved_step = get_flow_step_for_template(
+                employer,
+                template or docusign_template_id or template_name,
+            )
+            if resolved_step:
+                flow = resolved_flow
+                flow_step = resolved_step
 
         # -- add a guard
         if not employer:
@@ -929,27 +969,164 @@ def create_envelope_for_in_app_signing(user, template_id, employer):
     return envelope_summary.envelope_id
 
 
+def _stored_gsa_recipient(user, envelope_id):
+    """GSA signer already saved for this envelope. Do not invent one from the user."""
+    envelope = (
+        SentDocuSignEnvelope.objects.filter(envelope_id=envelope_id)
+        .prefetch_related("recipients")
+        .first()
+    )
+    if envelope is None:
+        return None
+    if envelope.user_id and envelope.user_id != user.id:
+        raise ValueError("This envelope belongs to a different user.")
+    signers = [
+        recipient
+        for recipient in envelope.recipients.all()
+        if (recipient.role_name or "").strip().lower() == "gsa"
+        and recipient.recipient_id
+        and recipient.email
+        and recipient.name
+    ]
+    if not signers:
+        logger.error(
+            "No stored GSA recipient for envelope %s (user %s). "
+            "Refusing to guess a name, email, or client user id.",
+            envelope_id,
+            user.id,
+        )
+        raise ValueError("No stored GSA recipient for this envelope.")
+    open_signers = [
+        recipient
+        for recipient in signers
+        if (recipient.status or "").lower() not in {"completed", "declined", "voided"}
+    ]
+    return (open_signers or signers)[0]
+
+
+def _signer_on_envelope(envelopes_api, envelope_id, stored):
+    """The DocuSign signer that matches the GSA row already saved for this envelope."""
+    listed = envelopes_api.list_recipients(
+        account_id=settings.DOCUSIGN_ACCOUNT_ID,
+        envelope_id=envelope_id,
+    )
+    signers = list(getattr(listed, "signers", None) or [])
+    match = next(
+        (
+            signer
+            for signer in signers
+            if str(getattr(signer, "recipient_id", "") or "") == str(stored.recipient_id)
+        ),
+        None,
+    )
+    if match is None:
+        logger.error(
+            "Stored GSA recipient %s is not on DocuSign envelope %s.",
+            stored.recipient_id,
+            envelope_id,
+        )
+        raise ValueError("Stored GSA recipient is not on this envelope.")
+    return match
+
+
+def _embedded_client_user_id(signer):
+    """Id already on this signer, or one to attach so the view is a signing session."""
+    existing = (getattr(signer, "client_user_id", None) or "").strip()
+    if existing:
+        return existing, False
+    # A recipient view with no clientUserId is only a document view. DocuSign
+    # then hides the Sign Here tab the email ceremony shows.
+    return f"docketproof-{signer.recipient_id}", True
+
+
+def _ensure_embedded_signer(envelopes_api, envelope_id, signer):
+    """Give a remote signer an embedded id without moving their tabs."""
+    client_user_id, must_set = _embedded_client_user_id(signer)
+    if not must_set:
+        return client_user_id
+    envelopes_api.update_recipients(
+        account_id=settings.DOCUSIGN_ACCOUNT_ID,
+        envelope_id=envelope_id,
+        resend_envelope="false",
+        recipients=Recipients(
+            signers=[
+                Signer(
+                    recipient_id=str(signer.recipient_id),
+                    name=signer.name,
+                    email=signer.email,
+                    client_user_id=client_user_id,
+                    # Keep the email link a DocuSign signing session.
+                    embedded_recipient_start_url="SIGN_AT_DOCUSIGN",
+                )
+            ]
+        ),
+    )
+    logger.info(
+        "DocuSign envelope %s recipient %s can sign in the app. "
+        "Sign Here stays on that recipient. Email signing stays at DocuSign.",
+        envelope_id,
+        signer.recipient_id,
+    )
+    return client_user_id
+
+
+def _recipient_view_request(envelopes_api, user, envelope_id, return_url):
+    stored = _stored_gsa_recipient(user, envelope_id)
+    if stored is not None:
+        signer = _signer_on_envelope(envelopes_api, envelope_id, stored)
+        client_user_id = _ensure_embedded_signer(envelopes_api, envelope_id, signer)
+        logger.info(
+            "DocuSign recipient view for envelope %s uses stored recipient %s (%s).",
+            envelope_id,
+            stored.recipient_id,
+            stored.role_name,
+        )
+        return RecipientViewRequest(
+            authentication_method="none",
+            client_user_id=client_user_id,
+            recipient_id=str(stored.recipient_id),
+            return_url=return_url,
+            user_name=signer.name or stored.name,
+            email=signer.email or stored.email,
+        )
+    # In-app signing creates the envelope with this client user id and has no
+    # stored recipient row yet.
+    return RecipientViewRequest(
+        authentication_method="none",
+        client_user_id=str(user.id),
+        recipient_id="1",
+        return_url=return_url,
+        user_name=f"{user.first_name} {user.last_name}",
+        email=user.email,
+    )
+
+
 def get_recipient_view_url(user, envelope_id, return_url):
     access_token = get_access_token().access_token
     base_path = settings.DOCUSIGN_BASE_PATH
     api_client = create_api_client(base_path, access_token)
 
     envelopes_api = EnvelopesApi(api_client)
-
-    recipient_view_request = RecipientViewRequest(
-        authentication_method="none",
-        client_user_id=str(user.id),  # Important for embedded signing
-        recipient_id="1",  # DocuSign assigns 1 to the first recipient by default
-        return_url=return_url,
-        user_name=f"{user.first_name} {user.last_name}",
-        email=user.email,
-    )
-
-    results = envelopes_api.create_recipient_view(
-        account_id=settings.DOCUSIGN_ACCOUNT_ID,
-        envelope_id=envelope_id,
-        recipient_view_request=recipient_view_request,
-    )
+    recipient_view_request = None
+    try:
+        recipient_view_request = _recipient_view_request(
+            envelopes_api, user, envelope_id, return_url
+        )
+        results = envelopes_api.create_recipient_view(
+            account_id=settings.DOCUSIGN_ACCOUNT_ID,
+            envelope_id=envelope_id,
+            recipient_view_request=recipient_view_request,
+        )
+    except ApiException as exc:
+        logger.exception(
+            "DocuSign create_recipient_view failed for envelope %s "
+            "recipient_id=%s status=%s body=%s",
+            envelope_id,
+            getattr(recipient_view_request, "recipient_id", None),
+            getattr(exc, "status", None),
+            getattr(exc, "body", None),
+        )
+        raise
 
     return results.url
 
@@ -977,3 +1154,42 @@ def get_template_signature_validation(template_id):
         return {
             "has_sign_here": False,
         }
+
+
+RESENDABLE_ENVELOPE_STATUSES = frozenset({"sent", "delivered"})
+
+
+def resend_docusign_envelope(sent_envelope):
+    """Email an in-process envelope again.
+
+    Uses EnvelopesApi.update(resend_envelope=true), the same update call
+    this module already uses to change an envelope. It does not create a
+    second envelope. Drafts, completed, declined, and voided envelopes
+    are refused.
+    """
+    status = (getattr(sent_envelope, "status", "") or "").lower()
+    envelope_id = getattr(sent_envelope, "envelope_id", "") or ""
+    if status not in RESENDABLE_ENVELOPE_STATUSES or not envelope_id:
+        raise ValueError(
+            "Only sent or delivered DocuSign envelopes can be resent."
+        )
+
+    account_id = settings.DOCUSIGN_ACCOUNT_ID
+    if not account_id:
+        raise ValueError("DocuSign account is not configured.")
+
+    access_token = get_access_token().access_token
+    api_client = create_api_client(settings.DOCUSIGN_API_CLIENT_HOST, access_token)
+    envelopes_api = EnvelopesApi(api_client)
+    envelopes_api.update(
+        account_id,
+        envelope_id,
+        envelope=Envelope(),
+        resend_envelope="true",
+    )
+    logger.info(
+        "Resent DocuSign envelope %s for user_id=%s",
+        envelope_id,
+        getattr(sent_envelope, "user_id", None),
+    )
+    return {"success": True, "envelope_id": envelope_id}

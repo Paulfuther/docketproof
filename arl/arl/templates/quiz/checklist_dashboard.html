@@ -7,13 +7,18 @@
 {{ form|as_crispy_errors }}
 
 
-<div class="container">
+<div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
+{% if shows_gsa_chrome %}
+    <div class="pt-5 mt-4 mb-3">
+        <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+        <h1 class="h4 mt-2 mb-1">Checklist Dashboard</h1>
+    </div>
+{% else %}
     <div class="row justify-content-center pt-5 mt-5"></div>
     <div class="row justify-content-center">
         <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
-  
-
   <legend>Checklist Dashboard</legend>
+{% endif %}
 
 <ul class="nav nav-tabs flex-wrap text-center" id="checklistTabs">
   <li class="nav-item">
@@ -208,8 +213,10 @@
 </div>
   </div>
 
+{% if not shows_gsa_chrome %}
 </div>
 </div>
+{% endif %}
 
 </div>
 </div>

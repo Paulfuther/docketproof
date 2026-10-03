@@ -18,7 +18,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponseBadRequest, HttpResponseNotFound, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -40,6 +40,12 @@ from .forms import (
     TemplateItemFormSet,
 )
 from .models import Checklist, ChecklistItem, ChecklistTemplate, Quiz, SaltLog
+from arl.user.gsa_access import (
+    gsa_preview_blocks_mutation,
+    is_gsa_account,
+    post_form_success_url,
+)
+
 from .tasks import (
     generate_checklist_pdf_task,
     generate_fresh_checklist_pdf,
@@ -150,6 +156,9 @@ class SaltLogCreateView(LoginRequiredMixin, CreateView):
     template_name = "quiz/salt_log_form.html"
     success_url = reverse_lazy("home")
 
+    def get_success_url(self):
+        return str(post_form_success_url(self.request.user, self.request))
+
     def dispatch(self, request, *args, **kwargs):
         print("Dispatch method called.")
         return super().dispatch(request, *args, **kwargs)
@@ -166,6 +175,9 @@ class SaltLogCreateView(LoginRequiredMixin, CreateView):
         return self.render_to_response({"form": form})
 
     def form_valid(self, form):
+        blocked = gsa_preview_blocks_mutation(self.request)
+        if blocked:
+            return blocked
         # Set the user and user_employer fields for the form instance
         form.instance.user = self.request.user
         form.instance.user_employer = self.request.user.employer
@@ -306,8 +318,11 @@ class SaltLogListView(LoginRequiredMixin, ListView):
     context_object_name = "saltlogs"
 
     def get_queryset(self):
-        # Filter salt logs by the current user's employer
-        return SaltLog.objects.filter(user_employer=self.request.user.employer)
+        user = self.request.user
+        queryset = SaltLog.objects.filter(user_employer=user.employer)
+        if is_gsa_account(user):
+            queryset = queryset.filter(user=user)
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -322,14 +337,23 @@ class SaltLogUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "quiz/salt_log_form_update.html"
     success_url = reverse_lazy("salt_log_list")
 
+    def get_queryset(self):
+        user = self.request.user
+        queryset = super().get_queryset()
+        if is_gsa_account(user):
+            return queryset.filter(user=user, user_employer=user.employer)
+        return queryset
+
+    def get_success_url(self):
+        if is_gsa_account(self.request.user):
+            return str(post_form_success_url(self.request.user, self.request))
+        return str(self.success_url)
+
     def dispatch(self, request, *args, **kwargs):
         try:
-            # Your print statement for debugging
-            print("Dispatch method called.")
             return super().dispatch(request, *args, **kwargs)
-        except Exception as e:
-            print(f"Exception occurred: {e}")
-            raise
+        except Http404:
+            return HttpResponseNotFound("Salt log not found.")
 
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -337,14 +361,14 @@ class SaltLogUpdateView(LoginRequiredMixin, UpdateView):
         employer = user.employer
         existing_images = []
 
-        # Check if image_folder exists and get available images from S3
         if self.object.image_folder:
             existing_images = get_s3_images_for_salt_log(
                 self.object.image_folder, user.employer
             )
-        print(existing_images)
         form = self.form_class(
-            instance=self.object, initial={"existing_images": existing_images}
+            instance=self.object,
+            initial={"existing_images": existing_images},
+            user=user,
         )
         form.fields["user_employer"].initial = employer
 
@@ -355,7 +379,6 @@ class SaltLogUpdateView(LoginRequiredMixin, UpdateView):
         )
 
     def form_valid(self, form):
-        # print(form)
         form.instance.user_employer = self.request.user.employer
         return super().form_valid(form)
 

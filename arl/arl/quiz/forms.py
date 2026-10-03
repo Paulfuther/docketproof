@@ -101,6 +101,11 @@ class SaltLogForm(forms.ModelForm):
         if user:
             self.fields["user_employer"].initial = self.get_user_employer(user)
             self.fields["user_employer"].disabled = True
+            if user.employer_id:
+                self.fields["store"].queryset = Store.objects.filter(
+                    employer=user.employer
+                ).order_by("number")
+                self.fields["store"].empty_label = "Select a store…"
 
     def get_user_employer(self, user):
         return user.employer

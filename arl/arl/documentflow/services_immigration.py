@@ -1,5 +1,33 @@
-from datetime import date
-from django.db.models import Q
+import base64
+import csv
+import logging
+import mimetypes
+from datetime import date, datetime
+from io import StringIO
+
+from django.contrib.auth.models import Group
+from django.db import transaction
+from django.db.models import CharField, Q
+from django.db.models.functions import Cast
+from django.utils import timezone
+
+from arl.bucket.helpers import read_s3_object_bytes
+from arl.dsign.models import SignedDocumentFile
+from arl.msg.helpers import create_master_email
+from arl.setup.models import TenantApiKeys
+from arl.user.models import CustomUser
+
+from .constants import IMMIGRATION_STATUS_TYPES
+from .models import ImmigrationStatusEvent
+
+logger = logging.getLogger(__name__)
+
+IMMIGRATION_UPLOAD_EMAIL_GROUP = "immigration_email"
+
+# User-facing label when a checkbox or an overrides-permit event
+# keeps the employee work-authorized. The status code stays
+# extension_pending so audit ranking does not move.
+AUTHORIZED_EXTENSION_LABEL = "Authorized - extension on file"
 
 
 def _get_sin_value(user):
@@ -11,10 +39,21 @@ def _get_sin_value(user):
     return "".join(ch for ch in str(raw) if ch.isdigit())
 
 
-def _days_until(target_date):
+def requires_work_permit(user):
+    """True only when the SIN is temporary (digits start with 9).
+
+    Permanent SINs, a blank SIN, and a SIN that cannot be decrypted do
+    not need a work permit. A leftover work_permit_expiration_date on
+    those rows is not a milestone reminder.
+    """
+    return _get_sin_value(user).startswith("9")
+
+
+def _days_until(target_date, today=None):
     if not target_date:
         return None
-    return (target_date - date.today()).days
+    today = today or timezone.localdate()
+    return (target_date - today).days
 
 
 def _sin_status(user):
@@ -85,15 +124,25 @@ def _sin_status(user):
     }
 
 
-def _permit_status(user, sin_info):
+def permit_override_status_types():
+    """Immigration event types that prove work authorization."""
+    return [
+        code
+        for code, meta in IMMIGRATION_STATUS_TYPES.items()
+        if meta.get("overrides_permit")
+    ]
+
+
+def _permit_status(user, sin_info, permit_override=False):
     expiry = getattr(user, "work_permit_expiration_date", None)
     days_left = _days_until(expiry)
 
-    # 🔥 NEW: extension overrides expiry
-    if user.work_permit_extension_requested:
+    # Checkbox ("extension letter on file") or an active event whose
+    # type has overrides_permit. Either one means authorized with proof.
+    if user.work_permit_extension_requested or permit_override:
         return {
             "code": "extension_pending",
-            "label": "Extension Pending",
+            "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
             "expiry": expiry,
             "days_left": days_left,
@@ -149,11 +198,24 @@ def _permit_status(user, sin_info):
 def _overall_status(sin_info, permit_info):
     # Extension / maintained-status path overrides SIN expiry.
     # A temporary SIN may expire while the employee remains work-authorized.
+    # A permanent SIN leaves Compliant only for a real extension letter
+    # (checkbox) or an active overrides-permit event, not a leftover
+    # permit date.
     if permit_info["code"] == "extension_pending":
         return {
             "code": "extension_pending",
-            "label": "Extension Pending",
+            "label": AUTHORIZED_EXTENSION_LABEL,
             "pill_class": "primary",
+        }
+
+    # Permanent SIN does not need a work permit. A leftover
+    # work_permit_expiration_date — even one that is expired or inside
+    # 120 days — must not flip the overall pill to expiring soon or urgent.
+    if sin_info["code"] == "permanent":
+        return {
+            "code": "compliant",
+            "label": "Compliant",
+            "pill_class": "success",
         }
 
     # Valid permit should also prevent expired SIN from becoming "urgent".
@@ -205,7 +267,374 @@ def _overall_status(sin_info, permit_info):
     }
 
 
-def build_immigration_audit(employer, search_query="", flagged_only=False):
+# Same 120-day window _permit_status uses for "Expiring Soon".
+# Chip color only — it does not feed the audit sort.
+_PERMIT_WATCH_DAYS = 120
+
+_OVERALL_SCAN = {
+    "compliant": ("Compliant", "ok"),
+    "urgent": ("Urgent", "urgent"),
+    "expiring_soon": ("Expiring soon", "watch"),
+    "compliant_sin_update_needed": ("SIN update", "watch"),
+    "extension_pending": ("Authorized", "auth"),
+    "needs_review": ("Needs review", "watch"),
+}
+
+
+def _scan_chip(label, title, tone, detail=None):
+    chip = {"label": label, "title": title, "tone": tone}
+    if detail:
+        chip["detail"] = detail
+    return chip
+
+
+def _event_scan_label(event):
+    meta = IMMIGRATION_STATUS_TYPES.get(event.status_type) or {}
+    return meta.get("scan_label") or event.get_status_type_display()
+
+
+def _sin_scan_chip(row):
+    info = row["sin_info"]
+    code = info["code"]
+    title = info["label"]
+    if row["sin_expiry"]:
+        title = f"{info['label']} — expires {row['sin_expiry'].isoformat()}"
+
+    if code == "permanent":
+        return _scan_chip("Permanent", info["label"], "ok")
+    if code == "expired":
+        return _scan_chip("SIN expired", title, "urgent")
+    if code == "missing":
+        return _scan_chip("No SIN", info["label"], "urgent")
+    return _scan_chip("Temp SIN", title, "watch")
+
+
+def _permit_scan_chip(row):
+    """Calendar state of the permit, separate from authorization proof.
+
+    An extension or overrides-permit event stays on the Proof and Overall
+    chips. A permanent SIN stays "Not required" even when a leftover
+    permit date is expired — same rule the ranker already uses.
+    """
+    info = row["permit_info"]
+    code = info["code"]
+    days = row["permit_days"]
+    full = info["label"]
+
+    if code == "not_required":
+        return _scan_chip("Not required", full, "muted")
+
+    if code == "missing_expiry" or (code == "extension_pending" and days is None):
+        if code == "missing_expiry":
+            return _scan_chip("No expiry", full, "urgent")
+        return _scan_chip("No expiry", f"No permit expiry on file. {full}", "watch")
+
+    if code == "expired" or (days is not None and days < 0):
+        title = full
+        if code == "extension_pending":
+            title = f"Permit expired. {full}"
+        return _scan_chip("Expired", title, "urgent")
+
+    if days is not None:
+        label = "1 day" if days == 1 else f"{days} days"
+        if code == "valid" or (
+            code == "extension_pending" and days > _PERMIT_WATCH_DAYS
+        ):
+            tone = "ok"
+        else:
+            tone = "watch"
+        return _scan_chip(label, f"{full} — {label} remaining", tone)
+
+    if code == "valid":
+        return _scan_chip("Valid", full, "ok")
+
+    return _scan_chip(full, full, "muted")
+
+
+def _proof_scan_chip(row):
+    """Proof column: authorization evidence, otherwise the latest event.
+
+    Blue when the employee is work-authorized by an extension checkbox
+    or an overrides-permit event. Gray for context events, no proof,
+    and permit-not-required.
+    """
+    permit_event = row["permit_event"]
+    if permit_event is not None:
+        full = permit_event.get_status_type_display()
+        title = full
+        if full != AUTHORIZED_EXTENSION_LABEL:
+            title = f"{full}. {AUTHORIZED_EXTENSION_LABEL}"
+        return _scan_chip(
+            _event_scan_label(permit_event),
+            title,
+            "auth",
+            detail=full,
+        )
+
+    if row["extension_requested"]:
+        return _scan_chip(
+            "Extension on file",
+            AUTHORIZED_EXTENSION_LABEL,
+            "auth",
+            detail="Extension on file",
+        )
+
+    latest = row["latest_immigration_event"]
+    if latest is not None:
+        return _scan_chip(
+            _event_scan_label(latest),
+            latest.get_status_type_display(),
+            "muted",
+        )
+
+    if row["sin_info"]["is_temporary"]:
+        return _scan_chip("None", "No proof on file", "muted")
+
+    return _scan_chip("—", "No proof required", "muted")
+
+
+def _overall_scan_chip(row):
+    info = row["overall_status"]
+    label, tone = _OVERALL_SCAN.get(info["code"], (info["label"], "muted"))
+    return _scan_chip(label, info["label"], tone)
+
+
+def _attach_scan_chips(row):
+    """Display chips for the scan list. Does not change rank inputs."""
+    row["sin_chip"] = _sin_scan_chip(row)
+    row["permit_chip"] = _permit_scan_chip(row)
+    row["proof_chip"] = _proof_scan_chip(row)
+    row["overall_chip"] = _overall_scan_chip(row)
+
+
+def _normalize_audit_sort(sort):
+    """Blank stays urgency. Extra sorts are SIN, Permit, Name, and Date hired."""
+    sort = (sort or "").strip().lower()
+    if sort in {"sin", "permit", "name", "hired"}:
+        return sort
+    return ""
+
+
+def _audit_name_key(employee):
+    return (
+        (employee.last_name or "").casefold(),
+        (employee.first_name or "").casefold(),
+        (employee.username or "").casefold(),
+        employee.pk or 0,
+    )
+
+
+def _audit_display_name_key(employee):
+    """A-Z by the name shown on the row. A blank name sorts last."""
+    full = (employee.get_full_name() or "").strip()
+    if not full:
+        username = (getattr(employee, "username", None) or "").casefold()
+        return (1, username, employee.pk or 0)
+    return (0, full.casefold(), employee.pk or 0)
+
+
+def _hired_sort_key(employee, name_key):
+    """Newest date hired first. A missing date sorts last, then by name.
+
+    Date hired is CustomUser.date_joined. The employee record has no
+    separate hire-date column; the account is created when they join.
+    """
+    hired = getattr(employee, "date_joined", None)
+    if hired is None:
+        return (1, name_key(employee))
+    return (0, -hired.timestamp(), name_key(employee))
+
+
+def _audit_days_key(days):
+    """Sooner dates first. A missing date sorts after any real number."""
+    if days is None:
+        return (1, 0)
+    return (0, days)
+
+
+# Worst SIN chip first. Matches _sin_scan_chip: No SIN, SIN expired,
+# then Temp SIN (no date, then inside 120 days, then later), then Permanent.
+_SIN_SEVERITY = {
+    "missing": 0,
+    "expired": 1,
+    "missing_expiry": 2,
+    "expiring_soon": 3,
+    "temporary": 4,
+    "permanent": 5,
+}
+
+
+def _permit_severity(row):
+    """Worst permit chip first. Same calendar rules as _permit_scan_chip.
+
+    Not required is last, including a permanent SIN with a leftover date.
+    Expired, then no expiry, then inside the 120-day watch window, then
+    a later valid date.
+    """
+    code = row["permit_info"]["code"]
+    days = row["permit_days"]
+    if code == "not_required":
+        return 5
+    if code == "expired" or (days is not None and days < 0):
+        return 0
+    if code == "missing_expiry" or days is None:
+        return 1
+    if days <= _PERMIT_WATCH_DAYS:
+        return 2
+    return 3
+
+
+def _search_audit_employees(employees, search_query):
+    """Each word must match name, email, username, or store number."""
+    search_query = (search_query or "").strip()
+    if not search_query:
+        return employees
+    employees = employees.annotate(
+        _store_number_text=Cast("store__number", CharField())
+    )
+    for token in search_query.split():
+        employees = employees.filter(
+            Q(first_name__icontains=token)
+            | Q(last_name__icontains=token)
+            | Q(email__icontains=token)
+            | Q(username__icontains=token)
+            | Q(_store_number_text__icontains=token)
+        )
+    return employees
+
+
+def _immigration_row_for_employee(employee):
+    override_types = permit_override_status_types()
+    latest_event = (
+        employee.immigration_status_events.filter(is_active=True)
+        .order_by("-effective_date", "-created_at")
+        .first()
+    )
+    permit_event = (
+        employee.immigration_status_events.filter(
+            is_active=True,
+            status_type__in=override_types,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    immigration_events = (
+        employee.immigration_status_events.filter(is_active=True)
+        .select_related("document_file", "created_by")
+        .order_by("-effective_date", "-created_at")
+    )
+    sin_expiry = employee.sin_expiration_date
+    sin_days = _days_until(sin_expiry)
+    sin_info = _sin_status(employee)
+    permit_expiry = employee.work_permit_expiration_date
+    permit_days = _days_until(permit_expiry)
+    permit_info = _permit_status(
+        employee,
+        sin_info,
+        permit_override=permit_event is not None,
+    )
+    overall = _overall_status(sin_info, permit_info)
+    return {
+        "employee": employee,
+        "sin_masked": employee.masked_sin(),
+        "sin_expiry": sin_expiry,
+        "sin_days": sin_days,
+        "sin_info": sin_info,
+        "permit_expiry": permit_expiry,
+        "permit_days": permit_days,
+        "permit_info": permit_info,
+        "extension_requested": employee.work_permit_extension_requested,
+        "extension_date": employee.work_permit_extension_date,
+        "overall_status": overall,
+        "is_flagged": overall.get("code") != "compliant",
+        "latest_immigration_event": latest_event,
+        "permit_event": permit_event,
+        "immigration_events": immigration_events,
+    }
+
+
+def _employee_sin_badge(sin_info):
+    code = sin_info["code"]
+    if code == "permanent":
+        return None
+    tone_map = {
+        "missing": "urgent",
+        "expired": "urgent",
+        "missing_expiry": "watch",
+        "expiring_soon": "watch",
+        "temporary": "watch",
+    }
+    label_map = {
+        "missing": "Missing SIN",
+        "expired": "Expired",
+        "missing_expiry": "Temporary SIN",
+        "expiring_soon": "Expiring",
+        "temporary": "Temporary SIN",
+    }
+    return {
+        "label": label_map.get(code, sin_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": sin_info["label"],
+    }
+
+
+def _employee_permit_badge(permit_info):
+    code = permit_info["code"]
+    if code == "not_required":
+        return None
+    tone_map = {
+        "extension_pending": "auth",
+        "missing_expiry": "urgent",
+        "expired": "urgent",
+        "expiring_soon": "watch",
+        "valid": "ok",
+    }
+    label_map = {
+        "extension_pending": "Authorized",
+        "missing_expiry": "Missing Permit Expiry",
+        "expired": "Expired",
+        "expiring_soon": "Expiring",
+        "valid": "Valid",
+    }
+    return {
+        "label": label_map.get(code, permit_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": permit_info["label"],
+    }
+
+
+def _employee_overall_badge(overall_status):
+    label, tone = _OVERALL_SCAN.get(
+        overall_status["code"],
+        (overall_status["label"], "muted"),
+    )
+    return {
+        "label": label,
+        "tone": tone,
+        "title": overall_status["label"],
+    }
+
+
+def build_immigration_tracker(user):
+    """GSA tracker summary using the same compliance rules as the HR audit."""
+    row = _immigration_row_for_employee(user)
+    return {
+        "latest_event": row["latest_immigration_event"],
+        "latest_immigration_event": row["latest_immigration_event"],
+        "sin_expiration": user.sin_expiration_date,
+        "work_permit_expiration": user.work_permit_expiration_date,
+        "extension_requested": row["extension_requested"],
+        "extension_date": row["extension_date"],
+        "sin_info": row["sin_info"],
+        "permit_info": row["permit_info"],
+        "overall_status": row["overall_status"],
+        "sin_badge": _employee_sin_badge(row["sin_info"]),
+        "permit_badge": _employee_permit_badge(row["permit_info"]),
+        "overall_badge": _employee_overall_badge(row["overall_status"]),
+    }
+
+
+def build_immigration_audit(employer, search_query="", flagged_only=False, sort=""):
     employees = (
         employer.customuser_set.filter(is_active=True)
         .select_related("store")
@@ -213,72 +642,13 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
     )
 
     search_query = (search_query or "").strip()
-    if search_query:
-        employees = employees.filter(
-            Q(first_name__icontains=search_query)
-            | Q(last_name__icontains=search_query)
-            | Q(email__icontains=search_query)
-        )
+    employees = _search_audit_employees(employees, search_query)
+    sort = _normalize_audit_sort(sort)
 
     rows = []
 
     for employee in employees:
-        latest_event = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .order_by("-effective_date", "-created_at")
-            .first()
-        )
-
-        permit_event = (
-            employee.immigration_status_events
-            .filter(
-                is_active=True,
-                status_type__in=[
-                    "work_permit_extension",
-                    "maintained_status",
-                    "pgwp_application",
-                    "restoration_application",
-                    "new_work_permit",
-                ],
-            )
-            .order_by("-created_at")
-            .first()
-        )
-
-        immigration_events = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .select_related("document_file", "created_by")
-            .order_by("-effective_date", "-created_at")
-        )
-        sin_expiry = employee.sin_expiration_date
-        sin_days = _days_until(sin_expiry)
-        sin_info = _sin_status(employee)
-
-        permit_expiry = employee.work_permit_expiration_date
-        permit_days = _days_until(permit_expiry)
-
-        permit_info = _permit_status(employee, sin_info)
-        overall = _overall_status(sin_info, permit_info)
-
-        row = {
-            "employee": employee,
-            "sin_masked": employee.masked_sin(),
-            "sin_expiry": sin_expiry,
-            "sin_days": sin_days,
-            "sin_info": sin_info,
-            "permit_expiry": permit_expiry,
-            "permit_days": permit_days,
-            "permit_info": permit_info,
-            "extension_requested": employee.work_permit_extension_requested,
-            "extension_date": employee.work_permit_extension_date,
-            "overall_status": overall,
-            "is_flagged": overall.get("code") != "compliant",
-            "latest_immigration_event": latest_event,
-            "permit_event": permit_event,
-            "immigration_events": immigration_events,
-        }
+        row = _immigration_row_for_employee(employee)
 
         if flagged_only and not row["is_flagged"]:
             continue
@@ -288,21 +658,422 @@ def build_immigration_audit(employer, search_query="", flagged_only=False):
     PRIORITY_MAP = {
         "urgent": 0,
         "expiring_soon": 1,
+        "compliant_sin_update_needed": 1,
         "extension_pending": 2,
         "needs_review": 3,
         "compliant": 4,
     }
 
-    rows.sort(
-        key=lambda r: (
-            PRIORITY_MAP.get(r["overall_status"]["code"], 99),
-            r["permit_days"] if r["permit_days"] is not None else 9999,
-            -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
+    def _rank_permit_days(row):
+        # A permanent SIN is Permit Not Required. Do not rank that row
+        # by a leftover work_permit_expiration_date.
+        if row["permit_info"]["code"] == "not_required":
+            return 9999
+        if row["permit_days"] is None:
+            return 9999
+        return row["permit_days"]
+
+    if sort == "sin":
+        rows.sort(
+            key=lambda r: (
+                _SIN_SEVERITY.get(r["sin_info"]["code"], 99),
+                _audit_days_key(r["sin_days"]),
+                _audit_name_key(r["employee"]),
+            )
         )
-    )
+    elif sort == "permit":
+        rows.sort(
+            key=lambda r: (
+                _permit_severity(r),
+                _audit_days_key(
+                    None if _permit_severity(r) == 5 else r["permit_days"]
+                ),
+                _audit_name_key(r["employee"]),
+            )
+        )
+    elif sort == "name":
+        rows.sort(key=lambda r: _audit_display_name_key(r["employee"]))
+    elif sort == "hired":
+        rows.sort(key=lambda r: _hired_sort_key(r["employee"], _audit_name_key))
+    else:
+        rows.sort(
+            key=lambda r: (
+                PRIORITY_MAP.get(r["overall_status"]["code"], 99),
+                _rank_permit_days(r),
+                -(r["employee"].date_joined.timestamp() if r["employee"].date_joined else 0),
+            )
+        )
+
+    for row in rows:
+        _attach_scan_chips(row)
 
     return {
         "immigration_rows": rows,
         "immigration_search": search_query,
         "immigration_flagged_only": flagged_only,
+        "immigration_sort": sort,
+    }
+
+
+IMMIGRATION_EXPORT_COLUMNS = (
+    ("name", "Name"),
+    ("email", "Email"),
+    ("store", "Store"),
+    ("employer", "Employer"),
+    ("masked_sin", "Masked SIN"),
+    ("sin_type", "SIN Type"),
+    ("sin_expiry", "SIN Expiry"),
+    ("sin_days_left", "SIN Days Left"),
+    ("permit_expiry", "Permit Expiry"),
+    ("permit_days_left", "Permit Days Left"),
+    ("extension_authorized", "Extension Authorized"),
+    ("overall_status", "Overall Status"),
+    ("overall_status_code", "Overall Status Code"),
+    ("latest_event_type", "Latest Event Type"),
+    ("latest_event_effective_date", "Latest Event Effective Date"),
+    ("latest_event_has_document", "Latest Event Has Document"),
+    ("latest_event_has_reference", "Latest Event Has Reference"),
+)
+
+
+def _csv_date(value):
+    return value.isoformat() if value else ""
+
+
+def _csv_days(value):
+    return "" if value is None else str(value)
+
+
+def _csv_yes(value):
+    return "Yes" if value else "No"
+
+
+def _sin_type_for_export(sin_info):
+    if sin_info["code"] == "missing":
+        return "missing"
+    if sin_info["is_temporary"]:
+        return "temporary"
+    return "permanent"
+
+
+def immigration_audit_export_records(employer):
+    """All active employees, in the same order as the unfiltered audit."""
+    audit = build_immigration_audit(employer)
+    employer_name = employer.name if employer else ""
+    records = []
+    for row in audit["immigration_rows"]:
+        employee = row["employee"]
+        event = row["latest_immigration_event"]
+        store = ""
+        if employee.store_id and employee.store is not None:
+            store = str(employee.store.number)
+        full_name = (employee.get_full_name() or "").strip()
+        records.append(
+            {
+                "name": full_name or employee.username or "",
+                "email": employee.email or "",
+                "store": store,
+                "employer": employer_name,
+                "masked_sin": row["sin_masked"],
+                "sin_type": _sin_type_for_export(row["sin_info"]),
+                "sin_expiry": _csv_date(row["sin_expiry"]),
+                "sin_days_left": _csv_days(row["sin_days"]),
+                "permit_expiry": _csv_date(row["permit_expiry"]),
+                "permit_days_left": _csv_days(row["permit_days"]),
+                "extension_authorized": _csv_yes(
+                    row["overall_status"]["code"] == "extension_pending"
+                ),
+                "overall_status": row["overall_status"]["label"],
+                "overall_status_code": row["overall_status"]["code"],
+                "latest_event_type": (
+                    event.get_status_type_display() if event else ""
+                ),
+                "latest_event_effective_date": (
+                    _csv_date(event.effective_date) if event else ""
+                ),
+                "latest_event_has_document": _csv_yes(
+                    bool(event and event.document_file_id)
+                ),
+                "latest_event_has_reference": _csv_yes(
+                    bool(event and (event.reference_number or "").strip())
+                ),
+            }
+        )
+    return records
+
+
+def render_immigration_audit_csv(employer):
+    """Excel-openable CSV. Caller adds a UTF-8 BOM for Excel."""
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([label for _key, label in IMMIGRATION_EXPORT_COLUMNS])
+    for record in immigration_audit_export_records(employer):
+        writer.writerow(
+            [record[key] for key, _label in IMMIGRATION_EXPORT_COLUMNS]
+        )
+    return buffer.getvalue()
+
+
+def _coerce_date(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return datetime.strptime(cleaned, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("Use a valid date.") from exc
+    raise ValueError("Use a valid date.")
+
+
+def _sync_employee_immigration_dates(employee, status_type, effective_date, expiry_date):
+    """Write permit status and dates onto the employee the audit already reads."""
+    meta = IMMIGRATION_STATUS_TYPES.get(status_type, {})
+    fields = []
+
+    if status_type == "new_work_permit":
+        employee.work_permit_extension_requested = False
+        fields.append("work_permit_extension_requested")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+    elif meta.get("overrides_permit"):
+        employee.work_permit_extension_requested = True
+        fields.append("work_permit_extension_requested")
+        if effective_date:
+            employee.work_permit_extension_date = effective_date
+            fields.append("work_permit_extension_date")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+
+    if fields:
+        employee.save(update_fields=fields)
+
+
+@transaction.atomic
+def update_immigration_tracker(
+    *,
+    employee,
+    employer,
+    created_by,
+    document_file,
+    status_type,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+):
+    """
+    Append an ImmigrationStatusEvent for an uploaded file and refresh the
+    employee permit fields. This is the same tracker the HR audit reads.
+    """
+    status_type = (status_type or "").strip()
+    if status_type not in IMMIGRATION_STATUS_TYPES:
+        raise ValueError("Choose a valid immigration status.")
+    if document_file is None:
+        raise ValueError("A document file is required.")
+    if employee.employer_id != employer.id:
+        raise ValueError("Employee is not part of this employer.")
+
+    effective = _coerce_date(effective_date)
+    expiry = _coerce_date(expiry_date)
+
+    event = ImmigrationStatusEvent.objects.create(
+        user=employee,
+        employer=employer,
+        status_type=status_type,
+        effective_date=effective,
+        expiry_date=expiry,
+        reference_number=(reference_number or "").strip(),
+        notes=notes or "",
+        document_file=document_file,
+        created_by=created_by,
+        is_active=True,
+    )
+    _sync_employee_immigration_dates(employee, status_type, effective, expiry)
+    return event
+
+
+def resolve_immigration_email_group_name():
+    """
+    Return the Django auth group that receives immigration upload emails.
+
+    Prefer the canonical ``immigration_email`` group. If it is missing, use the
+    only group whose name contains both "immigration" and "email".
+    """
+    if Group.objects.filter(name=IMMIGRATION_UPLOAD_EMAIL_GROUP).exists():
+        return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+    exact_insensitive = Group.objects.filter(
+        name__iexact=IMMIGRATION_UPLOAD_EMAIL_GROUP
+    ).first()
+    if exact_insensitive:
+        return exact_insensitive.name
+
+    candidates = [
+        group.name
+        for group in Group.objects.all()
+        if "immigration" in group.name.lower() and "email" in group.name.lower()
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+
+def immigration_upload_recipient_emails(employer_id):
+    group_name = resolve_immigration_email_group_name()
+    return list(
+        CustomUser.objects.filter(
+            is_active=True,
+            employer_id=employer_id,
+            groups__name=group_name,
+        )
+        .exclude(email="")
+        .values_list("email", flat=True)
+        .distinct()
+    )
+
+
+def _log_immigration_recipient_miss(employer_id, group_name):
+    group_users = CustomUser.objects.filter(
+        is_active=True,
+        groups__name=group_name,
+    )
+    employer_matches = group_users.filter(employer_id=employer_id).exclude(email="")
+    logger.warning(
+        "Immigration upload email has no recipients for employer_id=%s in group '%s' "
+        "(%s active group member(s), %s with this employer and an email address)",
+        employer_id,
+        group_name,
+        group_users.count(),
+        employer_matches.count(),
+    )
+
+
+def _format_tracker_date(value):
+    if not value:
+        return "Not provided"
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
+
+
+def _immigration_upload_attachment(document_file_id, file_bytes=None):
+    if file_bytes is None:
+        document = SignedDocumentFile.objects.get(pk=document_file_id)
+        file_bytes = read_s3_object_bytes(document.file_path)
+        file_name = document.file_name
+    else:
+        document = SignedDocumentFile.objects.filter(pk=document_file_id).first()
+        file_name = document.file_name if document else "immigration-document"
+
+    content_type = (
+        mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    )
+    return {
+        "content": base64.b64encode(file_bytes).decode("utf-8"),
+        "filename": file_name,
+        "type": content_type,
+    }
+
+
+def send_immigration_upload_notification(
+    *,
+    employer_id,
+    employee_name,
+    company_name,
+    document_title,
+    status_label,
+    document_file_id,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+    file_bytes=None,
+):
+    """
+    Email active users in the immigration upload notification group with the
+    uploaded document attached.
+    """
+    group_name = resolve_immigration_email_group_name()
+    to_emails = immigration_upload_recipient_emails(employer_id)
+    if not to_emails:
+        _log_immigration_recipient_miss(employer_id, group_name)
+        return {
+            "status": "skipped",
+            "group_name": group_name,
+            "message": "No recipients configured.",
+        }
+
+    tenant_api_key = TenantApiKeys.objects.filter(employer_id=employer_id).first()
+    sender_email = (
+        tenant_api_key.verified_sender_email
+        if tenant_api_key and tenant_api_key.verified_sender_email
+        else None
+    )
+
+    subject = f"Immigration document uploaded — {employee_name}"
+    body = (
+        "<p>An immigration document was uploaded from the GSA immigration page.</p>"
+        f"<p><strong>Employee:</strong> {employee_name}<br>"
+        f"<strong>Company:</strong> {company_name}<br>"
+        f"<strong>Document title:</strong> {document_title}<br>"
+        f"<strong>Immigration status:</strong> {status_label}<br>"
+        f"<strong>Effective date:</strong> {_format_tracker_date(effective_date)}<br>"
+        f"<strong>Expiry date:</strong> {_format_tracker_date(expiry_date)}<br>"
+        f"<strong>Reference number:</strong> {reference_number or 'Not provided'}<br>"
+        f"<strong>Notes:</strong> {notes or 'Not provided'}</p>"
+        "<p>The uploaded file is attached.</p>"
+    )
+
+    try:
+        attachment = _immigration_upload_attachment(document_file_id, file_bytes)
+    except Exception:
+        logger.exception(
+            "Immigration upload email could not load attachment for document_file_id=%s",
+            document_file_id,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "Attachment could not be loaded from storage.",
+        }
+
+    sent = create_master_email(
+        to_email=to_emails,
+        sendgrid_id=None,
+        template_data={"subject": subject, "name": to_emails[0]},
+        attachments=[attachment],
+        verified_sender=sender_email,
+        html_content=body,
+    )
+    if not sent:
+        logger.error(
+            "create_master_email failed for immigration upload to %s in group '%s'",
+            to_emails,
+            group_name,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "SendGrid send failed.",
+        }
+
+    logger.info(
+        "Immigration upload email sent to %s recipient(s) in group '%s'",
+        len(to_emails),
+        group_name,
+    )
+    return {
+        "status": "success",
+        "group_name": group_name,
+        "recipient_count": len(to_emails),
     }

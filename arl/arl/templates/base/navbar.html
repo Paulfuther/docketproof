@@ -53,11 +53,14 @@
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% if shows_gsa_chrome %}{% url 'employee_home' %}{% else %}{% url 'home' %}{% endif %}">
       <span>
-        {% if user.is_authenticated and user.employer %}
+        {% if gsa_preview_user and gsa_preview_user.employer %}
+          <span class=" d-none d-sm-inline">{{ gsa_preview_user.employer.name }}</span>
+          <span class=" d-inline d-sm-none" style="font-size: 1rem;">{{ gsa_preview_user.employer.name }}</span>
+        {% elif user.is_authenticated and user.employer %}
           <span class=" d-none d-sm-inline">{{ user.employer.name }}</span>
-     <span class=" d-inline d-sm-none" style="font-size: 1rem;">{{ user.employer.name }}</span>
+          <span class=" d-inline d-sm-none" style="font-size: 1rem;">{{ user.employer.name }}</span>
         {% else %}
           ARL
         {% endif %}
@@ -67,9 +70,66 @@
     
 
     <div class="collapse navbar-collapse" id="mainNavbar">
+      {% if shows_gsa_chrome %}
+      <style>
+        .navbar-nav .nav-link.employee-section {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+          width: 10.5rem;
+          white-space: nowrap;
+          font-weight: 500;
+          border-bottom: 2px solid transparent;
+        }
+        .navbar-nav .nav-link.employee-section.active {
+          font-weight: 600;
+          color: #1e3a5f;
+          border-bottom-color: #1e3a5f;
+        }
+        .employee-page { max-width: 860px; }
+      </style>
+      {% endif %}
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-        {% if user.is_authenticated %}
+        {% if shows_gsa_chrome %}
+        <li class="nav-item">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
+            <i class="material-symbols-outlined">description</i> Documents
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+            <i class="material-symbols-outlined">checklist</i> Checklists
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
+            <i class="material-symbols-outlined">badge</i> Immigration
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'create_salt_log' %}">
+            <i class="material-symbols-outlined">ac_unit</i> Salt log
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'incident_dashboard' or request.resolver_match.url_name == 'create_incident' %}active{% endif %}" href="{% url 'incident_dashboard' %}">
+            <i class="material-symbols-outlined">report</i> Incident report
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'help_page' %}">
+            <i class="material-symbols-outlined">info</i> Help
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'logout' %}">
+            <i class="material-symbols-outlined">logout</i> Logout
+          </a>
+        </li>
+
+        {% elif user.is_authenticated %}
         <!-- HR -->
         <li class="nav-item">
           <a class="nav-link" href="{% url 'hr_dashboard' %}">
@@ -167,8 +227,7 @@
             <li><a class="dropdown-item" href="{% url 'email_event_summary' %}">Email Logs</a></li>
             <li><a class="dropdown-item" href="{% url 'employee_email_report' %}">Employee Email Report</a></li>
             <li><a class="dropdown-item" href="{% url 'recruit:applicant_list' %}">Recruiting</a></li>
-           
-       
+            <li><a class="dropdown-item" href="{% url 'gsa_preview_select' %}">View as GSA</a></li>
           </ul>
         </li>
         
@@ -212,5 +271,13 @@
 
       </ul>
     </div>
+    {% if gsa_preview_active %}
+    <div class="w-100 text-center py-2 bg-info-subtle border-top">
+      <span class="small">
+        Viewing as <strong>{{ gsa_preview_user.get_full_name|default:gsa_preview_user.username }}</strong> (GSA preview, read-only).
+        <a class="ms-2 text-decoration-none" href="{% url 'gsa_preview_exit' %}">Exit preview</a>
+      </span>
+    </div>
+    {% endif %}
   </div>
 </nav>

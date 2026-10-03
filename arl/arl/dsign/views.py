@@ -36,7 +36,7 @@ from arl.dsign.helpers import (
 from arl.dsign.tasks import get_outstanding_docs, list_all_docusign_envelopes_task
 from arl.user.models import CustomUser  # adjust import paths
 from arl.user.models import Store  # adjust if different
-from arl.documentflow.models import ImmigrationStatusEvent
+from arl.documentflow.services_immigration import update_immigration_tracker
 from .forms import EmployeeDocUploadForm, NameEmailForm
 from .helpers import get_docusign_edit_url
 from .models import DocuSignTemplate, SignedDocumentFile
@@ -660,18 +660,21 @@ def upload_employee_documents(request):
     )
 
     if immigration_status_type:
-        ImmigrationStatusEvent.objects.create(
-            user=employee,
-            employer=employer,
-            status_type=immigration_status_type,
-            effective_date=immigration_effective_date,
-            expiry_date=immigration_expiry_date,
-            reference_number=immigration_reference_number,
-            notes=notes,
-            document_file=uploaded_doc,
-            created_by=request.user,
-            is_active=True,
-        )
+        try:
+            update_immigration_tracker(
+                employee=employee,
+                employer=employer,
+                created_by=request.user,
+                document_file=uploaded_doc,
+                status_type=immigration_status_type,
+                effective_date=immigration_effective_date,
+                expiry_date=immigration_expiry_date,
+                reference_number=immigration_reference_number,
+                notes=notes,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("documents_dashboard") + "?employee")
 
     messages.success(
         request, f"Uploaded '{title}' for {employee.get_full_name() or employee.email}."
