@@ -187,6 +187,22 @@ class CustomUser(AbstractUser):
     def is_storage(self):
         return self.groups.filter(name="storage").exists()
 
+    @property
+    def is_employee_account(self):
+        """GSA account. Managers, employers, HR, and staff keep their own pages."""
+        if self.is_staff or self.is_superuser:
+            return False
+        if self.groups.filter(name__in=["Manager", "EMPLOYER", "HR", "CSR"]).exists():
+            return False
+        return self.groups.filter(name="GSA").exists()
+
+    @property
+    def is_hr_account(self):
+        """HR account for one company. Invite forms store this role as HR or CSR."""
+        if not self.employer_id:
+            return False
+        return self.groups.filter(name__in=["HR", "CSR"]).exists()
+
 
 class SMSOptOut(models.Model):
     user = models.OneToOneField(

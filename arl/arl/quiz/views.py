@@ -10,6 +10,11 @@ from arl.helpers import (
     get_signed_url_for_key,
     upload_to_linode_object_storage,
 )
+from arl.user.gsa_access import (
+    gsa_preview_blocks_mutation,
+    is_gsa_account,
+    post_form_success_url,
+)
 from arl.user.models import Store
 from arl.utils.images import normalize_to_jpeg
 from celery.result import AsyncResult
@@ -168,7 +173,10 @@ def salt_logs_for_user(user):
     employer = getattr(user, "employer", None)
     if employer is None:
         return SaltLog.objects.none()
-    return SaltLog.objects.filter(user_employer=employer)
+    queryset = SaltLog.objects.filter(user_employer=employer)
+    if is_gsa_account(user):
+        queryset = queryset.filter(user=user)
+    return queryset
 
 
 def _stores_for_user(user):
@@ -240,6 +248,10 @@ def salt_log_dashboard(request):
 @login_required
 def salt_log_start(request):
     """Create the draft in this request so photos have a row to attach to."""
+    blocked = gsa_preview_blocks_mutation(request)
+    if blocked:
+        return blocked
+
     employer = getattr(request.user, "employer", None)
     if employer is None:
         messages.error(request, "Your account has no company. Ask an admin to set one.")
@@ -277,6 +289,10 @@ def salt_log_edit(request, pk):
     editable = salt_log.status == SaltLog.STATUS_DRAFT
 
     if request.method == "POST":
+        blocked = gsa_preview_blocks_mutation(request)
+        if blocked:
+            return blocked
+
         is_autosave = request.GET.get("autosave") == "1"
         action = "save" if is_autosave else (request.POST.get("action") or "save")
         if not editable:
@@ -321,6 +337,8 @@ def salt_log_edit(request, pk):
                         request,
                         f"Salt log submitted, but PDF task failed to queue: {exc}",
                     )
+                if is_gsa_account(request.user):
+                    return redirect(post_form_success_url(request.user, request))
                 return redirect("salt_log_list")
 
             messages.success(request, "Draft saved.")

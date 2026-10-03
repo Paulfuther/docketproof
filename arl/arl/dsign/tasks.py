@@ -658,6 +658,7 @@ def handle_recipient_completed(
     template_name,
     payload=None,
     triggering_recipient_id=None,
+    upload_now=False,
 ):
     """Handles recipient completion events and only finalizes the flow step when the whole envelope is completed."""
     try:
@@ -731,13 +732,20 @@ def handle_recipient_completed(
 
             if created:
                 logger.info(f"✅ Saved company signed document: {processed_doc}")
-                fetch_and_upload_signed_documents.delay(
+                upload_args = (
                     envelope_id,
                     user.id if user else None,
                     employer.id,
                     template_name,
-                    is_company_document=True,
                 )
+                if upload_now:
+                    fetch_and_upload_signed_documents(
+                        *upload_args, is_company_document=True
+                    )
+                else:
+                    fetch_and_upload_signed_documents.delay(
+                        *upload_args, is_company_document=True
+                    )
 
             return {"status": "success", "document_id": processed_doc.id}
 
@@ -767,9 +775,14 @@ def handle_recipient_completed(
         if created:
             logger.info(f"✅ Saved signed document: {processed_doc}")
 
-            fetch_and_upload_signed_documents.delay(
-                envelope_id, user.id, employer.id, template_name
-            )
+            if upload_now:
+                fetch_and_upload_signed_documents(
+                    envelope_id, user.id, employer.id, template_name
+                )
+            else:
+                fetch_and_upload_signed_documents.delay(
+                    envelope_id, user.id, employer.id, template_name
+                )
 
             notify_hr.delay(
                 template_name,
@@ -824,6 +837,87 @@ def handle_recipient_completed(
     except Exception as e:
         logger.exception(f"❌ Error in handle_recipient_completed for {envelope_id}")
         return {"error": str(e)}
+
+
+def _webhook_time(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def refresh_sent_envelope_from_docusign(sent_envelope):
+    """Apply the email webhook's completion handler after an in-app signature."""
+    access_token = get_access_token().access_token
+    api_client = ApiClient()
+    api_client.host = settings.DOCUSIGN_API_CLIENT_HOST
+    api_client.set_default_header("Authorization", f"Bearer {access_token}")
+    envelopes_api = EnvelopesApi(api_client)
+    account_id = settings.DOCUSIGN_ACCOUNT_ID
+    remote = envelopes_api.get_envelope(account_id, sent_envelope.envelope_id)
+    listed = envelopes_api.list_recipients(account_id, sent_envelope.envelope_id)
+    signers = []
+    for signer in list(getattr(listed, "signers", None) or []):
+        signers.append(
+            {
+                "recipientId": signer.recipient_id,
+                "recipientIdGuid": getattr(signer, "recipient_id_guid", "") or "",
+                "roleName": getattr(signer, "role_name", "") or "",
+                "name": signer.name or "",
+                "email": signer.email or "",
+                "routingOrder": getattr(signer, "routing_order", None) or 1,
+                "status": signer.status or "",
+                "sentDateTime": _webhook_time(getattr(signer, "sent_date_time", None)),
+                "deliveredDateTime": _webhook_time(
+                    getattr(signer, "delivered_date_time", None)
+                ),
+                "signedDateTime": _webhook_time(
+                    getattr(signer, "signed_date_time", None)
+                ),
+            }
+        )
+    gsa = next(
+        (
+            signer
+            for signer in signers
+            if (signer.get("roleName") or "").strip().lower() == "gsa"
+        ),
+        None,
+    )
+    triggering = (gsa or (signers[0] if signers else {})).get("recipientId")
+    template = sent_envelope.template
+    template_id = template.template_id if template else ""
+    template_name = sent_envelope.template_name or (
+        template.template_name if template else ""
+    )
+    payload = {
+        "data": {
+            "envelopeId": sent_envelope.envelope_id,
+            "recipientId": triggering,
+            "envelopeSummary": {
+                "status": (getattr(remote, "status", None) or ""),
+                "completedDateTime": _webhook_time(
+                    getattr(remote, "completed_date_time", None)
+                ),
+                "recipients": {"signers": signers},
+            },
+        }
+    }
+    logger.info(
+        "Refreshing envelope %s after in-app signing. DocuSign status=%s.",
+        sent_envelope.envelope_id,
+        payload["data"]["envelopeSummary"]["status"],
+    )
+    return handle_recipient_completed(
+        envelope_id=sent_envelope.envelope_id,
+        recipient_email=(gsa or {}).get("email", ""),
+        template_id=template_id,
+        template_name=template_name,
+        payload=payload,
+        triggering_recipient_id=triggering,
+        upload_now=True,
+    )
 
 
 # ✅ Sends SMS notifications to HR using the correct Twilio API keys

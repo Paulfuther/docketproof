@@ -6,10 +6,17 @@
 {% load crispy_forms_tags %}
 {{ form|as_crispy_errors }}
 
-<div class="container">
+<div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
+{% if shows_gsa_chrome %}
+  <div class="pt-5 mt-4 mb-3">
+    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
+    <h1 class="h4 mt-2 mb-1">Edit site incident</h1>
+  </div>
+{% else %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+{% endif %}
 
       {% if messages %}
         <div class="mt-3">
@@ -22,13 +29,24 @@
         </div>
       {% endif %}
 
+      {% if not shows_gsa_chrome %}
       <legend class="mb-3">Edit site incident</legend>
       <div class="d-flex gap-2 mb-3">
         <a href="{% url 'incidents' %}?tab=edit" class="btn btn-sm btn-outline-primary">Back to Incidents</a>
       </div>
+      {% endif %}
 
       {% include "incident/partials/site_incident_form.html" %}
+{% if shows_gsa_chrome %}
+</div>
+{% else %}
     </div>
   </div>
 </div>
+{% endif %}
+{% if shows_gsa_chrome %}
+<style>
+  .employee-page { max-width: 860px; }
+</style>
+{% endif %}
 {% endblock %}

@@ -3,6 +3,11 @@ import logging
 from django.db.models import CharField, Prefetch, Q
 from django.db.models.functions import Cast
 
+from arl.documentflow.helpers import (
+    build_extra_column,
+    build_flow_step_column,
+    resolve_envelope_column,
+)
 from arl.documentflow.models import (
     DocumentFlow,
     SentDocuSignEnvelope,
@@ -48,9 +53,8 @@ _OVERALL_CHIP = {
     "not_sent": ("Not Sent", "urgent", "No documents have been sent"),
 }
 
-
-def normalize_template_name(value):
-    return (value or "").strip().lower()
+HRDOC_PILLS_PER_ROW = 3
+HRDOC_CONTINUATION_PILLS_PER_ROW = 4
 
 
 def get_recipient_pill_class(status):
@@ -128,11 +132,7 @@ def _employee_name_key(employee):
 
 
 def _hired_sort_key(employee):
-    """Newest date hired first. A missing date sorts last, then by name.
-
-    Date hired is CustomUser.date_joined. The employee record has no
-    separate hire-date column; the account is created when they join.
-    """
+    """Newest date hired first. A missing date sorts last, then by name."""
     hired = getattr(employee, "date_joined", None)
     if hired is None:
         return (1, _employee_name_key(employee))
@@ -194,6 +194,87 @@ def _step_display_name(step):
     )
 
 
+def _build_pill_rows(steps):
+    """First row: three document pills plus Overall. Later rows use four doc slots."""
+    if not steps:
+        return [
+            {
+                "steps": [],
+                "empty_slots": [None] * HRDOC_PILLS_PER_ROW,
+                "show_overall": True,
+                "show_who": True,
+            }
+        ]
+
+    pill_rows = []
+    first_chunk = steps[:HRDOC_PILLS_PER_ROW]
+    pill_rows.append(
+        {
+            "steps": first_chunk,
+            "empty_slots": [None] * (HRDOC_PILLS_PER_ROW - len(first_chunk)),
+            "show_overall": True,
+            "show_who": True,
+        }
+    )
+
+    remaining = steps[HRDOC_PILLS_PER_ROW:]
+    for index in range(0, len(remaining), HRDOC_CONTINUATION_PILLS_PER_ROW):
+        chunk = remaining[index : index + HRDOC_CONTINUATION_PILLS_PER_ROW]
+        pill_rows.append(
+            {
+                "steps": chunk,
+                "empty_slots": [None]
+                * (HRDOC_CONTINUATION_PILLS_PER_ROW - len(chunk)),
+                "show_overall": False,
+                "show_who": False,
+            }
+        )
+
+    return pill_rows
+
+
+def _document_header_slots(audit_columns, size=HRDOC_PILLS_PER_ROW):
+    slots = []
+    for index in range(size):
+        if index < len(audit_columns):
+            slots.append(audit_columns[index])
+        else:
+            slots.append({"id": None, "name": "", "sort": ""})
+    return slots
+
+
+def _build_audit_columns(flow_steps, extra_column_envelopes):
+    columns = []
+    for step in flow_steps:
+        built = build_flow_step_column(step)
+        columns.append(
+            {
+                **built,
+                "id": step.id,
+                "name": _step_display_name(step),
+                "sort": f"step-{step.id}",
+            }
+        )
+
+    for column_key in sorted(
+        extra_column_envelopes,
+        key=lambda key: (
+            extra_column_envelopes[key].sent_at,
+            extra_column_envelopes[key].id,
+        ),
+    ):
+        built = build_extra_column(column_key, extra_column_envelopes[column_key])
+        columns.append(
+            {
+                **built,
+                "id": None,
+                "name": built["step_name"],
+                "sort": column_key,
+            }
+        )
+    return columns
+
+
 def build_document_audit(employer, search_query="", incomplete_only=False, sort=""):
     flow = (
         DocumentFlow.objects.filter(employer=employer, is_active=True, is_default=True)
@@ -217,10 +298,9 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
             "audit_search": search_query,
             "audit_incomplete_only": incomplete_only,
             "audit_sort": "",
-            "hrdoc_chip_count": 1,
+            "document_header_slots": _document_header_slots([]),
         }
 
-    # Always start from the actual configured flow steps
     flow_steps = list(
         flow.steps.filter(is_active=True)
         .select_related("template")
@@ -240,12 +320,10 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
         ],
     )
 
-    # Get all envelopes for these employees in this flow
-    sent_envelopes = (
-        SentDocuSignEnvelope.objects.filter(
-            user__in=employees,
-            flow=flow,
-        )
+    flow_step_ids = {step.id for step in flow_steps}
+
+    sent_envelopes = list(
+        SentDocuSignEnvelope.objects.filter(employer=employer, user__in=employees)
         .select_related("flow_step", "template", "user", "employer")
         .prefetch_related(
             Prefetch(
@@ -253,14 +331,25 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                 queryset=SentDocuSignRecipient.objects.order_by("routing_order", "id"),
             )
         )
-        .order_by("completed_at", "id")
+        .order_by("sent_at", "id")
     )
 
-    # Keep the newest envelope per (user, flow_step)
+    extra_column_envelopes = {}
     sent_map = {}
     for env in sent_envelopes:
-        if env.user_id and env.flow_step_id:
-            sent_map[(env.user_id, env.flow_step_id)] = env
+        if not env.user_id:
+            continue
+        column_key, _matched_step = resolve_envelope_column(
+            env, flow_steps, flow_step_ids
+        )
+        if column_key.startswith("extra-") and column_key not in extra_column_envelopes:
+            extra_column_envelopes[column_key] = env
+        map_key = (env.user_id, column_key)
+        existing = sent_map.get(map_key)
+        if not existing or env.sent_at >= existing.sent_at:
+            sent_map[map_key] = env
+
+    audit_columns = _build_audit_columns(flow_steps, extra_column_envelopes)
 
     employee_list = list(employees)
     signed_by_key = {}
@@ -275,19 +364,17 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                 signed_by_key[(signed.user_id, signed.envelope_id)] = signed.id
 
     rows = []
+    total_required = len(flow_steps)
 
     for employee in employees:
         step_results = []
         completed_count = 0
-        total_required = len(flow_steps)
 
-        for step in flow_steps:
-            template_name = step.template.template_name if step.template else ""
-            template_id = step.template.template_id if step.template else ""
-
-            step_name = _step_display_name(step)
-
-            sent_envelope = sent_map.get((employee.id, step.id))
+        for column in audit_columns:
+            step_name = column["step_name"]
+            template_name = column["template_name"]
+            template_id = column["template_id"]
+            sent_envelope = sent_map.get((employee.id, column["column_key"]))
 
             if sent_envelope:
                 envelope_status = (sent_envelope.status or "").lower()
@@ -320,18 +407,20 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                 )
 
                 is_complete = envelope_status == "completed"
-                if is_complete:
+                if column["is_flow_step"] and is_complete:
                     completed_count += 1
 
                 pill_class = get_step_pill_class(envelope_status)
                 label = get_step_pill_label(envelope_status)
                 step_results.append(
                     {
-                        "step_id": step.id,
-                        "step_order": step.step_order,
+                        "column_key": column["column_key"],
+                        "step_id": column["step_id"],
+                        "step_order": column["step_order"],
                         "step_name": step_name,
                         "template_name": template_name,
                         "template_id": template_id,
+                        "is_flow_step": column["is_flow_step"],
                         "status": envelope_status,
                         "label": label,
                         "pill_class": pill_class,
@@ -341,6 +430,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                         "sent_envelope_id": sent_envelope.id,
                         "envelope_id": sent_envelope.envelope_id,
                         "sent_at": sent_envelope.sent_at,
+                        "completed_at": sent_envelope.completed_at,
                         "signed_document_id": signed_by_key.get(
                             (employee.id, sent_envelope.envelope_id)
                         ),
@@ -348,14 +438,16 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                         "is_complete": is_complete,
                     }
                 )
-            else:
+            elif column["is_flow_step"]:
                 step_results.append(
                     {
-                        "step_id": step.id,
-                        "step_order": step.step_order,
+                        "column_key": column["column_key"],
+                        "step_id": column["step_id"],
+                        "step_order": column["step_order"],
                         "step_name": step_name,
                         "template_name": template_name,
                         "template_id": template_id,
+                        "is_flow_step": column["is_flow_step"],
                         "status": "not_sent",
                         "label": "Not Sent",
                         "pill_class": "danger",
@@ -365,6 +457,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                         "sent_envelope_id": None,
                         "envelope_id": None,
                         "sent_at": None,
+                        "completed_at": None,
                         "signed_document_id": None,
                         "can_resend": False,
                         "is_complete": False,
@@ -388,8 +481,9 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
         rows.append(
             {
                 "employee": employee,
-                "step_results": step_results,  # keep old template name for compatibility
-                "steps": step_results,  # also provide new name
+                "step_results": step_results,
+                "steps": step_results,
+                "pill_rows": _build_pill_rows(step_results),
                 "completed_count": completed_count,
                 "total_required": total_required,
                 "overall_status": overall_status,
@@ -432,23 +526,24 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
             )
         )
 
-    audit_columns = [
-        {
-            "id": step.id,
-            "name": _step_display_name(step),
-            "sort": f"step-{step.id}",
-        }
-        for step in flow_steps
+    header_columns = [
+        {"id": column["id"], "name": column["name"], "sort": column["sort"]}
+        for column in audit_columns
+    ]
+    flow_header_columns = [
+        {"id": column["id"], "name": column["name"], "sort": column["sort"]}
+        for column in audit_columns
+        if column["is_flow_step"]
     ]
 
     return {
         "flow": flow,
         "rows": rows,
-        "audit_columns": audit_columns,
+        "audit_columns": header_columns,
+        "document_header_slots": _document_header_slots(flow_header_columns),
         "audit_search": search_query,
         "audit_incomplete_only": incomplete_only,
         "audit_sort": sort,
-        "hrdoc_chip_count": len(flow_steps) + 1,
     }
 
 

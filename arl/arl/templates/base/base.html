@@ -3,6 +3,12 @@
 <!doctype html>
 <html lang="en">
 
+{% if shows_gsa_chrome %}
+<style>
+  /* Reserve scrollbar space so the GSA nav does not shift between pages. */
+  html, body { scrollbar-gutter: stable; }
+</style>
+{% endif %}
 
 <style>
   /* Stop any horizontal scrolling.
