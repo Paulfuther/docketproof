@@ -228,7 +228,9 @@
                           <div class="hrdoc-fact-cell">
                             <div class="hrdoc-fact-label">{{ step.step_name }}</div>
                             <div class="hrdoc-fact-value">{{ step.label }}</div>
-                            {% if step.sent_at %}
+                            {% if step.status == "completed" and step.completed_at %}
+                              <div class="hrdoc-fact-sub">Completed {{ step.completed_at|date:"F j, Y, g:i A" }}</div>
+                            {% elif step.sent_at %}
                               <div class="hrdoc-fact-sub">Sent {{ step.sent_at|date:"F j, Y" }}</div>
                             {% endif %}
                             {% for rec in step.recipient_pills %}
@@ -280,7 +282,9 @@
                           <div class="hrdoc-fact-cell">
                             <div class="hrdoc-fact-label">{{ step.step_name }}</div>
                             <div class="hrdoc-fact-value">{{ step.label }}</div>
-                            {% if step.sent_at %}
+                            {% if step.status == "completed" and step.completed_at %}
+                              <div class="hrdoc-fact-sub">Completed {{ step.completed_at|date:"F j, Y, g:i A" }}</div>
+                            {% elif step.sent_at %}
                               <div class="hrdoc-fact-sub">Sent {{ step.sent_at|date:"F j, Y" }}</div>
                             {% endif %}
                             {% for rec in step.recipient_pills %}

@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.db.models.signals import post_save
 from django.test import TestCase
 
@@ -153,6 +154,24 @@ class DocumentAuditTests(TestCase):
         return next(
             step for step in row["step_results"] if step["column_key"] == column_key
         )
+
+    def test_completed_audit_step_includes_completed_at(self):
+        completed_at = timezone.now()
+        SentDocuSignEnvelope.objects.create(
+            employer=self.employer,
+            user=self.employee,
+            template=self.handbook_template,
+            template_name=self.handbook_template.template_name,
+            envelope_id="env-completed-handbook",
+            status="completed",
+            completed_at=completed_at,
+        )
+
+        audit = build_document_audit(self.employer)
+        handbook = self._step_result(audit, self.handbook_step.id)
+
+        self.assertEqual(handbook["status"], "completed")
+        self.assertEqual(handbook["completed_at"], completed_at)
 
     def test_manual_gsa_send_without_flow_links_shows_in_audit(self):
         SentDocuSignEnvelope.objects.create(

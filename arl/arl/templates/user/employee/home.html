@@ -40,13 +40,17 @@
       <h2 class="h6 mb-3">Signed</h2>
       {% if signed_page.object_list %}
         <ul class="list-group list-group-flush">
-          {% for doc in signed_page %}
+          {% for entry in signed_page %}
             <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-3">
               <div class="min-w-0">
-                <div class="fw-semibold text-break">{{ doc.document_title|default:doc.template_name|default:doc.file_name }}</div>
-                <div class="text-muted small">{{ doc.uploaded_at|date:"F j, Y" }}</div>
+                <div class="fw-semibold text-break">{{ entry.name }}</div>
+                {% if entry.completed_at %}
+                  <div class="text-muted small">Completed {{ entry.completed_at|date:"F j, Y, g:i A" }}</div>
+                {% endif %}
               </div>
-              <a class="btn btn-sm btn-outline-primary flex-shrink-0" href="{% url 'download_signed_document' doc.id %}">Download</a>
+              {% if entry.download_id %}
+                <a class="btn btn-sm btn-outline-primary flex-shrink-0" href="{% url 'download_signed_document' entry.download_id %}">Download</a>
+              {% endif %}
             </li>
           {% endfor %}
         </ul>

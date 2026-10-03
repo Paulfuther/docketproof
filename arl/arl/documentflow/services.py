@@ -430,6 +430,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                         "sent_envelope_id": sent_envelope.id,
                         "envelope_id": sent_envelope.envelope_id,
                         "sent_at": sent_envelope.sent_at,
+                        "completed_at": sent_envelope.completed_at,
                         "signed_document_id": signed_by_key.get(
                             (employee.id, sent_envelope.envelope_id)
                         ),
@@ -456,6 +457,7 @@ def build_document_audit(employer, search_query="", incomplete_only=False, sort=
                         "sent_envelope_id": None,
                         "envelope_id": None,
                         "sent_at": None,
+                        "completed_at": None,
                         "signed_document_id": None,
                         "can_resend": False,
                         "is_complete": False,

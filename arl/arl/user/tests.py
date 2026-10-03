@@ -10,6 +10,7 @@ from django.db.models.signals import post_save
 from django.http import HttpResponse
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from arl.documentflow.models import (
     ImmigrationStatusEvent,
@@ -311,20 +312,23 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
             envelope_id="env-secret",
             status="sent",
         )
+        completed_at = timezone.now()
         SentDocuSignEnvelope.objects.create(
             employer=self.employer,
             user=self.employee,
-            template_name="Already signed policy",
-            envelope_id="env-done",
+            template_name="SECURITY REPORT",
+            envelope_id="env-security",
             status="completed",
+            completed_at=completed_at,
         )
 
         self.client.force_login(self.employee)
         home = self.client.get(reverse("employee_home"))
         self.assertContains(home, "Signed offer")
         self.assertContains(home, "Handbook")
+        self.assertContains(home, "SECURITY REPORT")
+        self.assertContains(home, completed_at.strftime("%B"))
         self.assertNotContains(home, "Coworker secret")
-        self.assertNotContains(home, "Already signed policy")
         self.assertContains(home, reverse("checklist_dashboard"))
         self.assertContains(home, reverse("employee_immigration_upload"))
         self.assertContains(home, reverse("create_salt_log"))

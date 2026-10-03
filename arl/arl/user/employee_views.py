@@ -2,6 +2,7 @@ import logging
 import mimetypes
 import os
 import uuid
+from datetime import datetime, timezone as dt_timezone
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -117,6 +118,79 @@ def _unsigned_queryset(user):
     )
 
 
+def _completed_envelopes_queryset(user):
+    return (
+        SentDocuSignEnvelope.objects.filter(
+            user=user,
+            employer=user.employer,
+            status="completed",
+        )
+        .select_related("template", "flow_step")
+        .order_by("-completed_at", "-sent_at", "-id")
+    )
+
+
+def _employee_signed_entries(actor):
+    """Signed files plus completed envelopes that never received a stored file."""
+    if not actor.employer_id:
+        return []
+
+    files = list(
+        SignedDocumentFile.objects.filter(
+            user=actor,
+            employer=actor.employer,
+            is_company_document=False,
+        ).order_by("-uploaded_at", "-id")
+    )
+    envelopes = list(_completed_envelopes_queryset(actor))
+    envelope_by_id = {
+        envelope.envelope_id: envelope
+        for envelope in envelopes
+        if envelope.envelope_id
+    }
+    seen_envelope_ids = set()
+    entries = []
+
+    for document in files:
+        envelope = (
+            envelope_by_id.get(document.envelope_id) if document.envelope_id else None
+        )
+        if document.envelope_id:
+            seen_envelope_ids.add(document.envelope_id)
+        completed_at = None
+        if envelope and envelope.completed_at:
+            completed_at = envelope.completed_at
+        else:
+            completed_at = document.uploaded_at
+        entries.append(
+            {
+                "name": document.document_title
+                or document.template_name
+                or document.file_name,
+                "completed_at": completed_at,
+                "download_id": document.id,
+            }
+        )
+
+    for envelope in envelopes:
+        if envelope.envelope_id and envelope.envelope_id in seen_envelope_ids:
+            continue
+        entries.append(
+            {
+                "name": _document_label(envelope),
+                "completed_at": envelope.completed_at or envelope.sent_at,
+                "download_id": None,
+            }
+        )
+
+    entries.sort(
+        key=lambda entry: entry["completed_at"]
+        or datetime.fromtimestamp(0, tz=dt_timezone.utc),
+        reverse=True,
+    )
+    return entries
+
+
 def _envelope_for_actor(user, envelope_id):
     try:
         envelope = (
@@ -141,16 +215,12 @@ def _redirect_unless_gsa(request):
 
 
 def _employee_documents_context(request, actor):
-    signed_documents = SignedDocumentFile.objects.none()
+    signed_entries = []
     unsigned_envelopes = SentDocuSignEnvelope.objects.none()
     if actor.employer_id:
-        signed_documents = SignedDocumentFile.objects.filter(
-            user=actor,
-            employer=actor.employer,
-            is_company_document=False,
-        ).order_by("-uploaded_at", "-id")
+        signed_entries = _employee_signed_entries(actor)
         unsigned_envelopes = _unsigned_queryset(actor)
-    signed_page = Paginator(signed_documents, DOCUMENT_PAGE_SIZE).get_page(
+    signed_page = Paginator(signed_entries, DOCUMENT_PAGE_SIZE).get_page(
         request.GET.get("signed")
     )
     unsigned_page = Paginator(unsigned_envelopes, DOCUMENT_PAGE_SIZE).get_page(
