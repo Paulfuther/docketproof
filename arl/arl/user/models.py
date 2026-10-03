@@ -170,17 +170,12 @@ class CustomUser(AbstractUser):
 
     @property
     def is_employee_account(self):
-        """Front-line employee, not a staff, employer, or manager account."""
+        """GSA account. Managers, employers, HR, and staff keep the existing pages."""
         if self.is_staff or self.is_superuser:
             return False
-        return not self.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
-
-    @property
-    def is_company_manager(self):
-        """Manager or employer account scoped to one company."""
-        if not self.employer_id:
+        if self.groups.filter(name__in=["Manager", "EMPLOYER", "HR"]).exists():
             return False
-        return self.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+        return self.groups.filter(name="GSA").exists()
 
 
 class SMSOptOut(models.Model):

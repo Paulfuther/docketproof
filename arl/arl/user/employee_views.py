@@ -125,11 +125,18 @@ def _envelope_for_actor(user, envelope_id):
     return envelope
 
 
+def _redirect_unless_gsa(request):
+    if getattr(request.user, "is_employee_account", False):
+        return None
+    return redirect("home")
+
+
 @login_required
 def employee_home(request):
+    denied = _redirect_unless_gsa(request)
+    if denied:
+        return denied
     user = request.user
-    if getattr(user, "is_company_manager", False):
-        return redirect("manager_employee_list")
     signed_documents = SignedDocumentFile.objects.none()
     unsigned_pills = []
     if user.employer_id:
@@ -153,6 +160,9 @@ def employee_home(request):
 
 @login_required
 def employee_unsigned_document(request, envelope_id):
+    denied = _redirect_unless_gsa(request)
+    if denied:
+        return denied
     envelope = _envelope_for_actor(request.user, envelope_id)
     if envelope is None:
         return HttpResponseForbidden("You cannot open this document.")
@@ -172,6 +182,9 @@ def employee_unsigned_document(request, envelope_id):
 @login_required
 @require_POST
 def employee_open_unsigned_document(request, envelope_id):
+    denied = _redirect_unless_gsa(request)
+    if denied:
+        return denied
     envelope = _envelope_for_actor(request.user, envelope_id)
     if envelope is None:
         return HttpResponseForbidden("You cannot open this document.")
@@ -215,6 +228,9 @@ def _immigration_context(user):
 @login_required
 @require_http_methods(["GET", "POST"])
 def employee_immigration_upload(request):
+    denied = _redirect_unless_gsa(request)
+    if denied:
+        return denied
     user = request.user
     if not user.employer_id:
         messages.error(request, "Your account is not linked to an employer yet.")

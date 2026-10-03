@@ -48,6 +48,10 @@ class EmployeeTestCase(TestCase):
             self.employer,
             is_staff=True,
         )
+        gsa = Group.objects.create(name="GSA")
+        self.employee.groups.add(gsa)
+        self.coworker.groups.add(gsa)
+        self.assertTrue(self.employee.is_employee_account)
 
     def _user(self, username, first, last, phone, employer, is_staff=False):
         return User.objects.create_user(
@@ -133,6 +137,8 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
     def test_manager_session_starts_only_after_phone_code(self, send_code, check_code):
         manager_group = Group.objects.create(name="Manager")
         self.employee.groups.add(manager_group)
+        self.assertTrue(self.employee.groups.filter(name="GSA").exists())
+        self.assertFalse(self.employee.is_employee_account)
 
         self._login("ada")
         self.assertNotIn("_auth_user_id", self.client.session)
@@ -140,17 +146,16 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
             reverse("verification_page"),
             {"verification_code": "123456"},
         )
-        self.assertRedirects(
-            response, reverse("manager_employee_list"), fetch_redirect_response=False
-        )
-        self.assertEqual(int(self.client.session["_auth_user_id"]), self.employee.id)
+        self._assert_old_home_after_phone_code(response, self.employee)
         check_code.assert_called_once()
-
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertContains(roster, "Ben Wright")
-        self.assertContains(roster, "Pat Staff")
-        self.assertContains(roster, "Ada Lovelace")
-        self.assertNotContains(roster, "Other Co")
+        self.assertContains(self.client.get(reverse("home")), reverse("hr_dashboard"))
+        self.assertContains(
+            self.client.get(reverse("home")), reverse("documents_dashboard")
+        )
+        hr_page = self.client.get(reverse("hr_dashboard"))
+        self.assertEqual(hr_page.status_code, 200)
+        docs_page = self.client.get(reverse("documents_dashboard"))
+        self.assertEqual(docs_page.status_code, 200)
 
     @patch("arl.user.views.request_verification_token", side_effect=TwilioException("down"))
     def test_phone_code_failure_does_not_start_a_session(self, send_code):
@@ -195,19 +200,64 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
             reverse("verification_page"),
             {"verification_code": "123456"},
         )
-        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
-        self.assertEqual(int(self.client.session["_auth_user_id"]), self.staff.id)
+        self._assert_old_home_after_phone_code(response, self.staff)
         check_code.assert_called_once()
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertEqual(roster.status_code, 403)
+
+    @patch("arl.user.views.check_verification_token", return_value=True)
+    @patch("arl.user.views.request_verification_token")
+    def test_employer_lands_on_the_old_home_after_phone_code(self, send_code, check_code):
+        employer_group = Group.objects.create(name="EMPLOYER")
+        self.coworker.groups.add(employer_group)
+        self.assertFalse(self.coworker.is_employee_account)
+
+        self._login("ben")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        response = self.client.post(
+            reverse("verification_page"),
+            {"verification_code": "123456"},
+        )
+        self._assert_old_home_after_phone_code(response, self.coworker)
+        check_code.assert_called_once()
+        self.assertEqual(self.client.get(reverse("hr_dashboard")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("documents_dashboard")).status_code, 200)
+
+    @patch("arl.user.views.check_verification_token", return_value=True)
+    @patch("arl.user.views.request_verification_token")
+    def test_hr_lands_on_the_old_home_after_phone_code(self, send_code, check_code):
+        hr_user = self._user(
+            "helen",
+            "Helen",
+            "Reed",
+            "+14161234570",
+            self.employer,
+        )
+        hr_user.groups.add(Group.objects.create(name="HR"))
+        self.assertFalse(hr_user.is_employee_account)
+
+        self._login("helen")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        response = self.client.post(
+            reverse("verification_page"),
+            {"verification_code": "123456"},
+        )
+        self._assert_old_home_after_phone_code(response, hr_user)
+        check_code.assert_called_once()
+        send_code.assert_called_once()
+
+    def _assert_old_home_after_phone_code(self, response, user):
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
+        home = self.client.get(reverse("home"))
+        self.assertEqual(home.status_code, 200)
+        self.assertNotContains(home, "Hello")
+        new_page = self.client.get(reverse("employee_home"))
+        self.assertRedirects(new_page, reverse("home"))
 
     def test_anonymous_users_cannot_open_employee_pages(self):
         urls = [
             reverse("employee_home"),
             reverse("employee_immigration_upload"),
             reverse("checklist_dashboard"),
-            reverse("manager_employee_list"),
-            reverse("manager_employee_detail", args=[self.employee.id]),
         ]
         for url in urls:
             response = self.client.get(url)
@@ -362,166 +412,6 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         managed = self.client.get(reverse("download_signed_document", args=[theirs.id]))
         self.assertEqual(managed.status_code, 200)
         self.assertGreaterEqual(download.call_count, 2)
-
-
-class ManagerEmployeeListTests(EmployeeTestCase):
-    def setUp(self):
-        super().setUp()
-        self.manager_group = Group.objects.create(name="Manager")
-        self.staff.is_staff = False
-        self.staff.save(update_fields=["is_staff"])
-        self.staff.groups.add(self.manager_group)
-        self.outsider = self._user(
-            "out",
-            "Out",
-            "Sider",
-            "+14161234570",
-            self.other_employer,
-        )
-        self.coworker.sin = "987654321"
-        self.coworker.work_permit_expiration_date = date(2027, 3, 1)
-        self.coworker.work_permit_extension_requested = True
-        self.coworker.work_permit_extension_date = date(2026, 3, 1)
-        self.coworker.save(
-            update_fields=[
-                "sin",
-                "work_permit_expiration_date",
-                "work_permit_extension_requested",
-                "work_permit_extension_date",
-            ]
-        )
-
-    def test_manager_sees_only_their_company(self):
-        inactive = self._user(
-            "old", "Old", "Hand", "+14161234571", self.employer
-        )
-        inactive.is_active = False
-        inactive.save(update_fields=["is_active"])
-
-        self.client.force_login(self.staff)
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertEqual(roster.status_code, 200)
-        self.assertContains(roster, "Ada Lovelace")
-        self.assertContains(roster, "Ben Wright")
-        self.assertContains(roster, "Pat Staff")
-        self.assertContains(
-            roster, reverse("manager_employee_detail", args=[self.coworker.id])
-        )
-        self.assertNotContains(roster, "Out Sider")
-        self.assertNotContains(roster, "Old Hand")
-
-        home = self.client.get(reverse("home"))
-        self.assertRedirects(home, reverse("manager_employee_list"))
-        own_docs = self.client.get(reverse("employee_home"))
-        self.assertRedirects(own_docs, reverse("manager_employee_list"))
-
-    def test_detail_shows_signed_docs_unsigned_pills_and_immigration(self):
-        SignedDocumentFile.objects.create(
-            user=self.coworker,
-            employer=self.employer,
-            envelope_id="signed-ben",
-            file_name="offer.pdf",
-            file_path="DOCUMENTS/acme/offer.pdf",
-            document_title="Signed offer",
-        )
-        envelope = SentDocuSignEnvelope.objects.create(
-            employer=self.employer,
-            user=self.coworker,
-            template_name="Handbook",
-            envelope_id="env-handbook",
-            status="sent",
-        )
-        SentDocuSignEnvelope.objects.create(
-            employer=self.employer,
-            user=self.coworker,
-            template_name="Already signed policy",
-            envelope_id="env-done",
-            status="completed",
-        )
-        ImmigrationStatusEvent.objects.create(
-            user=self.coworker,
-            employer=self.employer,
-            status_type="maintained_status",
-            effective_date=date(2026, 3, 1),
-            expiry_date=date(2027, 3, 1),
-            reference_number="IRCC-42",
-        )
-
-        self.client.force_login(self.staff)
-        page = self.client.get(
-            reverse("manager_employee_detail", args=[self.coworker.id])
-        )
-        self.assertEqual(page.status_code, 200)
-        self.assertContains(page, "Signed offer")
-        self.assertContains(page, "Handbook")
-        self.assertContains(page, "Sent")
-        self.assertNotContains(page, "Already signed policy")
-        self.assertContains(page, "Maintained Status")
-        self.assertContains(page, "IRCC-42")
-        self.assertContains(page, "Extension requested")
-        self.assertContains(page, "March 1, 2027")
-        self.assertContains(
-            page, reverse("download_signed_document", args=[SignedDocumentFile.objects.get().id])
-        )
-        self.assertNotContains(page, "Open this document")
-        self.assertNotContains(
-            page, reverse("employee_unsigned_document", args=[envelope.id])
-        )
-        self.assertNotContains(page, "987654321")
-
-    def test_manager_cannot_open_another_companys_employee(self):
-        other_manager = self._user(
-            "mia",
-            "Mia",
-            "Chen",
-            "+14161234572",
-            self.other_employer,
-        )
-        other_manager.groups.add(self.manager_group)
-
-        self.client.force_login(other_manager)
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertContains(roster, "Out Sider")
-        self.assertNotContains(roster, "Ada Lovelace")
-        self.assertNotContains(roster, "Ben Wright")
-        self.assertNotContains(roster, "Pat Staff")
-
-        denied = self.client.get(
-            reverse("manager_employee_detail", args=[self.coworker.id])
-        )
-        self.assertEqual(denied.status_code, 403)
-        self.assertNotContains(denied, "Ben Wright", status_code=403)
-        self.assertNotContains(denied, "Handbook", status_code=403)
-
-    def test_employee_cannot_open_the_manager_list(self):
-        self.client.force_login(self.employee)
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertEqual(roster.status_code, 403)
-        detail = self.client.get(
-            reverse("manager_employee_detail", args=[self.coworker.id])
-        )
-        self.assertEqual(detail.status_code, 403)
-
-        home = self.client.get(reverse("employee_home"))
-        self.assertEqual(home.status_code, 200)
-        self.assertNotContains(home, "Ben Wright")
-
-    def test_missing_employee_is_not_found(self):
-        self.client.force_login(self.staff)
-        missing = self.client.get(reverse("manager_employee_detail", args=[999999]))
-        self.assertEqual(missing.status_code, 404)
-
-    def test_employer_group_sees_the_same_company_list(self):
-        employer_group = Group.objects.create(name="EMPLOYER")
-        self.employee.groups.add(employer_group)
-        self.assertTrue(self.employee.is_company_manager)
-        self.assertFalse(self.employee.is_employee_account)
-
-        self.client.force_login(self.employee)
-        roster = self.client.get(reverse("manager_employee_list"))
-        self.assertEqual(roster.status_code, 200)
-        self.assertContains(roster, "Ben Wright")
-        self.assertNotContains(roster, "Out Sider")
 
 
 class EmployeeImmigrationUploadTests(EmployeeTestCase):

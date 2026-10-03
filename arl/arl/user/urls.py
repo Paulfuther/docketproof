@@ -7,7 +7,6 @@ from .employee_views import (
     employee_open_unsigned_document,
     employee_unsigned_document,
 )
-from .manager_views import manager_employee_detail, manager_employee_list
 from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     TaskResultListView, admin_verification_page,
                     check_verification, fetch_managers, home_view, login_view,
@@ -85,12 +84,6 @@ urlpatterns = [
         "employee/immigration/",
         employee_immigration_upload,
         name="employee_immigration_upload",
-    ),
-    path("manager/employees/", manager_employee_list, name="manager_employee_list"),
-    path(
-        "manager/employees/<int:user_id>/",
-        manager_employee_detail,
-        name="manager_employee_detail",
     ),
     path("fetch_managers/", fetch_managers, name="fetch_managers"),
     path('task-results/', TaskResultListView.as_view(), name='task_results'),
