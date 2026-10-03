@@ -1,363 +1,782 @@
-<div class="mb-4">
-  <h4 class="mb-1">Immigration Audit</h4>
-</div>
+<div class="imm-audit">
+  <h2 class="imm-title">Immigration Audit</h2>
 
-<div class="card shadow-sm border-0 mb-4">
-  <div class="card-body">
+  <form
+    id="imm-toolbar"
+    class="imm-toolbar"
+    hx-get="{% url 'immigration_audit_partial' %}"
+    hx-target="#imm-list"
+    hx-select="#imm-list"
+    hx-swap="outerHTML"
+    hx-indicator="#immigration-loading"
+    hx-sync="#imm-toolbar:replace"
+    hx-trigger="submit">
 
-    <form
-      class="row g-2 align-items-end"
-      hx-get="{% url 'immigration_audit_partial' %}"
-      hx-target="#immigration_audit"
-      hx-swap="innerHTML"
-      hx-include="this">
+    <input type="hidden" name="tab" value="immigration_audit">
 
-      <input type="hidden" name="tab" value="immigration_audit">
-
-      <!-- Search -->
-      <div class="col-12 col-md-6">
-        <label class="form-label small text-muted mb-1">Search employee</label>
-        <input
-          type="text"
-          name="imm_q"
-          value="{{ immigration_search }}"
-          class="form-control"
-          placeholder="Search by name or email"
-          hx-get="{% url 'immigration_audit_partial' %}"
-          hx-trigger="keyup changed delay:300ms"
-          hx-target="#immigration_audit"
-          hx-swap="innerHTML">
-
-        <div id="immigration-loading" class="small text-muted mt-1 d-none">
-          <span class="spinner-border spinner-border-sm me-1"></span>
-          Searching...
-        </div>
-      </div>
-
-      <!-- Flagged only -->
-      <div class="col-12 col-md-3">
-        <div class="form-check mt-4">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            name="imm_flagged"
-            value="1"
-            id="imm_flagged"
-            {% if immigration_flagged_only %}checked{% endif %}
-            hx-get="{% url 'immigration_audit_partial' %}"
-            hx-trigger="change"
-            hx-target="#immigration_audit"
-            hx-swap="innerHTML">
-          <label class="form-check-label" for="imm_flagged">
-            Issues only
-          </label>
-        </div>
-      </div>
-
-      <!-- Reset -->
-      <div class="col-12 col-md-3 d-flex gap-2">
-        <button
-          type="button"
-          class="btn btn-outline-secondary w-100"
-          hx-get="{% url 'immigration_audit_partial' %}"
-          hx-target="#immigration_audit"
-          hx-swap="innerHTML">
-          Reset
-        </button>
-      </div>
-
-    </form>
-  </div>
-</div>
-
-
-{% for row in immigration_rows %}
-<div class="card shadow-sm border-0 mb-3 immigration-card {% if row.is_flagged %}immigration-card-warning{% endif %}">
-  <div class="card-body">
-
-    <!-- Header -->
-    <div class="immigration-header">
-      <div class="immigration-employee">
-        <h5 class="mb-1 immigration-name">
-          {{ row.employee.get_full_name|default:row.employee.username }}
-        </h5>
-
-        <div class="text-muted small immigration-meta">
-          {% if row.employee.email %}
-            <span>{{ row.employee.email }}</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="immigration-summary">
-        <span class="imm-pill is-{{ row.overall_status.pill_class }}">
-          {{ row.overall_status.label }}
-        </span>
-      </div>
+    <div class="imm-search">
+      <svg class="imm-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"></circle>
+        <path d="M20 20L16.5 16.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+      </svg>
+      <input
+        type="search"
+        name="imm_q"
+        id="imm_q"
+        value="{{ immigration_search }}"
+        placeholder="Search employees..."
+        aria-label="Search employees"
+        autocomplete="off"
+        hx-get="{% url 'immigration_audit_partial' %}"
+        hx-trigger="input changed delay:300ms, search"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
+        hx-indicator="#immigration-loading">
     </div>
 
-    <!-- DETAILS -->
-    <div class="immigration-details mt-3">
+    <label class="imm-issues" for="imm_flagged">
+      <input
+        type="checkbox"
+        name="imm_flagged"
+        value="1"
+        id="imm_flagged"
+        {% if immigration_flagged_only %}checked{% endif %}
+        hx-get="{% url 'immigration_audit_partial' %}"
+        hx-trigger="change"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
+        hx-indicator="#immigration-loading">
+      <span>Issues only</span>
+    </label>
 
-      <!-- Latest update -->
-      {% if row.latest_immigration_event %}
-          <div class="immigration-detail-row">
-            <span class="immigration-detail-label">Latest Update</span>
+    <label class="imm-sort" for="imm_sort">
+      <span>Sort</span>
+      <select
+        name="imm_sort"
+        id="imm_sort"
+        aria-label="Sort employees"
+        hx-get="{% url 'immigration_audit_partial' %}"
+        hx-trigger="change"
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-include="#imm-toolbar"
+        hx-sync="#imm-toolbar:replace"
+        hx-indicator="#immigration-loading">
+        <option value="" {% if not immigration_sort %}selected{% endif %}>Urgency</option>
+        <option value="name" {% if immigration_sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+        <option value="hired" {% if immigration_sort == "hired" %}selected{% endif %}>Date hired (newest)</option>
+        <option value="sin" {% if immigration_sort == "sin" %}selected{% endif %}>SIN status</option>
+        <option value="permit" {% if immigration_sort == "permit" %}selected{% endif %}>Permit status</option>
+      </select>
+    </label>
 
-            <span class="immigration-detail-value text-end">
-              <div>{{ row.latest_immigration_event.get_status_type_display }}</div>
+    <div class="imm-toolbar-actions">
+      <button
+        type="button"
+        class="imm-btn imm-btn-ghost"
+        hx-get="{% url 'immigration_audit_partial' %}"
+        hx-target="#immigration_audit"
+        hx-swap="innerHTML"
+        hx-indicator="#immigration-loading">
+        Reset
+      </button>
+      <a
+        class="imm-btn imm-btn-download"
+        href="{% url 'immigration_audit_export' %}"
+        title="CSV of all active employees for this employer">
+        Download spreadsheet
+      </a>
+    </div>
+  </form>
 
-              {% if row.latest_immigration_event.effective_date %}
-                <div class="immigration-subtext">
-                  {{ row.latest_immigration_event.effective_date|date:"F j, Y" }}
-                </div>
-              {% endif %}
-            </span>
-          </div>
-          {% endif %}
+  <div class="imm-list-wrap">
+    <div id="immigration-loading" class="imm-loading" aria-live="polite">
+      <span class="imm-spinner" aria-hidden="true"></span>
+      Searching…
+    </div>
 
-          {% if row.latest_immigration_event.reference_number %}
-          <div class="immigration-detail-row">
-            <span class="immigration-detail-label">Reference</span>
-            <span class="immigration-detail-value">
-              {{ row.latest_immigration_event.reference_number }}
-            </span>
-          </div>
-          {% endif %}
+    <div class="imm-list" id="imm-list">
+    {% if immigration_rows %}
+      <div class="imm-scan imm-scan-head">
+        <span class="imm-head-employee"><span class="imm-sr">Employee</span></span>
+        <button
+          type="button"
+          class="imm-col-sort{% if immigration_sort == 'sin' %} is-active{% endif %}"
+          data-sort="{% if immigration_sort == 'sin' %}{% else %}sin{% endif %}"
+          aria-pressed="{% if immigration_sort == 'sin' %}true{% else %}false{% endif %}"
+          title="{% if immigration_sort == 'sin' %}Sorted by SIN severity. Click to restore urgency.{% else %}Sort by SIN severity{% endif %}"
+          onclick="var s=document.getElementById('imm_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">SIN</button>
+        <button
+          type="button"
+          class="imm-col-sort{% if immigration_sort == 'permit' %} is-active{% endif %}"
+          data-sort="{% if immigration_sort == 'permit' %}{% else %}permit{% endif %}"
+          aria-pressed="{% if immigration_sort == 'permit' %}true{% else %}false{% endif %}"
+          title="{% if immigration_sort == 'permit' %}Sorted by permit severity. Click to restore urgency.{% else %}Sort by permit severity{% endif %}"
+          onclick="var s=document.getElementById('imm_sort');if(s){s.value=this.getAttribute('data-sort')||'';s.dispatchEvent(new Event('change',{bubbles:true}));}">PERMIT</button>
+        <span>PROOF</span>
+        <span>OVERALL</span>
+        <span class="imm-sr">Details</span>
+      </div>
 
-          {% if row.latest_immigration_event.document_file %}
-            <div class="immigration-detail-row">
-              <span class="immigration-detail-label">Document</span>
+      {% for row in immigration_rows %}
+        {% with employee=row.employee %}
+          <article class="imm-row">
+            <input
+              type="checkbox"
+              id="imm-fold-{{ employee.pk }}"
+              class="imm-fold-check">
 
-              <span class="immigration-detail-value">
-                <a
-                  href="{% url 'download_signed_document' row.latest_immigration_event.document_file.id %}"
-                  target="_blank"
-                  class="btn btn-sm btn-outline-secondary imm-btn">
-                  View
-                </a>
-              </span>
-            </div>
-            {% endif %}
-            <!----   Get a history of immigration events -->
-            {% if row.immigration_events %}
-              <div class="immigration-history mt-2">
-                <div class="immigration-detail-label mb-1">Immigration History</div>
-
-                {% for event in row.immigration_events %}
-                  <div class="immigration-history-item">
-                
-                      <div class="imm-history-text">
-                <div class="imm-history-title">
-                  {{ event.get_status_type_display }}
-                </div>
-                {% if event.effective_date %}
-                  <div class="immigration-subtext">
-                    {{ event.effective_date|date:"M j, Y" }}
+            <div class="imm-scan">
+              <div class="imm-who">
+                <div class="imm-name">{{ employee.get_full_name|default:employee.username }}</div>
+                {% if employee.email or employee.store_id %}
+                  <div class="imm-who-meta">
+                    {% if employee.email %}
+                      <div class="imm-meta imm-meta-email">{{ employee.email }}</div>
+                    {% endif %}
+                    {% if employee.store_id %}
+                      <div class="imm-meta imm-meta-store">Store {{ employee.store.number }}</div>
+                    {% endif %}
                   </div>
                 {% endif %}
               </div>
-                                  
 
-                    {% if event.document_file %}
-                      <a href="{% url 'download_signed_document' event.document_file.id %}"
-                        target="_blank"
-                        class="btn btn-sm btn-outline-secondary imm-btn">
-                        View
-                      </a>
-                    {% endif %}
+              <span class="imm-chip imm-chip-overall is-{{ row.overall_chip.tone }}" title="{{ row.overall_chip.title }}">
+                <span class="imm-dot" aria-hidden="true"></span>
+                <span class="imm-chip-label">{{ row.overall_chip.label }}</span>
+              </span>
+
+              <div class="imm-days">
+                <span class="imm-days-kicker">Days left</span>
+                <span class="imm-chip imm-chip-permit is-{{ row.permit_chip.tone }}" title="{{ row.permit_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.permit_chip.label }}</span>
+                </span>
+              </div>
+
+              <div class="imm-pair">
+                <span class="imm-chip imm-chip-sin is-{{ row.sin_chip.tone }}" title="{{ row.sin_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.sin_chip.label }}</span>
+                </span>
+                <span class="imm-chip imm-chip-proof is-{{ row.proof_chip.tone }}" title="{{ row.proof_chip.title }}">
+                  <span class="imm-dot" aria-hidden="true"></span>
+                  <span class="imm-chip-label">{{ row.proof_chip.label }}</span>
+                </span>
+              </div>
+
+              <label class="imm-details-toggle" for="imm-fold-{{ employee.pk }}">
+                <span class="imm-sr">Show details for {{ employee.get_full_name|default:employee.username }}</span>
+                <span aria-hidden="true">Details</span>
+                <span class="imm-chevron" aria-hidden="true">&gt;</span>
+              </label>
+            </div>
+
+            <div class="imm-fold-body">
+              <div class="imm-facts">
+                <div>
+                  <div class="imm-fact-label">SIN</div>
+                  <div class="imm-fact-value">{{ row.sin_info.label }}</div>
+                  <div class="imm-fact-sub">
+                    Expiry:
+                    {% if row.sin_expiry %}{{ row.sin_expiry|date:"F j, Y" }}{% else %}—{% endif %}
                   </div>
-                {% endfor %}
+                  <div class="imm-fact-sub">
+                    Days remaining:
+                    {% if row.sin_days != None %}
+                      {% if row.sin_days < 0 %}
+                        {{ row.sin_days|add:"0"|cut:"-" }} overdue
+                      {% else %}
+                        {{ row.sin_days }}
+                      {% endif %}
+                    {% else %}—{% endif %}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="imm-fact-label">Permit</div>
+                  <div class="imm-fact-value">{{ row.permit_info.label }}</div>
+                  <div class="imm-fact-sub">
+                    Expiry:
+                    {% if row.permit_expiry %}{{ row.permit_expiry|date:"F j, Y" }}{% else %}—{% endif %}
+                  </div>
+                  <div class="imm-fact-sub">
+                    Days remaining:
+                    {% if row.permit_days != None %}
+                      {% if row.permit_days < 0 %}
+                        {{ row.permit_days|add:"0"|cut:"-" }} overdue
+                      {% else %}
+                        {{ row.permit_days }}
+                      {% endif %}
+                    {% else %}—{% endif %}
+                  </div>
+                  {% if row.extension_requested %}
+                    <div class="imm-fact-sub">
+                      Extension filed
+                      {% if row.extension_date %}
+                        {{ row.extension_date|date:"F j, Y" }}
+                      {% else %}
+                        — no date recorded
+                      {% endif %}
+                    </div>
+                    <div class="imm-fact-sub">
+                      Still legal — left out of the 90, 60, and 30 day reminders
+                    </div>
+                  {% endif %}
+                </div>
+
+                <div>
+                  <div class="imm-fact-label">Proof</div>
+                  <div class="imm-fact-value">{{ row.proof_chip.detail|default:row.proof_chip.title }}</div>
+                  <div class="imm-fact-label imm-fact-label-spaced">Overall</div>
+                  <div class="imm-fact-value">{{ row.overall_status.label }}</div>
+                </div>
               </div>
-            {% endif %}
 
-      <!-- SIN -->
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">SIN Status</span>
-        <span class="imm-pill is-{{ row.sin_info.pill_class }}">
-          {{ row.sin_info.label }}
-        </span>
-      </div>
-
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">SIN Expiry</span>
-        <span class="immigration-detail-value">
-          {% if row.sin_expiry %}
-            {{ row.sin_expiry|date:"F j, Y" }}
-          {% else %}—{% endif %}
-        </span>
-      </div>
-
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">SIN Days Remaining</span>
-        <span class="immigration-detail-value">
-          {% if row.sin_days != None %}
-            {% if row.sin_days < 0 %}
-              {{ row.sin_days|add:"0"|cut:"-" }} overdue
-            {% else %}
-              {{ row.sin_days }}
-            {% endif %}
-          {% else %}—{% endif %}
-        </span>
-      </div>
-
-      <!-- PERMIT -->
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">Permit Status</span>
-        <span class="imm-pill is-{{ row.permit_info.pill_class }}">
-          {{ row.permit_info.label }}
-        </span>
-      </div>
-
-      {% if row.extension_requested %}
-        <div class="immigration-detail-row">
-          <span class="immigration-detail-label">Extension Filed</span>
-
-          <span class="immigration-detail-value text-end">
-
-            <div>Filed</div>
-
-            {% if row.extension_date %}
-              <div class="immigration-subtext">
-                {{ row.extension_date|date:"F j, Y" }}
-              </div>
-            {% else %}
-              <div class="immigration-subtext">
-                No date recorded
-              </div>
-            {% endif %}
-
-          </span>
-        </div>
-        {% endif %}
-
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">Permit Expiry</span>
-        <span class="immigration-detail-value">
-          {% if row.permit_expiry %}
-            {{ row.permit_expiry|date:"F j, Y" }}
-          {% else %}—{% endif %}
-        </span>
-      </div>
-
-      <div class="immigration-detail-row">
-        <span class="immigration-detail-label">Days Remaining</span>
-        <span class="immigration-detail-value">
-          {% if row.permit_days != None %}
-            {% if row.permit_days < 0 %}
-              {{ row.permit_days|add:"0"|cut:"-" }} overdue
-            {% else %}
-              {{ row.permit_days }}
-            {% endif %}
-          {% else %}—{% endif %}
-        </span>
-      </div>
-
+              {% if row.latest_immigration_event %}
+                <div class="imm-history">
+                  <div class="imm-fact-label">Immigration history</div>
+                  {% for event in row.immigration_events %}
+                    <div class="imm-history-item">
+                      <div class="imm-history-text">
+                        <div class="imm-history-title">{{ event.get_status_type_display }}</div>
+                        <div class="imm-fact-sub">
+                          {% if event.effective_date %}
+                            Effective {{ event.effective_date|date:"F j, Y" }}
+                          {% else %}
+                            No effective date
+                          {% endif %}
+                          {% if event.expiry_date %}
+                            · Expires {{ event.expiry_date|date:"F j, Y" }}
+                          {% endif %}
+                        </div>
+                        {% if event.label %}
+                          <div class="imm-fact-sub">{{ event.label }}</div>
+                        {% endif %}
+                        {% if event.reference_number %}
+                          <div class="imm-fact-sub">Reference {{ event.reference_number }}</div>
+                        {% endif %}
+                        {% if event.notes %}
+                          <div class="imm-fact-sub">{{ event.notes }}</div>
+                        {% endif %}
+                      </div>
+                      {% if event.document_file %}
+                        <a
+                          href="{% url 'download_signed_document' event.document_file.id %}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="imm-doc-link">
+                          View
+                        </a>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </article>
+        {% endwith %}
+      {% endfor %}
+    {% else %}
+      <div class="imm-empty">No employees found.</div>
+    {% endif %}
     </div>
   </div>
 </div>
 
-{% empty %}
-<div class="alert alert-info">
-  No employees found.
-</div>
-{% endfor %}
 <style>
-.immigration-card {
-  border-radius: 1rem;
-  transition: all 0.15s ease;
+.imm-audit {
+  background: #f4f6fb;
+  border-radius: 18px;
+  padding: 20px 18px 28px;
+  color: #1a1f36;
 }
 
-.immigration-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.08);
+.imm-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1a1f36;
+  margin: 0 0 16px;
+  line-height: 1.2;
 }
 
-.immigration-card-warning {
-  border-left: 4px solid #dc3545;
-  background: linear-gradient(to right, #fff3f4 0%, #ffffff 20%);
-}
-
-.immigration-header {
+.imm-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
+  gap: 16px 18px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #eef1f6;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+  padding: 12px 14px;
 }
 
-.immigration-employee {
-  flex: 1 1 320px;
+.imm-search {
+  flex: 1 1 280px;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #e6e8ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #9aa3b2;
+}
+
+.imm-search:focus-within {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  color: #64748b;
+}
+
+.imm-search-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.imm-search input {
+  border: 0;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  height: 1.5rem;
+  max-height: 1.5rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #1a1f36;
+  /* iOS Safari/Chrome zoom the page when a focused field computes under 16px. */
+  font-size: max(16px, 1rem);
+  line-height: 1.2;
+  scroll-margin-top: 4.5rem;
+  scroll-margin-bottom: 1.5rem;
+}
+
+.imm-search input::placeholder {
+  color: #9aa3b2;
+}
+
+.imm-issues {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+  user-select: none;
+}
+
+.imm-issues input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.imm-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.imm-sort select {
+  height: 42px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  font-size: max(16px, 1rem);
+  font-weight: 600;
+  scroll-margin-top: 4.5rem;
+}
+
+.imm-col-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #98a2b3;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.imm-col-sort:hover,
+.imm-col-sort.is-active {
+  color: #1d4ed8;
+}
+
+.imm-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.imm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.imm-btn-ghost {
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.imm-btn-ghost:hover {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.imm-btn-download {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.imm-btn-download:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.imm-list-wrap {
+  position: relative;
+  margin-top: 22px;
+}
+
+.imm-loading {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  right: 4px;
+  transform: translateY(-100%);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.imm-loading.htmx-request {
+  display: inline-flex;
+}
+
+.imm-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #d1d5db;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: imm-spin 0.7s linear infinite;
+}
+
+@keyframes imm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.imm-list {
+  margin-top: 0;
+  overflow-anchor: none;
+  background: #fff;
+  border: 1px solid #eef1f6;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+  overflow-x: auto;
+}
+
+.imm-scan {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) repeat(4, 164px) 104px;
+  column-gap: 12px;
+  align-items: center;
+  min-width: 980px;
+  padding: 0 20px;
+}
+
+.imm-scan-head {
+  padding-top: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f2f6;
+}
+
+.imm-scan-head span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #98a2b3;
+}
+
+.imm-row {
+  position: relative;
+}
+
+.imm-row + .imm-row {
+  border-top: 1px solid #f0f2f6;
+}
+
+.imm-row:hover {
+  background: #fbfcfe;
+}
+
+.imm-row .imm-scan {
+  grid-template-areas: "who sin permit proof overall details";
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.imm-who {
+  grid-area: who;
   min-width: 0;
 }
 
-.immigration-name {
-  word-break: break-word;
-  font-weight: 600;
+.imm-days,
+.imm-pair {
+  display: contents;
 }
 
-.immigration-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+.imm-days-kicker {
+  display: none;
 }
 
-.immigration-summary {
-  flex: 0 0 auto;
-}
+.imm-chip-sin { grid-area: sin; }
+.imm-chip-permit { grid-area: permit; }
+.imm-chip-proof { grid-area: proof; }
+.imm-chip-overall { grid-area: overall; }
+.imm-details-toggle { grid-area: details; }
 
-.immigration-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.immigration-detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.immigration-detail-label {
-  font-size: 0.82rem;
-  color: #6c757d;
+.imm-name {
+  font-size: 15px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.immigration-detail-value {
-  font-size: 0.95rem;
-  color: #212529;
-  font-weight: 500;
-  text-align: right;
+  color: #1a1f36;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.immigration-latest-row {
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.65rem;
-  background: #f8f9fa;
+.imm-meta {
+  font-size: 13px;
+  color: #8b95a7;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.immigration-subtext {
-  font-size: 0.78rem;
-  color: #6c757d;
-  margin-top: 2px;
-}
-
-.immigration-history {
-  border-top: 1px solid #eef0f2;
-  padding-top: 0.65rem;
-}
-
-.immigration-history-item {
-  display: flex;
-  justify-content: space-between;
+.imm-chip {
+  box-sizing: border-box;
+  width: 164px;
+  height: 30px;
+  padding: 0 10px;
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.25rem 0;
+  justify-content: flex-start;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.imm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+}
+
+.imm-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imm-chip.is-ok {
+  background: #e7f6ee;
+  color: #157a42;
+}
+.imm-chip.is-ok .imm-dot { background: #22a45a; }
+
+.imm-chip.is-watch {
+  background: #fbf6d8;
+  color: #8a6914;
+}
+.imm-chip.is-watch .imm-dot { background: #e0b325; }
+
+.imm-chip.is-auth {
+  background: #e7f1fe;
+  color: #1d5fd0;
+}
+.imm-chip.is-auth .imm-dot { background: #3b82f6; }
+
+.imm-chip.is-urgent {
+  background: #fdecee;
+  color: #d1263a;
+}
+.imm-chip.is-urgent .imm-dot { background: #ef4454; }
+
+.imm-chip.is-muted {
+  background: #f2f3f5;
+  color: #6b7280;
+}
+.imm-chip.is-muted .imm-dot { background: #a3aab4; }
+
+.imm-fold-check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.imm-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.imm-details-toggle:hover {
+  color: #1d4ed8;
+}
+
+.imm-chevron {
+  display: inline-block;
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.imm-fold-check:checked ~ .imm-scan .imm-chevron {
+  transform: rotate(90deg);
+}
+
+.imm-fold-check:focus-visible ~ .imm-scan .imm-details-toggle {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.imm-fold-body {
+  display: none;
+  margin: 0 20px 16px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  min-width: 940px;
+}
+
+.imm-fold-check:checked ~ .imm-fold-body {
+  display: block;
+}
+
+.imm-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+
+.imm-fact-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #98a2b3;
+  margin-bottom: 4px;
+}
+
+.imm-fact-label-spaced {
+  margin-top: 12px;
+}
+
+.imm-fact-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1f36;
+  line-height: 1.35;
+}
+
+.imm-fact-sub {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.imm-history {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e7ebf0;
+}
+
+.imm-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.imm-history-item + .imm-history-item {
+  border-top: 1px solid #eef1f5;
 }
 
 .imm-history-text {
@@ -365,113 +784,268 @@
 }
 
 .imm-history-title {
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.2;
+  color: #1a1f36;
+  line-height: 1.3;
 }
 
-.imm-pill,
-.imm-btn {
-  width: 150px;
-  height: 28px;
+.imm-doc-link {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 28px;
+  padding: 0 12px;
   border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
   font-weight: 700;
-  white-space: nowrap;
+  text-decoration: none;
 }
 
-.imm-pill {
-  font-size: 0.72rem;
-  border: 1px solid transparent;
-  text-align: center;
+.imm-doc-link:hover {
+  background: #f9fafb;
+  color: #111827;
 }
 
-.imm-btn {
-  font-size: 0.65rem;
+.imm-empty {
+  padding: 28px 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.imm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.imm-pill.is-success {
-  background: #d1e7dd;
-  color: #0f5132;
-  border-color: #badbcc;
-}
-
-.imm-pill.is-warning {
-  background: #fff3cd;
-  color: #664d03;
-  border-color: #ffecb5;
-}
-
-.imm-pill.is-danger {
-  background: #f8d7da;
-  color: #842029;
-  border-color: #f5c2c7;
-}
-
-.imm-pill.is-dark {
-  background: #e2e3e5;
-  color: #41464b;
-  border-color: #d3d6d8;
-}
-
-.imm-pill.is-primary {
-  background: #cfe2ff;
-  color: #084298;
-  border-color: #b6d4fe;
-}
-
-@media (max-width: 576px) {
-  .immigration-header {
-    align-items: flex-start;
+/* Card stack at the Bootstrap md breakpoint and below. Wide screens keep the scan row. */
+@media (max-width: 767.98px) {
+  .imm-audit {
+    padding: 16px 12px 20px;
+    max-width: 100%;
   }
 
-  .immigration-summary {
-    flex-shrink: 0;
+  .imm-title {
+    font-size: 1.45rem;
   }
 
-  .immigration-employee {
+  .imm-toolbar {
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  .imm-search {
+    flex: 1 1 100%;
+    max-width: none;
     min-width: 0;
   }
 
-  .immigration-detail-row {
+  .imm-sort {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .imm-sort select {
+    min-width: 0;
+  }
+
+  .imm-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .imm-toolbar-actions .imm-btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .imm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+    max-width: 100%;
+  }
+
+  .imm-scan-head {
+    display: none;
+  }
+
+  .imm-row {
+    background: #fff;
+    border: 1px solid #eef1f6;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+    max-width: 100%;
+  }
+
+  .imm-row + .imm-row {
+    border-top: 1px solid #eef1f6;
+  }
+
+  .imm-row .imm-scan {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "email kicker"
+      "store store"
+      "pill days"
+      "chips chips"
+      "details details";
+    column-gap: 8px;
+    row-gap: 2px;
     align-items: center;
+    min-width: 0;
+    width: auto;
+    padding: 14px 14px 12px;
   }
 
-  .immigration-detail-label {
-    font-size: 0.76rem;
+  .imm-row .imm-scan:has(.imm-meta-email):not(:has(.imm-meta-store)) {
+    grid-template-areas:
+      "name name"
+      "email kicker"
+      "pill days"
+      "chips chips"
+      "details details";
   }
 
-  .immigration-detail-value {
-    font-size: 0.88rem;
+  .imm-row .imm-scan:not(:has(.imm-meta-email)):has(.imm-meta-store) {
+    grid-template-areas:
+      "name name"
+      "store kicker"
+      "pill days"
+      "chips chips"
+      "details details";
   }
 
-  .imm-pill,
-  .imm-btn {
-    width: 130px;
-    height: 26px;
+  .imm-row .imm-scan:not(:has(.imm-who-meta)) {
+    grid-template-areas:
+      "name kicker"
+      "pill days"
+      "chips chips"
+      "details details";
   }
 
-  .imm-pill {
-    font-size: 0.68rem;
+  .imm-who,
+  .imm-who-meta,
+  .imm-days {
+    display: contents;
   }
 
-  .imm-btn {
-    font-size: 0.56rem;
+  .imm-name {
+    grid-area: name;
+    align-self: center;
+    min-width: 0;
   }
 
-  .immigration-history-item {
-    align-items: center;
+  .imm-meta-email { grid-area: email; }
+  .imm-meta-store { grid-area: store; }
+
+  .imm-meta-email,
+  .imm-meta-store {
+    min-width: 0;
   }
 
-  .imm-history-text {
-    max-width: calc(100% - 145px);
+  .imm-chip-overall { grid-area: pill; }
+
+  .imm-chip {
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
   }
 
-  .immigration-history-item .imm-btn {
-    flex: 0 0 130px;
-    margin-left: auto;
+  /* Email, then store. Status pill and days-left value share the next row at equal width. */
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit,
+  .imm-pair .imm-chip {
+    justify-self: stretch;
+    align-self: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .imm-row .imm-chip-overall,
+  .imm-days .imm-chip-permit {
+    margin-top: 8px;
+  }
+
+  .imm-days-kicker {
+    display: block;
+    grid-area: kicker;
+    justify-self: end;
+    align-self: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #98a2b3;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .imm-days .imm-chip-permit {
+    grid-area: days;
+  }
+
+  .imm-pair {
+    display: grid;
+    grid-area: chips;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 8px;
+    margin-top: 8px;
+    min-width: 0;
+  }
+
+  .imm-pair .imm-chip {
+    grid-area: auto;
+  }
+
+  .imm-details-toggle {
+    grid-area: details;
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    min-height: 36px;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+
+  .imm-fold-body {
+    min-width: 0;
+    margin: 0 12px 12px;
+  }
+
+  .imm-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .imm-history-item {
+    align-items: flex-start;
+  }
+
+  .imm-empty {
+    background: #fff;
+    border: 1px solid #eef1f6;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 }
 </style>

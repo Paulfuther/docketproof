@@ -21,7 +21,9 @@ from .views import (CheckPhoneNumberUniqueView, RegisterView,
                     update_user_roles, setup_totp, verify_totp,
                     employee_docs_search,
                     employee_quick_search,
-                    immigration_audit_partial)
+                    immigration_audit_partial,
+                    immigration_audit_export,
+                    resend_hr_documents)
 from django.views.generic import TemplateView
 
 
@@ -99,6 +101,11 @@ urlpatterns = [
     path("hr/dashboard/", hr_dashboard, name="hr_dashboard"),
     path("hr/invite/cancel/<int:invite_id>/", cancel_invite, name="cancel_invite"),
     path("hr/invite/resend/<int:invite_id>/", resend_invite, name="resend_invite"),
+    path(
+        "hr/documents/resend/<int:user_id>/",
+        resend_hr_documents,
+        name="resend_hr_documents",
+    ),
     path("hr/documents/", hr_document_view, name="hr_document_view"),
     path("hr/documents/fetch/<int:user_id>/", fetch_signed_docs_by_user, name="fetch_signed_docs_by_user"),
     path("hr/documents/download/<int:doc_id>/", download_signed_document, name="download_signed_document"),
@@ -109,4 +116,9 @@ urlpatterns = [
     path("hr/employee-quick-search/", employee_quick_search, name="employee_quick_search"),
     path("hr/immigration-audit/", immigration_audit_partial, name="immigration_audit_partial",
 ),
+    path(
+        "hr/immigration-audit/export/",
+        immigration_audit_export,
+        name="immigration_audit_export",
+    ),
 ]

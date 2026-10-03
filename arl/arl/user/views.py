@@ -27,6 +27,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -42,8 +43,15 @@ from twilio.rest import Client
 
 from arl.bucket.helpers import download_from_s3
 from arl.documentflow.models import DocumentFlow
-from arl.documentflow.services import build_document_audit
-from arl.documentflow.services_immigration import build_immigration_audit
+from arl.documentflow.services import (
+    build_document_audit,
+    resend_employee_flow_documents,
+    sort_param_or_date_hired,
+)
+from arl.documentflow.services_immigration import (
+    build_immigration_audit,
+    render_immigration_audit_csv,
+)
 from arl.dsign.models import DocuSignTemplate, SignedDocumentFile
 from arl.dsign.tasks import create_docusign_envelope_task
 from arl.msg.helpers import check_verification_token, request_verification_token
@@ -1004,11 +1012,13 @@ def immigration_audit_partial(request):
 
     immigration_search = request.GET.get("imm_q", "")
     immigration_flagged_only = request.GET.get("imm_flagged") == "1"
+    immigration_sort = sort_param_or_date_hired(request.GET, "imm_sort")
 
     immigration_context = build_immigration_audit(
         employer=employer,
         search_query=immigration_search,
         flagged_only=immigration_flagged_only,
+        sort=immigration_sort,
     )
 
     return render(
@@ -1016,6 +1026,25 @@ def immigration_audit_partial(request):
         "user/hr/partials/immigration_audit.html",
         immigration_context,
     )
+
+
+@login_required
+def immigration_audit_export(request):
+    """CSV of every active employee for this employer."""
+    employer = getattr(request.user, "employer", None)
+
+    if not _user_can_access_hr_dashboard(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    if not _user_can_access_immigration(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    slug = slugify(getattr(employer, "name", "") or "") or "employer"
+    filename = f"immigration-audit-{slug}.csv"
+    payload = render_immigration_audit_csv(employer).encode("utf-8-sig")
+    response = HttpResponse(payload, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @login_required
@@ -1098,11 +1127,13 @@ def hr_dashboard(request):
 
     audit_search = (request.GET.get("audit_q") or "").strip()
     audit_incomplete_only = request.GET.get("audit_incomplete") == "1"
+    audit_sort = sort_param_or_date_hired(request.GET, "audit_sort")
 
     document_audit_context = build_document_audit(
         employer=employer,
         search_query=audit_search,
         incomplete_only=audit_incomplete_only,
+        sort=audit_sort,
     )
     context.update(document_audit_context)
 
@@ -1168,6 +1199,72 @@ def employee_quick_search(request):
         )
     return render(
         request, "user/hr/partials/employee_quick_search.html", {"results": results}
+    )
+
+
+def _hr_document_resend_notice(employee, result):
+    name = employee.get_full_name() or employee.username
+    resent = result["resent"]
+    errors = result["errors"]
+    if resent and not errors:
+        if len(resent) == 1:
+            text = f"Resent {resent[0]} for {name}."
+        else:
+            text = f"Resent {len(resent)} documents for {name}: {', '.join(resent)}."
+        return {"tone": "ok", "text": text}
+    if resent and errors:
+        return {
+            "tone": "watch",
+            "text": (
+                f"Resent {', '.join(resent)} for {name}. "
+                f"Could not resend {errors[0][:180]}."
+            ),
+        }
+    if errors:
+        return {
+            "tone": "urgent",
+            "text": f"Could not resend documents for {name}. {errors[0][:180]}",
+        }
+    return {
+        "tone": "muted",
+        "text": (
+            f"Nothing to resend for {name}. Resend is only available for "
+            "envelopes DocuSign has already sent that are still outstanding."
+        ),
+    }
+
+
+@login_required
+@require_POST
+def resend_hr_documents(request, user_id):
+    """Resend one DocuSign envelope chosen from HR Documents details."""
+    if not _user_can_access_hr_dashboard(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    employer = request.user.employer
+    employee = CustomUser.objects.filter(
+        pk=user_id,
+        employer=employer,
+        is_active=True,
+    ).first()
+    if employee is None:
+        return HttpResponse(status=404)
+    result = resend_employee_flow_documents(
+        employer,
+        employee,
+        step_id=request.POST.get("step_id") or None,
+    )
+    context = build_document_audit(
+        employer=employer,
+        search_query=request.POST.get("audit_q", ""),
+        incomplete_only=request.POST.get("audit_incomplete") == "1",
+        sort=sort_param_or_date_hired(request.POST, "audit_sort"),
+    )
+    context["resend_notice"] = _hr_document_resend_notice(employee, result)
+    return render(
+        request,
+        "documentflow/partials/document_audit_log.html",
+        context,
     )
 
 
