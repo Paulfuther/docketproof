@@ -1,0 +1,31 @@
+{% comment %}Shared GSA nav links — desktop sidebar and tests expect employee-section class.{% endcomment %}
+<li class="nav-item">
+  <a class="nav-link employee-section gsa-nav-link {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">description</span>
+    <span class="gsa-nav-label">Documents</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link employee-section gsa-nav-link {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">checklist</span>
+    <span class="gsa-nav-label">Checklists</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link employee-section gsa-nav-link {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">badge</span>
+    <span class="gsa-nav-label">Immigration</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link employee-section gsa-nav-link {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'salt_log_list' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">ac_unit</span>
+    <span class="gsa-nav-label">Salt log</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link employee-section gsa-nav-link {% if request.resolver_match.url_name == 'incident_dashboard' or request.resolver_match.url_name == 'create_incident' %}active{% endif %}" href="{% url 'incident_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">report</span>
+    <span class="gsa-nav-label">Incident report</span>
+  </a>
+</li>

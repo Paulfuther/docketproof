@@ -1,22 +1,12 @@
 <nav class="gsa-bottom-tabs d-lg-none" aria-label="GSA sections">
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}is-active{% endif %}"
-     href="{% url 'employee_home' %}">
-    <span class="material-symbols-outlined" aria-hidden="true">description</span>
-    Documents
-  </a>
+     href="{% url 'employee_home' %}">Documents</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}is-active{% endif %}"
+     href="{% url 'checklist_dashboard' %}">Checklists</a>
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'employee_immigration_upload' %}is-active{% endif %}"
-     href="{% url 'employee_immigration_upload' %}">
-    <span class="material-symbols-outlined" aria-hidden="true">badge</span>
-    Immigration
-  </a>
+     href="{% url 'employee_immigration_upload' %}">Immigration</a>
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}is-active{% endif %}"
-     href="{% url 'salt_log_list' %}">
-    <span class="material-symbols-outlined" aria-hidden="true">ac_unit</span>
-    Salt log
-  </a>
+     href="{% url 'salt_log_list' %}">Salt log</a>
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'incident_dashboard' or request.resolver_match.url_name == 'create_incident' %}is-active{% endif %}"
-     href="{% url 'incident_dashboard' %}">
-    <span class="material-symbols-outlined" aria-hidden="true">report</span>
-    Incidents
-  </a>
+     href="{% url 'incident_dashboard' %}">Incidents</a>
 </nav>

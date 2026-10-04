@@ -46,90 +46,48 @@
 {% endif %}
 
 {% if shows_gsa_chrome %}
-<nav class="navbar navbar-expand-lg gsa-nav fixed-top">
-  <div class="container">
-    <div class="gsa-topbar w-100 d-lg-none">
-      <button class="navbar-toggler gsa-menu-btn" type="button" data-bs-toggle="collapse"
-        data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false"
-        aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      {% if gsa_subject_user %}
-      <span class="gsa-employee-label">
-        {{ gsa_subject_user.username|upper }}
-        {{ gsa_subject_user.get_full_name|default:gsa_subject_user.username }}
-      </span>
-      {% endif %}
+<header class="gsa-mobile-header d-lg-none">
+  <div class="gsa-mobile-header-inner">
+    {% include "base/gsa_identity.html" %}
+    <div class="gsa-mobile-utility">
+      <a class="gsa-utility-link" href="{% url 'help_page' %}">Help</a>
+      <a class="gsa-utility-link" href="{% url 'logout' %}">Log out</a>
     </div>
-
-    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'employee_home' %}">
-      {% if gsa_preview_user and gsa_preview_user.employer %}
-        {{ gsa_preview_user.employer.name }}
-      {% elif user.is_authenticated and user.employer %}
-        {{ user.employer.name }}
-      {% else %}
-        ARL
-      {% endif %}
-    </a>
-
-    <div class="collapse navbar-collapse gsa-menu-panel" id="mainNavbar">
-      <ul class="navbar-nav gsa-menu-list me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}active{% endif %}" href="{% url 'employee_home' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">description</span>
-            Documents
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
-            Checklists
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'employee_immigration_upload' %}active{% endif %}" href="{% url 'employee_immigration_upload' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">badge</span>
-            Immigration
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'salt_log_list' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">ac_unit</span>
-            Salt log
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'incident_dashboard' or request.resolver_match.url_name == 'create_incident' %}active{% endif %}" href="{% url 'incident_dashboard' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">report</span>
-            Incident report
-          </a>
-        </li>
-      </ul>
-      <ul class="navbar-nav gsa-menu-utility mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'help_page' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">info</span>
-            Help
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'logout' %}">
-            <span class="material-symbols-outlined" aria-hidden="true">logout</span>
-            Logout
-          </a>
-        </li>
-      </ul>
-    </div>
-
-    {% if gsa_preview_active %}
-    <div class="gsa-preview-banner w-100">
-      Viewing as <strong>{{ gsa_preview_user.get_full_name|default:gsa_preview_user.username }}</strong>
-      (GSA preview, read-only).
-      <a href="{% url 'gsa_preview_exit' %}">Exit preview</a>
-    </div>
-    {% endif %}
   </div>
-</nav>
+</header>
+
+<aside class="gsa-sidebar d-none d-lg-block" aria-label="GSA navigation">
+  <div class="gsa-sidebar-inner">
+    <div class="gsa-sidebar-identity">
+      {% include "base/gsa_identity.html" %}
+    </div>
+    <nav class="gsa-sidebar-nav">
+      <ul class="navbar-nav gsa-sidebar-list">
+        {% include "base/gsa_nav_items.html" %}
+        <li class="nav-item gsa-sidebar-utility">
+          <a class="nav-link gsa-nav-link" href="{% url 'help_page' %}">
+            <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">info</span>
+            <span class="gsa-nav-label">Help</span>
+          </a>
+        </li>
+        <li class="nav-item gsa-sidebar-utility">
+          <a class="nav-link gsa-nav-link" href="{% url 'logout' %}">
+            <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">logout</span>
+            <span class="gsa-nav-label">Log out</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</aside>
+
+{% if gsa_preview_active %}
+<div class="gsa-preview-banner">
+  GSA preview, read-only.
+  <a href="{% url 'gsa_preview_exit' %}">Exit preview</a>
+</div>
+{% endif %}
+
 {% include "base/gsa_bottom_tabs.html" %}
 
 {% else %}

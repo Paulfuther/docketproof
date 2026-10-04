@@ -1,0 +1,6 @@
+{% if gsa_subject_user %}
+<span class="gsa-identity">
+  {{ gsa_subject_user.username|upper }}
+  {{ gsa_subject_user.get_full_name|default:gsa_subject_user.username }}
+</span>
+{% endif %}
