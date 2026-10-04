@@ -179,7 +179,9 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertEqual(docs_page.status_code, 200)
         self.assertEqual(self.client.get(reverse("hr_document_view")).status_code, 200)
         checklist = self.client.get(reverse("checklist_dashboard"))
-        self.assertContains(checklist, "col-lg-6")
+        self.assertContains(checklist, "staff-page-shell")
+        self.assertContains(checklist, "staff-section-nav")
+        self.assertNotContains(checklist, "col-lg-6")
         self.assertNotContains(checklist, "Back to documents")
         self.assertNotContains(checklist, "employee-page")
 

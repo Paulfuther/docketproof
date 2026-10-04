@@ -215,18 +215,21 @@
       <div id="docNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2 mb-3" role="tablist">
         <a class="nav-icon-link {% if active_tab == 'employee' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-employee" role="tab"
-          data-title="Employee Docs">
-          <i class="material-symbols-outlined">person_apron</i>
+          data-title="Employee Docs" aria-label="Employee documents">
+          <i class="material-symbols-outlined" aria-hidden="true">person_apron</i>
+          <span class="staff-section-label hr-nav-label">Employee documents</span>
         </a>
         <a class="nav-icon-link {% if active_tab == 'store' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-store" role="tab"
-          data-title="Store Docs">
-          <i class="material-symbols-outlined">location_on</i>
+          data-title="Store Docs" aria-label="Store documents">
+          <i class="material-symbols-outlined" aria-hidden="true">location_on</i>
+          <span class="staff-section-label hr-nav-label">Store documents</span>
         </a>
         <a class="nav-icon-link {% if active_tab == 'company' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-company" role="tab"
-          data-title="Company Docs">
-          <i class="material-symbols-outlined">business_center</i>
+          data-title="Company Docs" aria-label="Company documents">
+          <i class="material-symbols-outlined" aria-hidden="true">business_center</i>
+          <span class="staff-section-label hr-nav-label">Company documents</span>
         </a>
       </div>
 

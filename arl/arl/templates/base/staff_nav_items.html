@@ -57,59 +57,6 @@
   </a>
 </li>
 {% endif %}
-{% if user.is_staff %}
-<li class="nav-item staff-nav-group">
-  <span class="staff-nav-group-label">Admin tools</span>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'admin:index' %}">Django admin</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status' %}">Carwash update</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status_list' %}">Carwash list</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status_report' %}">Carwash report</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'waiting_for_others' %}">Outstanding docs</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'queued_incidents_list' %}">Queued incidents</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'summarize_costs' %}">Message summary</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'task_results' %}">Task results</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'incident_dashboard' %}">Incident dashboard</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'sms_summary_view' %}">SMS logs</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'shortened_sms_report' %}">Short link SMS report</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'fetch_twilio_calls' %}">Call logs</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'email_event_summary' %}">Email logs</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'employee_email_report' %}">Employee email report</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'recruit:applicant_list' %}">Recruiting</a>
-</li>
-<li class="nav-item">
-  <a class="nav-link gsa-nav-link" href="{% url 'gsa_preview_select' %}">View as GSA</a>
-</li>
-{% endif %}
 {% flag 'enable_nav_link' %}
 <li class="nav-item">
   <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'quiz_list' %}active{% endif %}" href="{% url 'quiz_list' %}">
@@ -118,3 +65,19 @@
   </a>
 </li>
 {% endflag %}
+{% if user.is_staff %}
+<li class="nav-item staff-admin-tools-item">
+  <button type="button"
+          class="gsa-nav-link staff-admin-tools-toggle"
+          id="staffAdminToolsToggle"
+          aria-expanded="false"
+          aria-controls="staffAdminToolsPanel">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">grid_view</span>
+    <span class="gsa-nav-label">Admin tools</span>
+    <span class="material-symbols-outlined staff-admin-tools-chevron" aria-hidden="true">chevron_right</span>
+  </button>
+  <div class="staff-admin-tools-panel" id="staffAdminToolsPanel" hidden>
+    {% include "base/staff_admin_tools_links.html" %}
+  </div>
+</li>
+{% endif %}

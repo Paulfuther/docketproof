@@ -4,7 +4,7 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 
-<div class="container record-hub{% if shows_gsa_chrome %} gsa-main employee-page{% endif %}">
+<div class="container record-hub{% if shows_gsa_chrome %} gsa-main employee-page{% elif shows_staff_chrome %} staff-page-shell{% endif %}">
 {% if shows_gsa_chrome %}
   <header class="gsa-page-header">
     <a class="gsa-back-link" href="{% url 'employee_home' %}">
@@ -13,7 +13,7 @@
     </a>
     <h1 class="gsa-page-title">Salt Log Dashboard</h1>
   </header>
-{% else %}
+{% elif not shows_staff_chrome %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
@@ -35,6 +35,8 @@
       {% if not shows_gsa_chrome %}
       <h1 class="record-hub-title">Salt Log Dashboard</h1>
       {% endif %}
+
+      {% include "base/partials/staff_salt_section_nav.html" %}
 
       <ul class="nav nav-tabs record-hub-tabs text-center" id="saltLogTabs">
         <li class="nav-item">
@@ -79,7 +81,7 @@
           {% include "quiz/salt_log_rows.html" with rows=logs tab="edit" page_param="page" %}
         </div>
       </div>
-{% if shows_gsa_chrome %}
+{% if shows_gsa_chrome or shows_staff_chrome %}
 </div>
 {% else %}
     </div>

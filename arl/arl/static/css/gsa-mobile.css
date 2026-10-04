@@ -14,6 +14,7 @@
   --gsa-shadow: 0 1px 3px rgba(44, 51, 56, 0.06);
   --gsa-sidebar-width: 248px;
   --gsa-content-max-width: 860px;
+  --staff-content-max-width: 1180px;
   --gsa-mobile-header-height: 48px;
   --gsa-bottom-nav-height: 40px;
 }
@@ -724,7 +725,8 @@ body.gsa-app .alert {
 @media (min-width: 992px) {
   body.staff-app #hrNavMobile,
   body.staff-app #docNavMobile,
-  body.staff-app #commsNavMobile {
+  body.staff-app #commsNavMobile,
+  body.staff-app .staff-section-nav {
     position: sticky;
     top: 0;
     z-index: 1010;
@@ -737,11 +739,21 @@ body.gsa-app .alert {
   }
 
   body.staff-app > .container,
-  body.staff-app .container {
+  body.staff-app .container,
+  body.staff-app .page-container,
+  body.staff-app .staff-page-shell {
     margin-left: auto;
     margin-right: auto;
-    max-width: var(--gsa-content-max-width);
+    max-width: var(--staff-content-max-width);
     box-sizing: border-box;
+  }
+
+  body.staff-app .page-container {
+    padding-top: 1.5rem;
+  }
+
+  body.staff-app .staff-page-shell {
+    padding: 1.5rem 2rem 2rem;
   }
 
   body.staff-app .pt-5.mt-5,
@@ -749,6 +761,162 @@ body.gsa-app .alert {
     padding-top: 1.5rem !important;
     margin-top: 0 !important;
   }
+
+  body.staff-app .record-hub-tabs {
+    display: none !important;
+  }
+
+  body.staff-app .staff-section-nav {
+    display: flex !important;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0 0.85rem;
+    border-bottom: 1px solid var(--gsa-border);
+    overflow-x: auto;
+  }
+
+  body.staff-app .staff-section-link {
+    flex: 0 0 auto;
+    min-width: 4.25rem;
+    max-width: 6.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.2rem;
+    padding: 0.45rem 0.35rem;
+    border-radius: 10px;
+    text-decoration: none;
+    text-align: center;
+    color: var(--gsa-text-muted);
+    font-size: 0.65rem;
+    font-weight: 500;
+    line-height: 1.1;
+    border: 0;
+    background: transparent;
+  }
+
+  body.staff-app .staff-section-link .material-symbols-outlined {
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  body.staff-app .staff-section-label {
+    display: block;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: normal;
+  }
+
+  body.staff-app .staff-section-link.active,
+  body.staff-app .staff-section-link:hover {
+    color: var(--gsa-text);
+    background: rgba(45, 69, 78, 0.06);
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-link,
+  body.staff-app #docNavMobile .nav-icon-link {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.2rem;
+    min-width: 4.25rem;
+    padding: 0.45rem 0.35rem;
+    border-radius: 10px;
+    color: var(--gsa-text-muted);
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-link.active,
+  body.staff-app #hrNavMobile .hr-nav-link:hover,
+  body.staff-app #docNavMobile .nav-icon-link.active,
+  body.staff-app #docNavMobile .nav-icon-link:hover {
+    color: var(--gsa-text);
+    background: rgba(45, 69, 78, 0.06);
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-link .material-symbols-outlined,
+  body.staff-app #docNavMobile .nav-icon-link .material-symbols-outlined {
+    font-size: 24px;
+  }
+
+  body.staff-app #docNavMobile .staff-section-label {
+    display: block;
+  }
+
+  body.staff-app .gsa-sidebar-list {
+    min-height: calc(100vh - 7rem);
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.staff-app .staff-admin-tools-item {
+    margin-top: auto;
+    padding-top: 0.35rem;
+  }
+
+  body.staff-app .staff-admin-tools-toggle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+  }
+
+  body.staff-app .staff-admin-tools-chevron {
+    margin-left: auto;
+    font-size: 18px;
+    color: var(--gsa-text-muted);
+    transition: transform 0.15s ease;
+  }
+
+  body.staff-app .staff-admin-tools-toggle.is-open .staff-admin-tools-chevron {
+    transform: rotate(90deg);
+  }
+
+  body.staff-app .staff-admin-tools-panel {
+    padding: 0.15rem 0 0.35rem 0.35rem;
+  }
+
+  body.staff-app .staff-admin-tools-link {
+    display: block;
+    padding: 0.45rem 0.75rem;
+    color: var(--gsa-text-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 8px;
+  }
+
+  body.staff-app .staff-admin-tools-link:hover {
+    color: var(--gsa-text);
+    background: rgba(45, 69, 78, 0.06);
+  }
+}
+
+@media (max-width: 991.98px) {
+  body.staff-app #docNavMobile .staff-section-label {
+    display: none;
+  }
+}
+
+.app-more-panel .staff-admin-tools-link {
+  display: block;
+  padding: 0.55rem 0.25rem;
+  color: var(--gsa-text);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.app-more-panel .staff-admin-tools-link:hover {
+  color: var(--gsa-accent);
 }
 
 .staff-nav-group-label,

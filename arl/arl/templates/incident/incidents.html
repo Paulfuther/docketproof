@@ -6,10 +6,12 @@
 {% load crispy_forms_tags %}
 {% if form %}{{ form|as_crispy_errors }}{% endif %}
 
-<div class="container record-hub">
+<div class="container record-hub{% if shows_staff_chrome %} staff-page-shell{% endif %}">
+{% if not shows_staff_chrome %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
+{% endif %}
 
       {% include "base/partials/record_hub_styles.html" %}
 
@@ -96,6 +98,8 @@
 
       <h1 class="record-hub-title">Incident Dashboard</h1>
 
+      {% include "base/partials/staff_incident_section_nav.html" %}
+
       <ul class="nav nav-tabs record-hub-tabs text-center" id="incidentTabs">
         {% if can_add %}
         <li class="nav-item">
@@ -157,7 +161,11 @@
         {% endif %}
       </div>
 
+{% if shows_staff_chrome %}
+</div>
+{% else %}
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}

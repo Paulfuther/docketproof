@@ -1,4 +1,4 @@
-{% load waffle_tags %}
+{% load static waffle_tags %}
 
 {% if shows_gsa_chrome %}
 <aside class="gsa-sidebar d-none d-lg-block" aria-label="GSA navigation">
@@ -58,6 +58,7 @@
     </nav>
   </div>
 </aside>
+<script src="{% static 'js/staff_admin_tools_toggle.js' %}"></script>
 
 {% else %}
 <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top shadow-sm">

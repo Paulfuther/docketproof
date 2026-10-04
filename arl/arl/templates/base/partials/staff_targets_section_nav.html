@@ -1,0 +1,24 @@
+{% if shows_staff_chrome %}
+<nav class="staff-section-nav d-none d-lg-flex" aria-label="Sales target sections">
+  <a class="staff-section-link{% if targets_section == 'campaigns' %} active{% endif %}"
+     href="{% url 'sales_targets:sales_target_dashboard_selector' %}"
+     aria-label="Campaigns">
+    <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+    <span class="staff-section-label">Campaigns</span>
+  </a>
+  {% if period %}
+  <a class="staff-section-link{% if targets_section == 'dashboard' %} active{% endif %}"
+     href="{% url 'sales_targets:sales_target_dashboard' period.id %}"
+     aria-label="Dashboard">
+    <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+    <span class="staff-section-label">Dashboard</span>
+  </a>
+  <a class="staff-section-link{% if targets_section == 'import' %} active{% endif %}"
+     href="{% url 'sales_targets:sales_import_upload' period.id %}"
+     aria-label="Import">
+    <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+    <span class="staff-section-label">Import</span>
+  </a>
+  {% endif %}
+</nav>
+{% endif %}
