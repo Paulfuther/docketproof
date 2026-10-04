@@ -687,13 +687,13 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         dashboard = self.client.get(reverse("checklist_dashboard"))
         self.assertEqual(dashboard.status_code, 200)
         self.assertContains(dashboard, "Opening checklist")
-        self.assertContains(dashboard, "Back to documents")
+        self.assertNotContains(dashboard, "Back to documents")
         self.assertContains(dashboard, "employee-page")
         self.assertNotContains(dashboard, "col-lg-6")
         documents = self.client.get(reverse("employee_home"))
         self.assertNotContains(documents, "Back to documents")
         immigration = self.client.get(reverse("employee_immigration_upload"))
-        self.assertContains(immigration, "Back to documents")
+        self.assertNotContains(immigration, "Back to documents")
 
         started = self.client.post(
             reverse("checklist_from_template", args=[template.id]),
@@ -1084,8 +1084,8 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertContains(salt_log, "gsa-mobile-header")
         self.assertNotContains(salt_log, "navbar-toggler")
         self.assertContains(incident, "employee-page")
-        self.assertContains(salt_log, "Back to documents")
-        self.assertContains(incident, "Back to documents")
+        self.assertNotContains(salt_log, "Back to documents")
+        self.assertNotContains(incident, "Back to documents")
         self.assertContains(salt_log, "Create site salt log")
         self.assertContains(salt_log, "Area salted")
         self.assertContains(incident, "Incident dashboard")
