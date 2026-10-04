@@ -169,7 +169,7 @@
     {% endif %}
 
     <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
-    <div id="commsNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2"
+    <div id="commsNavMobile" class="col-12 px-0 d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom"
           {% if comms_nav_mode == "page" %}role="navigation" aria-label="Communications"{% else %}role="tablist" aria-orientation="horizontal"{% endif %}>
       {% if can_send_email %}
         <a class="comms-nav-link {% if active_tab == 'email' %}active{% endif %}"
