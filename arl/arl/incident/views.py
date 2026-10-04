@@ -24,6 +24,11 @@ from django.views.generic.edit import CreateView, UpdateView
 from PIL import Image
 
 from arl.helpers import get_s3_images_for_incident, upload_to_linode_object_storage
+from arl.user.gsa_access import (
+    GSAOrPermissionRequiredMixin,
+    gsa_preview_blocks_mutation,
+    post_form_success_url,
+)
 
 from .forms import IncidentForm, MajorIncidentForm
 from .models import Incident, MajorIncident
@@ -135,7 +140,7 @@ class IncidentHubView(LoginRequiredMixin, View):
 
 
 class IncidentCreateView(
-    PermissionRequiredMixin,
+    GSAOrPermissionRequiredMixin,
     LoginRequiredMixin,
     CreateView,
 ):
@@ -148,6 +153,9 @@ class IncidentCreateView(
 
     def get(self, request, *args, **kwargs):
         return redirect(f"{reverse('incidents')}?tab=start")
+
+    def get_success_url(self):
+        return str(post_form_success_url(self.request.user, self.request))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -466,6 +474,9 @@ def incident_dashboard(request):
     form = IncidentForm(request.POST or None, request.FILES or None, user=user)
 
     if request.method == "POST":
+        blocked = gsa_preview_blocks_mutation(request)
+        if blocked:
+            return blocked
         if form.is_valid():
             form.instance.user_employer = user.employer
             form_data = form.cleaned_data
@@ -553,7 +564,7 @@ class MajorIncidentUpdateView(PermissionRequiredMixin, LoginRequiredMixin, Updat
         return context
 
 
-class ProcessIncidentImagesView(PermissionRequiredMixin, LoginRequiredMixin, View):
+class ProcessIncidentImagesView(GSAOrPermissionRequiredMixin, LoginRequiredMixin, View):
     login_url = "/login/"
     permission_required = "incident.add_incident"
     raise_exception = True  # Raise exception when no access

@@ -1,0 +1,97 @@
+{% extends "base/base.html" %}
+{% block title %}Your documents{% endblock %}
+
+{% block template %}
+{% include "base/navbar.html" %}
+
+<div class="container employee-page">
+  <div class="pt-5 mt-4 mb-3">
+    <h1 class="h4 mb-1">Hello {{ document_owner.first_name|default:document_owner.username }}</h1>
+    <p class="text-muted mb-0">Signed documents are listed below. Open an unsigned document to finish it.</p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} mb-3" role="alert">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Unsigned</h2>
+      {% if unsigned_pills %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for pill in unsigned_pills %}
+            <a class="employee-doc-pill is-{{ pill.pill_class }}" href="{% url 'employee_unsigned_document' pill.id %}">
+              <span class="employee-doc-pill-name">{{ pill.name }}</span>
+              <span class="employee-doc-pill-status">{{ pill.label }}</span>
+            </a>
+          {% endfor %}
+        </div>
+        {% include "user/employee/pager.html" with page=unsigned_page param="unsigned" other_param="signed" other_page=signed_page label="Unsigned documents" %}
+      {% else %}
+        <p class="text-muted mb-0">No unsigned documents.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Signed</h2>
+      {% if signed_page.object_list %}
+        <ul class="list-group list-group-flush">
+          {% for entry in signed_page %}
+            <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-3">
+              <div class="min-w-0">
+                <div class="fw-semibold text-break">{{ entry.name }}</div>
+                {% if entry.completed_at %}
+                  <div class="text-muted small">Completed {{ entry.completed_at|date:"F j, Y, g:i A" }}</div>
+                {% endif %}
+              </div>
+              {% if entry.download_id %}
+                <a class="btn btn-sm btn-outline-primary flex-shrink-0" href="{% url 'download_signed_document' entry.download_id %}">Download</a>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        {% include "user/employee/pager.html" with page=signed_page param="signed" other_param="unsigned" other_page=unsigned_page label="Signed documents" %}
+      {% else %}
+        <p class="text-muted mb-0">No signed documents yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .employee-page { max-width: 860px; }
+  .employee-doc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    max-width: 100%;
+    padding: 0.35rem 0.45rem 0.35rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .employee-doc-pill-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .employee-doc-pill-status {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .employee-doc-pill.is-primary { background: #cfe2ff; color: #084298; border-color: #b6d4fe; }
+  .employee-doc-pill.is-warning { background: #fff3cd; color: #664d03; border-color: #ffecb5; }
+  .employee-doc-pill.is-success { background: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+  .employee-doc-pill.is-danger { background: #f8d7da; color: #842029; border-color: #f5c2c7; }
+  .employee-doc-pill.is-dark { background: #e2e3e5; color: #41464b; border-color: #d3d6d8; }
+</style>
+{% endblock %}

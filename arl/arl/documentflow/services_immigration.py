@@ -1,11 +1,28 @@
+import base64
 import csv
+import logging
+import mimetypes
+from datetime import date, datetime
 from io import StringIO
 
+from django.contrib.auth.models import Group
+from django.db import transaction
 from django.db.models import CharField, Q
 from django.db.models.functions import Cast
 from django.utils import timezone
 
+from arl.bucket.helpers import read_s3_object_bytes
+from arl.dsign.models import SignedDocumentFile
+from arl.msg.helpers import create_master_email
+from arl.setup.models import TenantApiKeys
+from arl.user.models import CustomUser
+
 from .constants import IMMIGRATION_STATUS_TYPES
+from .models import ImmigrationStatusEvent
+
+logger = logging.getLogger(__name__)
+
+IMMIGRATION_UPLOAD_EMAIL_GROUP = "immigration_email"
 
 # User-facing label when a checkbox or an overrides-permit event
 # keeps the employee work-authorized. The status code stays
@@ -486,6 +503,137 @@ def _search_audit_employees(employees, search_query):
     return employees
 
 
+def _immigration_row_for_employee(employee):
+    override_types = permit_override_status_types()
+    latest_event = (
+        employee.immigration_status_events.filter(is_active=True)
+        .order_by("-effective_date", "-created_at")
+        .first()
+    )
+    permit_event = (
+        employee.immigration_status_events.filter(
+            is_active=True,
+            status_type__in=override_types,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    immigration_events = (
+        employee.immigration_status_events.filter(is_active=True)
+        .select_related("document_file", "created_by")
+        .order_by("-effective_date", "-created_at")
+    )
+    sin_expiry = employee.sin_expiration_date
+    sin_days = _days_until(sin_expiry)
+    sin_info = _sin_status(employee)
+    permit_expiry = employee.work_permit_expiration_date
+    permit_days = _days_until(permit_expiry)
+    permit_info = _permit_status(
+        employee,
+        sin_info,
+        permit_override=permit_event is not None,
+    )
+    overall = _overall_status(sin_info, permit_info)
+    return {
+        "employee": employee,
+        "sin_masked": employee.masked_sin(),
+        "sin_expiry": sin_expiry,
+        "sin_days": sin_days,
+        "sin_info": sin_info,
+        "permit_expiry": permit_expiry,
+        "permit_days": permit_days,
+        "permit_info": permit_info,
+        "extension_requested": employee.work_permit_extension_requested,
+        "extension_date": employee.work_permit_extension_date,
+        "overall_status": overall,
+        "is_flagged": overall.get("code") != "compliant",
+        "latest_immigration_event": latest_event,
+        "permit_event": permit_event,
+        "immigration_events": immigration_events,
+    }
+
+
+def _employee_sin_badge(sin_info):
+    code = sin_info["code"]
+    if code == "permanent":
+        return None
+    tone_map = {
+        "missing": "urgent",
+        "expired": "urgent",
+        "missing_expiry": "watch",
+        "expiring_soon": "watch",
+        "temporary": "watch",
+    }
+    label_map = {
+        "missing": "Missing SIN",
+        "expired": "Expired",
+        "missing_expiry": "Temporary SIN",
+        "expiring_soon": "Expiring",
+        "temporary": "Temporary SIN",
+    }
+    return {
+        "label": label_map.get(code, sin_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": sin_info["label"],
+    }
+
+
+def _employee_permit_badge(permit_info):
+    code = permit_info["code"]
+    if code == "not_required":
+        return None
+    tone_map = {
+        "extension_pending": "auth",
+        "missing_expiry": "urgent",
+        "expired": "urgent",
+        "expiring_soon": "watch",
+        "valid": "ok",
+    }
+    label_map = {
+        "extension_pending": "Authorized",
+        "missing_expiry": "Missing Permit Expiry",
+        "expired": "Expired",
+        "expiring_soon": "Expiring",
+        "valid": "Valid",
+    }
+    return {
+        "label": label_map.get(code, permit_info["label"]),
+        "tone": tone_map.get(code, "muted"),
+        "title": permit_info["label"],
+    }
+
+
+def _employee_overall_badge(overall_status):
+    label, tone = _OVERALL_SCAN.get(
+        overall_status["code"],
+        (overall_status["label"], "muted"),
+    )
+    return {
+        "label": label,
+        "tone": tone,
+        "title": overall_status["label"],
+    }
+
+
+def build_immigration_tracker(user):
+    """GSA tracker summary using the same compliance rules as the HR audit."""
+    row = _immigration_row_for_employee(user)
+    return {
+        "latest_event": row["latest_immigration_event"],
+        "latest_immigration_event": row["latest_immigration_event"],
+        "sin_expiration": user.sin_expiration_date,
+        "work_permit_expiration": user.work_permit_expiration_date,
+        "extension_requested": row["extension_requested"],
+        "extension_date": row["extension_date"],
+        "sin_info": row["sin_info"],
+        "permit_info": row["permit_info"],
+        "overall_status": row["overall_status"],
+        "sin_badge": _employee_sin_badge(row["sin_info"]),
+        "permit_badge": _employee_permit_badge(row["permit_info"]),
+        "overall_badge": _employee_overall_badge(row["overall_status"]),
+    }
+
+
 def build_immigration_audit(employer, search_query="", flagged_only=False, sort=""):
     employees = (
         employer.customuser_set.filter(is_active=True)
@@ -498,63 +646,9 @@ def build_immigration_audit(employer, search_query="", flagged_only=False, sort=
     sort = _normalize_audit_sort(sort)
 
     rows = []
-    override_types = permit_override_status_types()
 
     for employee in employees:
-        latest_event = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .order_by("-effective_date", "-created_at")
-            .first()
-        )
-
-        permit_event = (
-            employee.immigration_status_events
-            .filter(
-                is_active=True,
-                status_type__in=override_types,
-            )
-            .order_by("-created_at")
-            .first()
-        )
-
-        immigration_events = (
-            employee.immigration_status_events
-            .filter(is_active=True)
-            .select_related("document_file", "created_by")
-            .order_by("-effective_date", "-created_at")
-        )
-        sin_expiry = employee.sin_expiration_date
-        sin_days = _days_until(sin_expiry)
-        sin_info = _sin_status(employee)
-
-        permit_expiry = employee.work_permit_expiration_date
-        permit_days = _days_until(permit_expiry)
-
-        permit_info = _permit_status(
-            employee,
-            sin_info,
-            permit_override=permit_event is not None,
-        )
-        overall = _overall_status(sin_info, permit_info)
-
-        row = {
-            "employee": employee,
-            "sin_masked": employee.masked_sin(),
-            "sin_expiry": sin_expiry,
-            "sin_days": sin_days,
-            "sin_info": sin_info,
-            "permit_expiry": permit_expiry,
-            "permit_days": permit_days,
-            "permit_info": permit_info,
-            "extension_requested": employee.work_permit_extension_requested,
-            "extension_date": employee.work_permit_extension_date,
-            "overall_status": overall,
-            "is_flagged": overall.get("code") != "compliant",
-            "latest_immigration_event": latest_event,
-            "permit_event": permit_event,
-            "immigration_events": immigration_events,
-        }
+        row = _immigration_row_for_employee(employee)
 
         if flagged_only and not row["is_flagged"]:
             continue
@@ -718,3 +812,268 @@ def render_immigration_audit_csv(employer):
             [record[key] for key, _label in IMMIGRATION_EXPORT_COLUMNS]
         )
     return buffer.getvalue()
+
+
+def _coerce_date(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return datetime.strptime(cleaned, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("Use a valid date.") from exc
+    raise ValueError("Use a valid date.")
+
+
+def _sync_employee_immigration_dates(employee, status_type, effective_date, expiry_date):
+    """Write permit status and dates onto the employee the audit already reads."""
+    meta = IMMIGRATION_STATUS_TYPES.get(status_type, {})
+    fields = []
+
+    if status_type == "new_work_permit":
+        employee.work_permit_extension_requested = False
+        fields.append("work_permit_extension_requested")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+    elif meta.get("overrides_permit"):
+        employee.work_permit_extension_requested = True
+        fields.append("work_permit_extension_requested")
+        if effective_date:
+            employee.work_permit_extension_date = effective_date
+            fields.append("work_permit_extension_date")
+        if expiry_date:
+            employee.work_permit_expiration_date = expiry_date
+            fields.append("work_permit_expiration_date")
+
+    if fields:
+        employee.save(update_fields=fields)
+
+
+@transaction.atomic
+def update_immigration_tracker(
+    *,
+    employee,
+    employer,
+    created_by,
+    document_file,
+    status_type,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+):
+    """
+    Append an ImmigrationStatusEvent for an uploaded file and refresh the
+    employee permit fields. This is the same tracker the HR audit reads.
+    """
+    status_type = (status_type or "").strip()
+    if status_type not in IMMIGRATION_STATUS_TYPES:
+        raise ValueError("Choose a valid immigration status.")
+    if document_file is None:
+        raise ValueError("A document file is required.")
+    if employee.employer_id != employer.id:
+        raise ValueError("Employee is not part of this employer.")
+
+    effective = _coerce_date(effective_date)
+    expiry = _coerce_date(expiry_date)
+
+    event = ImmigrationStatusEvent.objects.create(
+        user=employee,
+        employer=employer,
+        status_type=status_type,
+        effective_date=effective,
+        expiry_date=expiry,
+        reference_number=(reference_number or "").strip(),
+        notes=notes or "",
+        document_file=document_file,
+        created_by=created_by,
+        is_active=True,
+    )
+    _sync_employee_immigration_dates(employee, status_type, effective, expiry)
+    return event
+
+
+def resolve_immigration_email_group_name():
+    """
+    Return the Django auth group that receives immigration upload emails.
+
+    Prefer the canonical ``immigration_email`` group. If it is missing, use the
+    only group whose name contains both "immigration" and "email".
+    """
+    if Group.objects.filter(name=IMMIGRATION_UPLOAD_EMAIL_GROUP).exists():
+        return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+    exact_insensitive = Group.objects.filter(
+        name__iexact=IMMIGRATION_UPLOAD_EMAIL_GROUP
+    ).first()
+    if exact_insensitive:
+        return exact_insensitive.name
+
+    candidates = [
+        group.name
+        for group in Group.objects.all()
+        if "immigration" in group.name.lower() and "email" in group.name.lower()
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return IMMIGRATION_UPLOAD_EMAIL_GROUP
+
+
+def immigration_upload_recipient_emails(employer_id):
+    group_name = resolve_immigration_email_group_name()
+    return list(
+        CustomUser.objects.filter(
+            is_active=True,
+            employer_id=employer_id,
+            groups__name=group_name,
+        )
+        .exclude(email="")
+        .values_list("email", flat=True)
+        .distinct()
+    )
+
+
+def _log_immigration_recipient_miss(employer_id, group_name):
+    group_users = CustomUser.objects.filter(
+        is_active=True,
+        groups__name=group_name,
+    )
+    employer_matches = group_users.filter(employer_id=employer_id).exclude(email="")
+    logger.warning(
+        "Immigration upload email has no recipients for employer_id=%s in group '%s' "
+        "(%s active group member(s), %s with this employer and an email address)",
+        employer_id,
+        group_name,
+        group_users.count(),
+        employer_matches.count(),
+    )
+
+
+def _format_tracker_date(value):
+    if not value:
+        return "Not provided"
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
+
+
+def _immigration_upload_attachment(document_file_id, file_bytes=None):
+    if file_bytes is None:
+        document = SignedDocumentFile.objects.get(pk=document_file_id)
+        file_bytes = read_s3_object_bytes(document.file_path)
+        file_name = document.file_name
+    else:
+        document = SignedDocumentFile.objects.filter(pk=document_file_id).first()
+        file_name = document.file_name if document else "immigration-document"
+
+    content_type = (
+        mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    )
+    return {
+        "content": base64.b64encode(file_bytes).decode("utf-8"),
+        "filename": file_name,
+        "type": content_type,
+    }
+
+
+def send_immigration_upload_notification(
+    *,
+    employer_id,
+    employee_name,
+    company_name,
+    document_title,
+    status_label,
+    document_file_id,
+    effective_date=None,
+    expiry_date=None,
+    reference_number="",
+    notes="",
+    file_bytes=None,
+):
+    """
+    Email active users in the immigration upload notification group with the
+    uploaded document attached.
+    """
+    group_name = resolve_immigration_email_group_name()
+    to_emails = immigration_upload_recipient_emails(employer_id)
+    if not to_emails:
+        _log_immigration_recipient_miss(employer_id, group_name)
+        return {
+            "status": "skipped",
+            "group_name": group_name,
+            "message": "No recipients configured.",
+        }
+
+    tenant_api_key = TenantApiKeys.objects.filter(employer_id=employer_id).first()
+    sender_email = (
+        tenant_api_key.verified_sender_email
+        if tenant_api_key and tenant_api_key.verified_sender_email
+        else None
+    )
+
+    subject = f"Immigration document uploaded — {employee_name}"
+    body = (
+        "<p>An immigration document was uploaded from the GSA immigration page.</p>"
+        f"<p><strong>Employee:</strong> {employee_name}<br>"
+        f"<strong>Company:</strong> {company_name}<br>"
+        f"<strong>Document title:</strong> {document_title}<br>"
+        f"<strong>Immigration status:</strong> {status_label}<br>"
+        f"<strong>Effective date:</strong> {_format_tracker_date(effective_date)}<br>"
+        f"<strong>Expiry date:</strong> {_format_tracker_date(expiry_date)}<br>"
+        f"<strong>Reference number:</strong> {reference_number or 'Not provided'}<br>"
+        f"<strong>Notes:</strong> {notes or 'Not provided'}</p>"
+        "<p>The uploaded file is attached.</p>"
+    )
+
+    try:
+        attachment = _immigration_upload_attachment(document_file_id, file_bytes)
+    except Exception:
+        logger.exception(
+            "Immigration upload email could not load attachment for document_file_id=%s",
+            document_file_id,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "Attachment could not be loaded from storage.",
+        }
+
+    sent = create_master_email(
+        to_email=to_emails,
+        sendgrid_id=None,
+        template_data={"subject": subject, "name": to_emails[0]},
+        attachments=[attachment],
+        verified_sender=sender_email,
+        html_content=body,
+    )
+    if not sent:
+        logger.error(
+            "create_master_email failed for immigration upload to %s in group '%s'",
+            to_emails,
+            group_name,
+        )
+        return {
+            "status": "error",
+            "group_name": group_name,
+            "message": "SendGrid send failed.",
+        }
+
+    logger.info(
+        "Immigration upload email sent to %s recipient(s) in group '%s'",
+        len(to_emails),
+        group_name,
+    )
+    return {
+        "status": "success",
+        "group_name": group_name,
+        "recipient_count": len(to_emails),
+    }

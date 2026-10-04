@@ -454,6 +454,25 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn("Sam Sent", flagged_body)
         self.assertNotIn("Mia Missing", flagged_body)
 
+    def test_reset_refreshes_list_without_replacing_audit_shell(self):
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("document_audit_log_partial"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn('hx-target="#hrdoc-list"', body)
+        self.assertIn('hx-select="#hrdoc-list"', body)
+        self.assertIn('hx-swap="outerHTML"', body)
+        self.assertIn("[name=audit_q]", body)
+        self.assertIn("[name=audit_incomplete]", body)
+        self.assertIn("getElementById('audit_sort')", body)
+        self.assertNotIn('hx-target="#document_audit"', body)
+
+        dashboard = self.client.get(reverse("hr_dashboard"))
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_body = dashboard.content.decode()
+        self.assertIn('hx-target="#hrdoc-list"', dashboard_body)
+        self.assertNotIn('hx-target="#document_audit"', dashboard_body)
+
     def _hr_nav_markup(self, body):
         after_desktop = body.split('id="hrNav"', 1)[1]
         desktop_nav, after_mobile = after_desktop.split('id="hrNavMobile"', 1)

@@ -27,6 +27,7 @@ from django.http import (
 )
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -333,31 +334,51 @@ def check_verification(request):
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
 
+# After the phone code is accepted, stay signed in for two weeks.
+EMPLOYEE_SESSION_SECONDS = 60 * 60 * 24 * 14
+
+
+def _redirect_after_login(user):
+    if getattr(user, "is_employee_account", False):
+        return redirect("employee_home")
+    return redirect("home")
+
+
+def _start_session(request, user):
+    login(request, user)
+    request.session.set_expiry(EMPLOYEE_SESSION_SECONDS)
+
+
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("home")
+        return _redirect_after_login(request.user)
 
     if request.method == "POST":
-        form = AuthenticationForm(request, request.POST)
+        form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            if user.phone_number:
-                print(f"DEBUG: Phone number before sending: {str(user.phone_number)}")
-                try:
-                    phone_number = str(user.phone_number)  # Ensure string conversion
-                    request.session["user_id"] = user.id
-                    request_verification_token(phone_number)  # ✅ Pass string to Twilio
-                    request.session["phone_number"] = (
-                        phone_number  # ✅ Ensure session stores string
-                    )
-                    return redirect("verification_page")
-                except TwilioException:
-                    return render(
-                        request,
-                        "user/login.html",
-                        {"form": form, "verification_error": True},
-                    )
-            return redirect("home")
+            # Password alone never starts a session. Employees, managers,
+            # and staff all finish the existing Twilio phone check first.
+            if not user.phone_number:
+                return render(
+                    request,
+                    "user/login.html",
+                    {"form": form, "verification_error": True},
+                )
+            try:
+                phone_number = str(user.phone_number)
+                request_verification_token(phone_number)
+            except TwilioException:
+                request.session.pop("user_id", None)
+                request.session.pop("phone_number", None)
+                return render(
+                    request,
+                    "user/login.html",
+                    {"form": form, "verification_error": True},
+                )
+            request.session["user_id"] = user.id
+            request.session["phone_number"] = phone_number
+            return redirect("verification_page")
     else:
         form = AuthenticationForm(request)
 
@@ -385,8 +406,8 @@ def verification_page(request):
             print("testing", token, phone_number)
             try:
                 if check_verification_token(phone_number, token):
-                    login(request, user)
-                    return redirect("home")
+                    _start_session(request, user)
+                    return _redirect_after_login(user)
                 else:
                     return render(
                         request,
@@ -411,6 +432,10 @@ def logout_view(request):
 
 
 def home_view(request):
+    if request.user.is_authenticated and getattr(
+        request.user, "is_employee_account", False
+    ):
+        return redirect("employee_home")
     return render(request, "user/home.html")
 
 
@@ -1058,6 +1083,72 @@ def employee_quick_search(request):
     )
 
 
+def _hr_document_resend_notice(employee, result):
+    name = employee.get_full_name() or employee.username
+    resent = result["resent"]
+    errors = result["errors"]
+    if resent and not errors:
+        if len(resent) == 1:
+            text = f"Resent {resent[0]} for {name}."
+        else:
+            text = f"Resent {len(resent)} documents for {name}: {', '.join(resent)}."
+        return {"tone": "ok", "text": text}
+    if resent and errors:
+        return {
+            "tone": "watch",
+            "text": (
+                f"Resent {', '.join(resent)} for {name}. "
+                f"Could not resend {errors[0][:180]}."
+            ),
+        }
+    if errors:
+        return {
+            "tone": "urgent",
+            "text": f"Could not resend documents for {name}. {errors[0][:180]}",
+        }
+    return {
+        "tone": "muted",
+        "text": (
+            f"Nothing to resend for {name}. Resend is only available for "
+            "envelopes DocuSign has already sent that are still outstanding."
+        ),
+    }
+
+
+@login_required
+@require_POST
+def resend_hr_documents(request, user_id):
+    """Resend one DocuSign envelope chosen from HR Documents details."""
+    if not _user_can_access_hr_dashboard(request.user):
+        return HttpResponseForbidden("Not allowed.")
+
+    employer = request.user.employer
+    employee = CustomUser.objects.filter(
+        pk=user_id,
+        employer=employer,
+        is_active=True,
+    ).first()
+    if employee is None:
+        return HttpResponse(status=404)
+    result = resend_employee_flow_documents(
+        employer,
+        employee,
+        step_id=request.POST.get("step_id") or None,
+    )
+    context = build_document_audit(
+        employer=employer,
+        search_query=request.POST.get("audit_q", ""),
+        incomplete_only=request.POST.get("audit_incomplete") == "1",
+        sort=sort_param_or_date_hired(request.POST, "audit_sort"),
+    )
+    context["resend_notice"] = _hr_document_resend_notice(employee, result)
+    return render(
+        request,
+        "documentflow/partials/document_audit_log.html",
+        context,
+    )
+
+
 @login_required
 def cancel_invite(request, invite_id):
     """Allows HR to cancel a new hire invitation."""
@@ -1227,9 +1318,27 @@ def hr_document_view(request):
     )
 
 
+def user_can_download_signed_document(user, doc):
+    """Owner, or a staff, manager, or employer account in the same company."""
+    if not user.is_authenticated or not user.is_active:
+        return False
+    if doc.user_id and doc.user_id == user.id:
+        return True
+    if user.is_superuser:
+        return True
+    if not user.employer_id or doc.employer_id != user.employer_id:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(name__in=["Manager", "EMPLOYER"]).exists()
+
+
+@login_required
 def download_signed_document(request, doc_id):
     try:
         doc = get_object_or_404(SignedDocumentFile, id=doc_id)
+        if not user_can_download_signed_document(request.user, doc):
+            return HttpResponseForbidden("You cannot download this document.")
 
         # get original filename + ext
         original_name = doc.file_name or os.path.basename(doc.file_path) or "document"
