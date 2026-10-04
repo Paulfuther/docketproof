@@ -108,10 +108,15 @@ class SaltLogFlowTests(TestCase):
         self.pdf_delay.assert_not_called()
         self.assertEqual(SaltLog.objects.count(), 1)
 
-    def test_legacy_create_url_still_opens_a_draft(self):
+    def test_legacy_create_url_opens_the_dashboard_start_form(self):
         resp = self.client.get(reverse("create_salt_log_legacy"))
-        salt_log = SaltLog.objects.get()
-        self.assertRedirects(resp, reverse("salt_log_edit", kwargs={"pk": salt_log.pk}))
+        self.assertRedirects(resp, reverse("salt_log_list"))
+        page = self.client.get(reverse("salt_log_list"))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Create site salt log")
+        self.assertContains(page, "Area salted")
+        salt_log = SaltLog.objects.get(user=self.user)
+        self.assertEqual(salt_log.status, SaltLog.STATUS_DRAFT)
 
     def test_account_without_employer_does_not_create_a_row(self):
         loner = CustomUser.objects.create_user(
@@ -529,8 +534,7 @@ class SaltLogListPaginationTests(TestCase):
         self.assertContains(page, "Page 1 of 2")
         self.assertContains(page, f">{total}<")
         self.assertContains(page, "tab=edit&page=2")
-        self.assertContains(page, 'href="#start"')
-        self.assertContains(page, "Create site salt log")
+        self.assertContains(page, 'class="tab-pane fade show active" id="edit"')
         self.assertNotContains(page, "Start salt log")
 
     def test_second_page_keeps_filters_and_newest_first_order(self):
@@ -600,12 +604,17 @@ class SaltLogListPaginationTests(TestCase):
             for query in captured.captured_queries
             if "quiz_saltlog" in query["sql"]
         ]
-        counts = [
+        selects = [
             sql
             for sql in salt_sql
-            if sql.lstrip().upper().startswith("SELECT COUNT")
+            if sql.lstrip().upper().startswith("SELECT")
         ]
-        pages = [sql for sql in salt_sql if sql not in counts]
+        counts = [
+            sql
+            for sql in selects
+            if "COUNT" in sql.upper()
+        ]
+        pages = [sql for sql in selects if sql not in counts]
         self.assertGreaterEqual(len(counts), 1)
         self.assertTrue(pages)
         for sql in pages:

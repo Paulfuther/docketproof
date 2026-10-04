@@ -250,6 +250,8 @@ def salt_log_dashboard(request):
         active_tab = "edit"
     if active_tab not in SALT_LOG_TABS:
         active_tab = "start"
+    if store_filter.isdigit() and request.GET.get("tab") is None:
+        active_tab = "edit"
 
     logs = (
         salt_logs_for_user(actor)
@@ -265,15 +267,17 @@ def salt_log_dashboard(request):
         logs = logs.filter(store_id=int(store_filter))
 
     edit_page = _salt_log_page(request, logs, "page")
-    start_salt_log = _draft_for_start_tab(request, actor)
+    start_salt_log = None
     start_form = None
     start_existing_images = []
     start_show_exception = False
-    if start_salt_log:
-        start_form = SaltLogForm(instance=start_salt_log, user=actor)
-        start_existing_images = _salt_log_images(start_salt_log)
-        levels_value = start_form["levels_ok"].value()
-        start_show_exception = levels_value in ("no", False)
+    if active_tab == "start":
+        start_salt_log = _draft_for_start_tab(request, actor)
+        if start_salt_log:
+            start_form = SaltLogForm(instance=start_salt_log, user=actor)
+            start_existing_images = _salt_log_images(start_salt_log)
+            levels_value = start_form["levels_ok"].value()
+            start_show_exception = levels_value in ("no", False)
 
     return render(
         request,
