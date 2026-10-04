@@ -566,6 +566,10 @@ body.gsa-app .card.shadow-sm {
   font-weight: 500;
 }
 
+.gsa-tracker-label--align-end {
+  text-align: right;
+}
+
 .gsa-tracker-item .gsa-tracker-value {
   font-size: 0.875rem;
   font-weight: 500;
