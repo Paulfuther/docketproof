@@ -535,7 +535,7 @@ class HRDocumentsScanTests(TestCase):
         allowed_desktop, allowed_mobile = self._hr_nav_markup(allowed_body)
         self.assertNotIn("hr-nav-label", allowed_desktop)
         self.assertEqual(
-            allowed_mobile.count('class="hr-nav-label">Immigration Audit</span>'),
+            allowed_mobile.count('class="hr-nav-label">Immigration</span>'),
             1,
         )
 
