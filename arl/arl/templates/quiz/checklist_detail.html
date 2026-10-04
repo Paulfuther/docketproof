@@ -20,27 +20,40 @@
     </style>
 
 
-<div class="container">
+<div class="container{% if shows_gsa_chrome %} gsa-main employee-page{% endif %}">
+{% if shows_gsa_chrome %}
+  <header class="gsa-page-header">
+    <a class="gsa-back-link" href="{% url 'checklist_dashboard' %}">
+      <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">chevron_left</span>
+      Back to checklists
+    </a>
+    <h1 class="gsa-page-title">{{ checklist.title }}</h1>
+  </header>
+{% else %}
     <div class="row justify-content-center pt-5 mt-5"></div>
             <div class="row justify-content-center">
                 <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
 
                 <div class="mb-3">
                 <legend class="mb-3">{{ checklist.title }}</legend>
-                <div class="mt-2 d-flex gap-2">
+{% endif %}
+
+                <div class="mb-3 mt-2 d-flex flex-wrap gap-2">
                      <span  class="btn btn-sm btn-outline-primary"
                         onclick="startFreshPdf('{{ checklist.slug }}')">
                             Download Fresh PDF
                 </span>
-                   
-                   
+                    {% if not shows_gsa_chrome %}
                     <a class="btn btn-sm btn-outline-primary" href="{% url 'checklist_dashboard' %}">Back to Checklists</a>
+                    {% endif %}
                     <a class="btn btn-sm btn-outline-primary"
                       href="{% url 'checklist_report_html' slug=checklist.slug %}">
                       Preview Report (HTML)
                     </a>
                 </div>
+{% if not shows_gsa_chrome %}
                 </div>
+{% endif %}
 
                    
    
@@ -180,9 +193,13 @@
       {% endif %}
     </div>
   </div>
+{% if shows_gsa_chrome %}
+</div>
+{% else %}
 </div>
 </div>
 </div>
+{% endif %}
 <script>
   const STATUS_URL = "{% url 'checklist_download_fresh_status' %}";
   const START_URL_TMPL = "{% url 'checklist_download_fresh_start_api' slug='__SLUG__' %}";

@@ -11,7 +11,16 @@
   .badge-soft { background:#eef2ff; color:#3730a3; }
 </style>
 
-<div class="container">
+<div class="container{% if shows_gsa_chrome %} gsa-main employee-page{% endif %}">
+{% if shows_gsa_chrome %}
+  <header class="gsa-page-header">
+    <a class="gsa-back-link" href="{% url 'checklist_dashboard' %}">
+      <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">chevron_left</span>
+      Back to checklists
+    </a>
+    <h1 class="gsa-page-title">Start Checklist</h1>
+  </header>
+{% else %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
@@ -20,6 +29,7 @@
         <h5 class="mb-0">Start Checklist</h5>
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'checklist_dashboard' %}">Back</a>
       </div>
+{% endif %}
 
       <div class="card mb-3">
         <div class="card-body">
@@ -81,9 +91,13 @@
         </div>
       </form>
 
+{% if shows_gsa_chrome %}
+</div>
+{% else %}
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Alert auto-dismiss -->
 <script>
