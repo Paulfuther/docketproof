@@ -89,6 +89,13 @@ def shows_gsa_chrome(request):
     return True
 
 
+def shows_staff_chrome(request):
+    """Manager, employer, HR, and staff shell (not GSA, not guest)."""
+    if not request.user.is_authenticated:
+        return False
+    return not shows_gsa_chrome(request)
+
+
 def gsa_actor(request):
     """User whose GSA data should be shown (preview subject or logged-in GSA)."""
     preview_user = get_gsa_preview_user(request)

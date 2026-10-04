@@ -3,9 +3,9 @@
 <!doctype html>
 <html lang="en">
 
-{% if shows_gsa_chrome %}
+{% if shows_gsa_chrome or shows_staff_chrome %}
 <style>
-  /* Reserve scrollbar space so the GSA nav does not shift between pages. */
+  /* Reserve scrollbar space so the app nav does not shift between pages. */
   html, body { scrollbar-gutter: stable; }
 </style>
 <link rel="stylesheet" href="{% static 'css/gsa-mobile.css' %}">
@@ -46,7 +46,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}{% endblock %}</title>
 
   <!-- Bootstrap CSS -->
@@ -84,10 +84,11 @@
   
 </head>
 
-<body{% if shows_gsa_chrome %} class="gsa-app{% if gsa_preview_active %} gsa-preview-active{% endif %}"{% endif %}>
+<body{% if shows_gsa_chrome %} class="gsa-app{% if gsa_preview_active %} gsa-preview-active{% endif %}"{% elif shows_staff_chrome %} class="staff-app"{% endif %}>
 
-  
-
+  {% if shows_gsa_chrome or shows_staff_chrome %}
+  {% include "base/app_mobile_chrome.html" %}
+  {% endif %}
 
   {% block template %}
   {% endblock %}

@@ -1,61 +1,6 @@
 {% load waffle_tags %}
 
-{% if not shows_gsa_chrome %}
-<style>
-  .navbar-nav .nav-link {
-    font-weight: 500;
-    font-size: 0.95rem;
-  }
-
-  .nav-link.active {
-    font-weight: 600;
-    border-bottom: 2px solid #0d6efd;
-  }
-
-  .dropdown-menu {
-    border-radius: 0.5rem;
-  }
-
-  .material-symbols-outlined {
-    font-variation-settings:
-      'FILL' 0,
-      'wght' 400,
-      'GRAD' 0,
-      'opsz' 48;
-    font-size: 24px;
-    color: #555;
-    vertical-align: middle;
-    margin-right: 4px;
-  }
-
-  .nav-link .material-symbols-outlined {
-    font-size: 20px;
-  }
-
-  .navbar-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100vh;
-    width: 100vw;
-    background-color: rgba(0, 0, 0, 0.4);
-    z-index: 1040;
-    display: none;
-  }
-</style>
-{% endif %}
-
 {% if shows_gsa_chrome %}
-<header class="gsa-mobile-header d-lg-none">
-  <div class="gsa-mobile-header-inner">
-    {% include "base/gsa_identity.html" %}
-    <div class="gsa-mobile-utility">
-      <a class="gsa-utility-link" href="{% url 'help_page' %}">Help</a>
-      <a class="gsa-utility-link" href="{% url 'logout' %}">Log out</a>
-    </div>
-  </div>
-</header>
-
 <aside class="gsa-sidebar d-none d-lg-block" aria-label="GSA navigation">
   <div class="gsa-sidebar-inner">
     <div class="gsa-sidebar-identity">
@@ -88,135 +33,41 @@
 </div>
 {% endif %}
 
-{% include "base/gsa_bottom_tabs.html" %}
+{% elif shows_staff_chrome %}
+<aside class="gsa-sidebar d-none d-lg-block" aria-label="Staff navigation">
+  <div class="gsa-sidebar-inner">
+    <div class="gsa-sidebar-identity">
+      {% include "base/staff_identity.html" %}
+    </div>
+    <nav class="gsa-sidebar-nav">
+      <ul class="navbar-nav gsa-sidebar-list">
+        {% include "base/staff_nav_items.html" %}
+        <li class="nav-item gsa-sidebar-utility">
+          <a class="nav-link gsa-nav-link" href="{% url 'help_page' %}">
+            <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">info</span>
+            <span class="gsa-nav-label">Help</span>
+          </a>
+        </li>
+        <li class="nav-item gsa-sidebar-utility">
+          <a class="nav-link gsa-nav-link" href="{% url 'logout' %}">
+            <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">logout</span>
+            <span class="gsa-nav-label">Log out</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</aside>
 
 {% else %}
 <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top shadow-sm">
   <div class="container">
-    <button class="navbar-toggler order-0" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
-      aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-
-    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
-      <span>
-        {% if user.is_authenticated and user.employer %}
-          <span class=" d-none d-sm-inline">{{ user.employer.name }}</span>
-          <span class=" d-inline d-sm-none" style="font-size: 1rem;">{{ user.employer.name }}</span>
-        {% else %}
-          ARL
-        {% endif %}
-      </span>
-    </a>
-
-    <div class="collapse navbar-collapse" id="mainNavbar">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        {% if user.is_authenticated %}
-        <!-- HR -->
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'hr_dashboard' %}">
-            <i class="material-symbols-outlined">group</i> HR
-          </a>
-        </li>
-
-        <!-- Documents -->
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'documents_dashboard' %}">
-            <i class="material-symbols-outlined">description</i> Docs
-          </a>
-        </li>
-
-        <!-- Reports & Forms -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="formsDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="material-symbols-outlined">assignment</i> Forms
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'salt_log_list' %}">Salt Log Dashboard</a></li>
-            <li><a class="dropdown-item" href="{% url 'incidents' %}">Incident Dashboard</a></li>
-            <li><a class="dropdown-item" href="{% url 'in_app_signing_dashboard' %}">In App Signing</a></li>
-            <li><a class="dropdown-item" href="{% url 'checklist_dashboard' %}">Checklist Dashboard</a></li>
-          </ul>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'sales_targets:sales_target_dashboard_selector' %}">
-            <i class="material-symbols-outlined">monitoring</i>
-            Targets
-          </a>
-        </li>
-
-        {% if user.is_dropbox %}
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'list_folders' %}">
-            <i class="material-symbols-outlined">cloud</i> Dropbox
-          </a>
-        </li>
-        {% endif %}
-
-        {% if user.is_comms %}
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'comms' %}">
-            <i class="material-symbols-outlined">sms</i> Communications
-          </a>
-        </li>
-        {% endif %}
-
-        {% if user.is_staff %}
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="material-symbols-outlined">admin_panel_settings</i> Admin Tools
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'admin:index' %}">Django Admin</a></li>
-            <li><a class="dropdown-item" href="{% url 'carwash_status' %}">Carwash Update</a></li>
-            <li><a class="dropdown-item" href="{% url 'carwash_status_list' %}">Carwash List</a></li>
-            <li><a class="dropdown-item" href="{% url 'carwash_status_report' %}">Carwash Report</a></li>
-            <li><a class="dropdown-item" href="{% url 'waiting_for_others' %}">Outstanding Docs</a></li>
-            <li><a class="dropdown-item" href="{% url 'queued_incidents_list' %}">Queued Incidents</a></li>
-            <li><a class="dropdown-item" href="{% url 'summarize_costs' %}">Message Summary</a></li>
-            <li><a class="dropdown-item" href="{% url 'task_results' %}">Task Results</a></li>
-            <li><a class="dropdown-item" href="{% url 'incident_dashboard' %}">Incident Dashboard</a></li>
-            <li><a class="dropdown-item" href="{% url 'sms_summary_view' %}">SMS Logs</a></li>
-            <li><a class="dropdown-item" href="{% url 'shortened_sms_report' %}">Short Link SMS Report</a></li>
-            <li><a class="dropdown-item" href="{% url 'fetch_twilio_calls' %}">Call Logs</a></li>
-            <li><a class="dropdown-item" href="{% url 'email_event_summary' %}">Email Logs</a></li>
-            <li><a class="dropdown-item" href="{% url 'employee_email_report' %}">Employee Email Report</a></li>
-            <li><a class="dropdown-item" href="{% url 'recruit:applicant_list' %}">Recruiting</a></li>
-            <li><a class="dropdown-item" href="{% url 'gsa_preview_select' %}">View as GSA</a></li>
-          </ul>
-        </li>
-        {% endif %}
-
-        {% flag 'enable_nav_link' %}
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'quiz_list' %}">
-            <i class="fas fa-question-circle me-1"></i> Quiz
-          </a>
-        </li>
-        {% endflag %}
-
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'help_page' %}">
-            <i class="material-symbols-outlined">info</i> Help
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'logout' %}">
-            <i class="material-symbols-outlined">logout</i> Logout
-          </a>
-        </li>
-
-        {% else %}
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'login' %}">
-            <i class="fas fa-sign-in-alt me-1"></i> Login
-          </a>
-        </li>
-        {% endif %}
-      </ul>
-    </div>
+    <a class="navbar-brand" href="{% url 'login' %}">ARL</a>
+    <ul class="navbar-nav ms-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'login' %}">Login</a>
+      </li>
+    </ul>
   </div>
 </nav>
 {% endif %}

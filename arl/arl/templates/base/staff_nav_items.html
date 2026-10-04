@@ -1,0 +1,120 @@
+{% load waffle_tags %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'hr_dashboard' %}active{% endif %}" href="{% url 'hr_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">group</span>
+    <span class="gsa-nav-label">HR</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'documents_dashboard' %}active{% endif %}" href="{% url 'documents_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">description</span>
+    <span class="gsa-nav-label">Docs</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'salt_log_list' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">ac_unit</span>
+    <span class="gsa-nav-label">Salt log</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'incidents' or request.resolver_match.url_name == 'create_incident' or request.resolver_match.url_name == 'incident_edit_list' or request.resolver_match.url_name == 'incident_list' or request.resolver_match.url_name == 'update_incident' %}active{% endif %}" href="{% url 'incidents' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">report</span>
+    <span class="gsa-nav-label">Incidents</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">checklist</span>
+    <span class="gsa-nav-label">Checklists</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'in_app_signing_dashboard' %}active{% endif %}" href="{% url 'in_app_signing_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">draw</span>
+    <span class="gsa-nav-label">In-app signing</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.namespace == 'sales_targets' %}active{% endif %}" href="{% url 'sales_targets:sales_target_dashboard_selector' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">monitoring</span>
+    <span class="gsa-nav-label">Targets</span>
+  </a>
+</li>
+{% if user.is_dropbox %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'list_folders' %}active{% endif %}" href="{% url 'list_folders' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">cloud</span>
+    <span class="gsa-nav-label">Dropbox</span>
+  </a>
+</li>
+{% endif %}
+{% if user.is_comms %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'comms' %}active{% endif %}" href="{% url 'comms' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">sms</span>
+    <span class="gsa-nav-label">Communications</span>
+  </a>
+</li>
+{% endif %}
+{% if user.is_staff %}
+<li class="nav-item staff-nav-group">
+  <span class="staff-nav-group-label">Admin tools</span>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'admin:index' %}">Django admin</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status' %}">Carwash update</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status_list' %}">Carwash list</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'carwash_status_report' %}">Carwash report</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'waiting_for_others' %}">Outstanding docs</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'queued_incidents_list' %}">Queued incidents</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'summarize_costs' %}">Message summary</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'task_results' %}">Task results</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'incident_dashboard' %}">Incident dashboard</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'sms_summary_view' %}">SMS logs</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'shortened_sms_report' %}">Short link SMS report</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'fetch_twilio_calls' %}">Call logs</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'email_event_summary' %}">Email logs</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'employee_email_report' %}">Employee email report</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'recruit:applicant_list' %}">Recruiting</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link gsa-nav-link" href="{% url 'gsa_preview_select' %}">View as GSA</a>
+</li>
+{% endif %}
+{% flag 'enable_nav_link' %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'quiz_list' %}active{% endif %}" href="{% url 'quiz_list' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">quiz</span>
+    <span class="gsa-nav-label">Quiz</span>
+  </a>
+</li>
+{% endflag %}

@@ -3,6 +3,7 @@ from arl.user.gsa_access import (
     gsa_actor,
     is_gsa_account,
     shows_gsa_chrome,
+    shows_staff_chrome,
 )
 
 
@@ -17,8 +18,12 @@ def gsa_preview(request):
             subject_user = gsa_actor(request) or (
                 request.user if is_gsa_account(request.user) else None
             )
+    staff_chrome = False
+    if request.user.is_authenticated:
+        staff_chrome = shows_staff_chrome(request)
     return {
         "shows_gsa_chrome": chrome,
+        "shows_staff_chrome": staff_chrome,
         "gsa_preview_active": preview_user is not None,
         "gsa_preview_user": preview_user,
         "gsa_subject_user": subject_user,

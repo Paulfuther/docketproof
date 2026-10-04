@@ -1,4 +1,4 @@
-<nav class="gsa-bottom-tabs d-lg-none" aria-label="GSA sections">
+<nav class="gsa-bottom-tabs app-mobile-chrome d-lg-none" aria-label="GSA sections">
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'employee_home' or request.resolver_match.url_name == 'employee_unsigned_document' %}is-active{% endif %}"
      href="{% url 'employee_home' %}">Documents</a>
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}is-active{% endif %}"

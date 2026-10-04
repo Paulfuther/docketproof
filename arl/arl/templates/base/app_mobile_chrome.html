@@ -1,0 +1,23 @@
+{% if shows_gsa_chrome %}
+<header class="gsa-mobile-header app-mobile-chrome d-lg-none" role="banner">
+  <div class="gsa-mobile-header-inner">
+    {% include "base/gsa_identity.html" %}
+    <div class="gsa-mobile-utility">
+      <a class="gsa-utility-link" href="{% url 'help_page' %}">Help</a>
+      <a class="gsa-utility-link" href="{% url 'logout' %}">Log out</a>
+    </div>
+  </div>
+</header>
+{% include "base/gsa_bottom_tabs.html" %}
+{% elif shows_staff_chrome %}
+<header class="gsa-mobile-header app-mobile-chrome d-lg-none" role="banner">
+  <div class="gsa-mobile-header-inner">
+    {% include "base/staff_identity.html" %}
+    <div class="gsa-mobile-utility">
+      <a class="gsa-utility-link" href="{% url 'help_page' %}">Help</a>
+      <a class="gsa-utility-link" href="{% url 'logout' %}">Log out</a>
+    </div>
+  </div>
+</header>
+{% include "base/staff_bottom_tabs.html" %}
+{% endif %}
