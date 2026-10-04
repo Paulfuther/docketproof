@@ -51,6 +51,11 @@
 
 /* ===== Mobile nav ===== */
 #hrNavMobile {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-wrap: nowrap;
   align-items: stretch;
   justify-content: flex-start;
@@ -62,6 +67,10 @@
   scrollbar-width: none;
   scroll-snap-type: x mandatory;
   scroll-padding-inline: 0.75rem;
+}
+#hrNavMobile::after {
+  content: "";
+  flex: 0 0 0.35rem;
 }
 #hrNavMobile::-webkit-scrollbar {
   display: none;
@@ -247,7 +256,7 @@ html {
     {% endif %}
 
     <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
-    <div id="hrNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom"
+    <div id="hrNavMobile" class="col-12 px-0 d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom"
          role="tablist"
          aria-orientation="horizontal">
       <a class="hr-nav-link {% if active_tab == 'docusign' %}active{% endif %}"

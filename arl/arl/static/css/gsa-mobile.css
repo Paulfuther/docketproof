@@ -735,6 +735,11 @@ body.gsa-app .alert {
   }
 
   body.staff-app #hrNavMobile {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     justify-content: center;
     gap: 0.35rem;
     padding: 0.35rem 0 0.85rem;
@@ -923,6 +928,11 @@ body.gsa-app .alert {
 
 @media (max-width: 991.98px) {
   body.staff-app #hrNavMobile {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     justify-content: flex-start;
     gap: 0.35rem;
     padding: 0.35rem 0.75rem 0.65rem;

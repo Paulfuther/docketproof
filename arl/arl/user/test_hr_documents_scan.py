@@ -516,6 +516,8 @@ class HRDocumentsScanTests(TestCase):
         ):
             self.assertEqual(mobile_nav.count(f'class="hr-nav-label">{label}</span>'), 1)
         self.assertNotIn("Immigration Audit", mobile_nav)
+        self.assertIn("min-width: 0", body)
+        self.assertIn('class="col-12 px-0 d-flex', body)
 
         self.assertNotIn('data-title="Immigration"', body)
         self.assertNotIn('data-title="Templates"', body)
