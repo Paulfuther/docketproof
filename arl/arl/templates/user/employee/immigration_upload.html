@@ -26,18 +26,24 @@
       <span class="gsa-tracker-label">Overall status</span>
       <div class="gsa-tracker-pill-slot gsa-tracker-pill-slot--anchor">
         <span class="gsa-tracker-pill-align-guide" aria-hidden="true">Work permit expiration</span>
-        <div class="gsa-tracker-pill-rail">
-          <span class="gsa-status-pill gsa-status-pill--{% if overall_badge.tone == 'auth' %}accent{% elif overall_badge.tone == 'muted' %}muted{% else %}{{ overall_badge.tone }}{% endif %}" title="{{ overall_badge.title }}">
-            {{ overall_badge.label }}
-          </span>
+        <div class="gsa-tracker-pill-rail-wrap">
+          <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+          <div class="gsa-tracker-pill-rail">
+            <span class="gsa-status-pill gsa-status-pill--{% if overall_badge.tone == 'auth' %}accent{% elif overall_badge.tone == 'muted' %}muted{% else %}{{ overall_badge.tone }}{% endif %}" title="{{ overall_badge.title }}">
+              {{ overall_badge.label }}
+            </span>
+          </div>
         </div>
       </div>
 
       {% if latest_event %}
         <span class="gsa-tracker-label">Latest status</span>
         <div class="gsa-tracker-pill-slot">
-          <div class="gsa-tracker-pill-rail">
-            <span class="gsa-status-pill gsa-status-pill--muted">{{ latest_event.get_status_type_display }}</span>
+          <div class="gsa-tracker-pill-rail-wrap">
+            <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+            <div class="gsa-tracker-pill-rail">
+              <span class="gsa-status-pill gsa-status-pill--muted">{{ latest_event.get_status_type_display }}</span>
+            </div>
           </div>
         </div>
       {% endif %}
@@ -50,16 +56,21 @@
       </div>
       <div class="gsa-tracker-item">
         <span class="gsa-tracker-label">Work permit expiration</span>
-        <div class="gsa-tracker-value">
-          {% if work_permit_expiration %}{{ work_permit_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
-        </div>
         {% if permit_badge %}
           <div class="gsa-tracker-pill-slot">
-            <div class="gsa-tracker-pill-rail">
-              <span class="gsa-status-pill gsa-status-pill--{% if permit_badge.tone == 'auth' %}accent{% else %}{{ permit_badge.tone }}{% endif %}" title="{{ permit_badge.title }}">{{ permit_badge.label }}</span>
+            <div class="gsa-tracker-pill-rail-wrap">
+              <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+              <div class="gsa-tracker-pill-rail">
+                <span class="gsa-status-pill gsa-status-pill--{% if permit_badge.tone == 'auth' %}accent{% else %}{{ permit_badge.tone }}{% endif %}" title="{{ permit_badge.title }}">{{ permit_badge.label }}</span>
+              </div>
             </div>
           </div>
         {% endif %}
+        <div class="gsa-tracker-value-rail">
+          <div class="gsa-tracker-value">
+            {% if work_permit_expiration %}{{ work_permit_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+          </div>
+        </div>
       </div>
 
       <div class="gsa-tracker-item">
@@ -70,16 +81,21 @@
       </div>
       <div class="gsa-tracker-item">
         <span class="gsa-tracker-label">SIN expiration</span>
-        <div class="gsa-tracker-value">
-          {% if sin_expiration %}{{ sin_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
-        </div>
         {% if sin_badge %}
           <div class="gsa-tracker-pill-slot">
-            <div class="gsa-tracker-pill-rail">
-              <span class="gsa-status-pill gsa-status-pill--{% if sin_badge.tone == 'auth' %}accent{% else %}{{ sin_badge.tone }}{% endif %}" title="{{ sin_badge.title }}">{{ sin_badge.label }}</span>
+            <div class="gsa-tracker-pill-rail-wrap">
+              <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+              <div class="gsa-tracker-pill-rail">
+                <span class="gsa-status-pill gsa-status-pill--{% if sin_badge.tone == 'auth' %}accent{% else %}{{ sin_badge.tone }}{% endif %}" title="{{ sin_badge.title }}">{{ sin_badge.label }}</span>
+              </div>
             </div>
           </div>
         {% endif %}
+        <div class="gsa-tracker-value-rail">
+          <div class="gsa-tracker-value">
+            {% if sin_expiration %}{{ sin_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+          </div>
+        </div>
       </div>
 
       {% if extension_requested %}

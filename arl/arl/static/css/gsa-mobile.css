@@ -402,6 +402,43 @@ body.gsa-app .card.shadow-sm {
   color: var(--gsa-accent);
 }
 
+/* Calm tracker pill palette (immigration Current tracker) */
+.gsa-tracker-layout .gsa-status-pill--accent {
+  background: #dce8e4;
+  color: #2d454e;
+  border: 1px solid #c8dbd4;
+}
+
+.gsa-tracker-layout .gsa-status-pill--muted {
+  background: #e6edf1;
+  color: #4a5c66;
+  border: 1px solid #d2dde4;
+}
+
+.gsa-tracker-layout .gsa-status-pill--ok {
+  background: #d9ebe3;
+  color: #2f5f4f;
+  border: 1px solid #c2ddd2;
+}
+
+.gsa-tracker-layout .gsa-status-pill--watch {
+  background: #f3ead8;
+  color: #8a6b3c;
+  border: 1px solid #e5d7bc;
+}
+
+.gsa-tracker-layout .gsa-status-pill--urgent {
+  background: #f2e0e0;
+  color: #8f4a4a;
+  border: 1px solid #e0c8c8;
+}
+
+.gsa-tracker-layout .gsa-status-pill--auth {
+  background: #dce8e4;
+  color: #2d454e;
+  border: 1px solid #c8dbd4;
+}
+
 /* ---- Tracker grid ---- */
 
 .gsa-tracker-layout {
@@ -447,7 +484,30 @@ body.gsa-app .card.shadow-sm {
   white-space: nowrap;
 }
 
+.gsa-tracker-pill-rail-wrap {
+  display: grid;
+  justify-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.gsa-tracker-pill-size-guide {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0.25rem 0.7rem;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
 .gsa-tracker-pill-rail {
+  grid-area: 1 / 1;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -459,9 +519,36 @@ body.gsa-app .card.shadow-sm {
 .gsa-tracker-pill-rail .gsa-status-pill {
   margin: 0;
   flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.gsa-tracker-value-rail {
+  display: flex;
+  justify-content: flex-end;
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  margin-top: 0.15rem;
+}
+
+.gsa-tracker-value-rail .gsa-tracker-value {
+  text-align: right;
 }
 
 .gsa-tracker-item .gsa-tracker-pill-slot {
+  margin-top: 0;
+}
+
+.gsa-tracker-item .gsa-tracker-value-rail {
+  margin-top: 0.15rem;
+}
+
+.gsa-tracker-item .gsa-tracker-pill-slot + .gsa-tracker-value-rail {
   margin-top: 0.2rem;
 }
 
