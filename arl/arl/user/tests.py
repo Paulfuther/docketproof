@@ -1086,8 +1086,11 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertContains(incident, "Back to documents")
         self.assertContains(salt_log, "Start salt log")
         self.assertContains(incident, "Incident dashboard")
-        self.assertContains(incident, "New Incident")
-        self.assertContains(incident, "Update Existing")
+        self.assertContains(incident, 'href="#start"')
+        self.assertContains(incident, 'href="#edit"')
+        self.assertContains(incident, "Create site incident")
+        self.assertContains(incident, "record-list")
+        self.assertContains(incident, "incident-pills")
 
     @patch("arl.incident.views.process_new_incident_reports_task.delay")
     def test_gsa_incident_dashboard_lists_only_company_incidents(self, _process_incident):
@@ -1107,9 +1110,55 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
             user_employer=self.other_employer,
         )
         self.client.force_login(self.employee)
-        response = self.client.get(reverse("incident_dashboard"))
+        response = self.client.get(
+            reverse("incident_dashboard"), {"tab": "edit"}
+        )
         self.assertContains(response, "Our spill")
         self.assertNotContains(response, "Other company")
+
+    def test_gsa_incident_dashboard_shows_view_not_edit_and_blocks_updates(self):
+        from arl.incident.models import Incident
+
+        incident = Incident.objects.create(
+            store=self.store,
+            brief_description="Fuel spill",
+            eventdetails="Fuel on pad",
+            user_employer=self.employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(
+            reverse("incident_dashboard"), {"tab": "edit"}
+        )
+        self.assertContains(response, ">View<")
+        self.assertNotContains(response, ">Edit<")
+        self.assertContains(
+            response,
+            reverse("generate_restricted_pdf_web", args=[incident.pk]),
+        )
+        denied = self.client.get(
+            reverse("update_incident", kwargs={"pk": incident.pk})
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_gsa_incident_edit_list_supports_search(self):
+        from arl.incident.models import Incident
+
+        Incident.objects.create(
+            store=self.store,
+            brief_description="Fuel spill",
+            eventdetails="Fuel on pad",
+            user_employer=self.employer,
+        )
+        Incident.objects.create(
+            store=self.store,
+            brief_description="Slip near door",
+            eventdetails="Wet floor",
+            user_employer=self.employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("gsa_incident_edit_list"), {"q": "Fuel"})
+        self.assertContains(response, "Fuel spill")
+        self.assertNotContains(response, "Slip near door")
 
     def test_non_gsa_still_needs_incident_permission(self):
         self.client.force_login(self.manager)

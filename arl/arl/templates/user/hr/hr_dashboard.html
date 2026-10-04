@@ -53,14 +53,24 @@
 #hrNavMobile {
   flex-wrap: nowrap;
   align-items: stretch;
-  padding-left: 0;
-  padding-right: 0;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem 0.65rem;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.75rem;
+}
+#hrNavMobile::-webkit-scrollbar {
+  display: none;
 }
 #hrNavMobile .hr-nav-link {
-  flex: 1 1 0;
-  /* Floor keeps "Immigration" on one line at .65rem. */
-  min-width: 3.95rem;
+  flex: 0 0 auto;
+  min-width: 4.25rem;
+  max-width: 5.75rem;
+  scroll-snap-align: start;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
@@ -236,7 +246,7 @@ html {
     {% endif %}
 
     <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
-    <div id="hrNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2"
+    <div id="hrNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom"
          role="tablist"
          aria-orientation="horizontal">
       <a class="hr-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
@@ -393,22 +403,14 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("blur", function () { tip.hide(); });
     el.addEventListener("click", function () { tip.hide(); });
   });
-});
-</script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tabEl) {
-    tabEl.addEventListener("shown.bs.tab", function (event) {
-      const href = event.target.getAttribute("href");
-      if (!href || !href.startsWith("#")) return;
 
-      const tabName = href.replace("#", "");
-      const url = new URL(window.location);
-
-      url.searchParams.set("tab", tabName);
-      window.history.replaceState({}, "", url);
-    });
-  });
+  var mobileNav = document.getElementById("hrNavMobile");
+  if (mobileNav) {
+    var activeLink = mobileNav.querySelector(".hr-nav-link.active");
+    if (activeLink) {
+      activeLink.scrollIntoView({ block: "nearest", inline: "center" });
+    }
+  }
 });
 </script>
 <script>

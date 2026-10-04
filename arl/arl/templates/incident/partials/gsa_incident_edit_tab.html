@@ -1,0 +1,29 @@
+<form
+  id="incident-search"
+  method="get"
+  action="{{ hub_url }}"
+  class="record-hub-search mb-3"
+  hx-get="{{ list_partial_url }}"
+  hx-target="#incident-list"
+  hx-swap="outerHTML"
+  hx-sync="#incident-search:replace"
+  hx-trigger="submit">
+  <input type="hidden" name="tab" value="edit">
+  <label class="form-label mb-1" for="incident-q">Search</label>
+  <input
+    id="incident-q"
+    type="search"
+    name="q"
+    value="{{ q }}"
+    class="form-control"
+    placeholder="Store or description"
+    autocomplete="off"
+    hx-get="{{ list_partial_url }}"
+    hx-trigger="input changed delay:300ms, search"
+    hx-target="#incident-list"
+    hx-swap="outerHTML"
+    hx-include="#incident-search"
+    hx-sync="#incident-search:replace">
+</form>
+
+{% include "incident/partials/incident_edit_list.html" %}
