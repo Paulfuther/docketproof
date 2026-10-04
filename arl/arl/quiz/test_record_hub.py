@@ -80,7 +80,7 @@ class RecordHubChromeTests(TestCase):
         self.assertEqual(incident_page.status_code, 200)
         self.assertEqual(checklist_page.status_code, 200)
 
-        self.assertContains(salt_page, "Salt Log Dashboard")
+        self.assertNotContains(salt_page, 'class="record-hub-title"')
         self.assertContains(salt_page, "Start salt log")
         self.assertContains(salt_page, reverse("create_salt_log"))
         self.assertContains(salt_page, 'href="#start"')
@@ -90,13 +90,13 @@ class RecordHubChromeTests(TestCase):
         self.assertNotContains(salt_page, "btn-primary")
         self.assertNotContains(salt_page, "Create site incident")
 
-        self.assertContains(incident_page, "Incident Dashboard")
+        self.assertNotContains(incident_page, 'class="record-hub-title"')
         self.assertContains(incident_page, 'href="#start"')
         self.assertContains(incident_page, 'href="#edit"')
         self.assertContains(incident_page, "Create site incident")
         self.assertNotContains(incident_page, "Start salt log")
 
-        self.assertContains(checklist_page, "Checklist Dashboard")
+        self.assertNotContains(checklist_page, 'class="record-hub-title"')
         self.assertContains(checklist_page, 'href="#start"')
         self.assertContains(checklist_page, 'href="#inprogress"')
         self.assertContains(checklist_page, 'href="#submitted"')
@@ -140,7 +140,7 @@ class RecordHubChromeTests(TestCase):
             self.client.get(reverse("checklist_dashboard") + "?tab=inprogress"),
         ]
         for page in pages:
-            self.assertContains(page, 'class="record-hub-title"')
+            self.assertNotContains(page, 'class="record-hub-title"')
             self.assertContains(page, "font-size: 1.125rem")
             self.assertContains(page, "font-weight: 500")
             self.assertContains(page, "record-hub-tabs")

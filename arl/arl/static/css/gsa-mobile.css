@@ -900,9 +900,11 @@ body.gsa-app .alert {
   }
 
   body.staff-app #commsTabContent,
-  body.staff-app #commsTabContent > .tab-pane {
+  body.staff-app #commsTabContent > .tab-pane,
+  body.staff-app .comms-content-column {
     min-width: 0;
     max-width: 100%;
+    overflow-x: clip;
   }
 }
 

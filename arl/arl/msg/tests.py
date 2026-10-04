@@ -932,8 +932,10 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("comms-mode-toggle", send_form)
         self.assertIn("comms-manage-link", send_form)
         self.assertIn("comms-email-form", send_form)
+        self.assertIn("comms-email-form-shell", send_form)
         self.assertIn("comms-email-preview", send_form)
-        self.assertIn("max-width: 640px", send_form)
+        self.assertIn("width: 640px", send_form)
+        self.assertIn("preview/?fragment=1", send_form)
         self.assertIn("Select Individuals", send_form)
         self.assertNotIn("toggle-email-group", send_form)
         self.assertNotIn("selected_group", send_form)
@@ -967,6 +969,27 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(data["subject"], "Hello Pat Doe")
         self.assertIn("Acme Co", data["html"])
         self.assertTrue(data["is_in_app"])
+
+    def test_preview_fragment_omits_document_wrapper(self):
+        template = EmailTemplate.objects.create(
+            name="Welcome",
+            subject="Hello {{name}}",
+            html_body="<p>From {{company_name}}</p>",
+            header_image_url="https://cdn.example/header.jpg",
+        )
+        template.employers.add(self.employer)
+        full = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        ).json()["html"]
+        fragment = self.client.get(
+            reverse("email_template_preview", args=[template.pk]) + "?fragment=1"
+        ).json()["html"]
+        self.assertIn("<!DOCTYPE html>", full)
+        self.assertIn('name="viewport"', full)
+        self.assertNotIn("<!DOCTYPE html>", fragment)
+        self.assertNotIn("<html", fragment)
+        self.assertIn('data-dp-email="1"', fragment)
+        self.assertIn("https://cdn.example/header.jpg", fragment)
 
     @patch("arl.msg.views.master_email_send_task")
     def test_comms_template_send_passes_subject(self, mock_task):

@@ -131,7 +131,9 @@
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
 
     <div>
+      {% if not shows_staff_chrome %}
       <legend class="mb-1">Sales Target Dashboard</legend>
+      {% endif %}
 
       <div class="dashboard-meta">
         {{ period.name }} · {{ period.start_date }} to {{ period.end_date }}

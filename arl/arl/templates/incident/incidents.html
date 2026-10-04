@@ -96,7 +96,9 @@
         }
       </style>
 
+      {% if not shows_staff_chrome %}
       <h1 class="record-hub-title">Incident Dashboard</h1>
+      {% endif %}
 
       {% include "base/partials/staff_incident_section_nav.html" %}
 

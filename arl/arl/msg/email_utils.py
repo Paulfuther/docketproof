@@ -600,20 +600,13 @@ def in_app_email_document(inner_html):
     )
 
 
-def wrap_in_app_email_html(
+def build_in_app_email_column(
     html_body,
     header_image_url=None,
     header_display_width=None,
     header_space_below=None,
 ):
-    """Wrap in-app HTML in a centered, mobile-fluid column.
-
-    Header uses HTML width for Outlook and width:100% + max-width for phones
-    so it sits in the available column without stretching past the chosen size.
-    A 600px-only spacer is avoided: that forced a desktop canvas and left a
-    right-hand gap on iPhone. Horizontal air is a single 16px body inset
-    shared by header, copy, and the injected ASM footer.
-    """
+    """Centered email column table without the outer HTML document wrapper."""
     body = html_body or ""
     url = (header_image_url or "").strip()
     if not url and not str(body).strip():
@@ -634,7 +627,7 @@ def wrap_in_app_email_html(
         )
         parts.append(header_spacer_html(header_space_below))
     parts.append(body)
-    column = (
+    return (
         '<table role="presentation" data-dp-email="1" align="center" border="0" '
         'cellpadding="0" cellspacing="0" width="100%" '
         f'style="width:100%;max-width:{EMAIL_IMAGE_MAX_WIDTH}px;margin:0 auto;">'
@@ -642,7 +635,46 @@ def wrap_in_app_email_html(
         f"{''.join(parts)}"
         "</td></tr></table>"
     )
+
+
+def wrap_in_app_email_html(
+    html_body,
+    header_image_url=None,
+    header_display_width=None,
+    header_space_below=None,
+):
+    """Wrap in-app HTML in a centered, mobile-fluid column.
+
+    Header uses HTML width for Outlook and width:100% + max-width for phones
+    so it sits in the available column without stretching past the chosen size.
+    A 600px-only spacer is avoided: that forced a desktop canvas and left a
+    right-hand gap on iPhone. Horizontal air is a single 16px body inset
+    shared by header, copy, and the injected ASM footer.
+    """
+    column = build_in_app_email_column(
+        html_body,
+        header_image_url=header_image_url,
+        header_display_width=header_display_width,
+        header_space_below=header_space_below,
+    )
+    if not column:
+        return column
     return in_app_email_document(column)
+
+
+def wrap_in_app_email_preview_fragment(
+    html_body,
+    header_image_url=None,
+    header_display_width=None,
+    header_space_below=None,
+):
+    """Preview fragment for in-page embeds (no html/body document wrapper)."""
+    return build_in_app_email_column(
+        html_body,
+        header_image_url=header_image_url,
+        header_display_width=header_display_width,
+        header_space_below=header_space_below,
+    )
 
 
 def resolve_body_image_placement(placement=None):
