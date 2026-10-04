@@ -1184,6 +1184,48 @@ body.gsa-app .alert {
     color: var(--gsa-text);
     font-weight: 600;
   }
+
+  /* HR and Docs still use legacy container/row/col nesting. On phone that stacks
+     Bootstrap column gutters on top of container padding and leaves single-edge
+     scrollbar-gutter visually heavier on the right. Match the 1.25rem mobile
+     header inset with even side padding. */
+  html:has(#hrNavMobile),
+  html:has(#docNavMobile) {
+    scrollbar-gutter: stable both-edges !important;
+  }
+
+  body.staff-app .container:has(#hrNavMobile),
+  body.staff-app .container:has(#docNavMobile) {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    --bs-gutter-x: 0;
+  }
+
+  body.staff-app .container:has(#hrNavMobile) > .row,
+  body.staff-app .container:has(#docNavMobile) > .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  body.staff-app .container:has(#docNavMobile) > .row > :only-child {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.staff-app .container:has(#docNavMobile) > .row > :only-child > .row.g-3 {
+    margin-left: 0;
+    margin-right: 0;
+    --bs-gutter-x: 0;
+  }
+
+  body.staff-app #hrNavMobile,
+  body.staff-app #docNavMobile,
+  body.staff-app .container:has(#hrNavMobile) > .row > section.col-12,
+  body.staff-app .container:has(#docNavMobile) .row.g-3 > section.col-12 {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .app-more-panel .staff-admin-tools-link {
