@@ -488,7 +488,6 @@ body.gsa-app .card.shadow-sm {
   display: grid;
   justify-items: stretch;
   width: fit-content;
-  max-width: 100%;
   margin-left: auto;
 }
 
@@ -504,6 +503,7 @@ body.gsa-app .card.shadow-sm {
   line-height: 1.35;
   white-space: nowrap;
   box-sizing: border-box;
+  width: max-content;
 }
 
 .gsa-tracker-pill-rail {
@@ -512,7 +512,7 @@ body.gsa-app .card.shadow-sm {
   justify-content: flex-end;
   align-items: center;
   width: 100%;
-  min-width: 0;
+  min-width: max-content;
   overflow: visible;
 }
 
@@ -525,6 +525,7 @@ body.gsa-app .card.shadow-sm {
   align-items: center;
   justify-content: center;
   text-align: center;
+  white-space: nowrap;
 }
 
 .gsa-tracker-value-rail {
