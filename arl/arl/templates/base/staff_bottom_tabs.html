@@ -8,6 +8,8 @@
      href="{% url 'salt_log_list' %}">Salt log</a>
   <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'incidents' or request.resolver_match.url_name == 'create_incident' or request.resolver_match.url_name == 'incident_edit_list' or request.resolver_match.url_name == 'update_incident' %}is-active{% endif %}"
      href="{% url 'incidents' %}">Incidents</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}is-active{% endif %}"
+     href="{% url 'checklist_dashboard' %}">Checklists</a>
   <button type="button" class="gsa-bottom-tab app-more-toggle" id="staffMoreToggle" aria-expanded="false" aria-controls="staffMorePanel">More</button>
 </nav>
 <script>

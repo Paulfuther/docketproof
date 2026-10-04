@@ -54,10 +54,11 @@
 
       <div class="tab-content record-hub-card">
         <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
-          <form method="post" action="{% url 'create_salt_log' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-secondary record-hub-create">Start salt log</button>
-          </form>
+          {% if start_form %}
+            {% include "quiz/partials/salt_log_hub_start_form.html" %}
+          {% else %}
+            <p class="text-muted mb-0">Your account has no company. Ask an admin to set one before starting a salt log.</p>
+          {% endif %}
         </div>
 
         <div class="tab-pane fade{% if active_tab == 'edit' %} show active{% endif %}" id="edit" role="tabpanel">

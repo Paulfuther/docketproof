@@ -156,8 +156,41 @@
   position: sticky; top: 0; z-index: 1020; /* stay visible while scrolling */
   background: #fff;
 }
+#docNavMobile {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 0.1rem;
+  padding: 0.35rem 0.25rem 0.5rem;
+  overflow: visible;
+}
 #docNavMobile .nav-icon-link{
-  padding: .75rem;       /* bigger touch target */
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.1rem;
+  padding: 0.28rem 0.05rem;
+  text-align: center;
+}
+#docNavMobile .nav-icon-link .material-symbols-outlined {
+  font-size: 18px;
+}
+#docNavMobile .staff-section-label {
+  display: block;
+  width: 100%;
+  font-size: 0.45rem;
+  line-height: 1.05;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  text-align: center;
 }
 @media (hover:none){
   /* On touch devices, ignore hover color changes */
@@ -212,7 +245,7 @@
       {% endif %}
 
       <!-- Section tabs (mobile; also used on staff desktop) -->
-      <div id="docNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2 mb-3" role="tablist">
+      <div id="docNavMobile" class="col-12 px-0 d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom mb-3" role="tablist">
         <a class="nav-icon-link {% if active_tab == 'employee' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-employee" role="tab"
           data-title="Employee Docs" aria-label="Employee documents">

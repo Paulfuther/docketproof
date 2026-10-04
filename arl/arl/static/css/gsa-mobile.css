@@ -707,7 +707,7 @@ body.gsa-app .alert {
       var(--gsa-mobile-header-height) + env(safe-area-inset-top, 0px) + 0.25rem
     );
     padding-bottom: calc(
-      var(--gsa-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 0.75rem
+      3.25rem + env(safe-area-inset-bottom, 0px) + 0.75rem
     );
   }
 
@@ -938,33 +938,86 @@ body.gsa-app .alert {
 
 @media (max-width: 991.98px) {
   body.staff-app #hrNavMobile {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.2rem 0.1rem;
-    padding: 0.35rem 0.35rem 0.5rem;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0.1rem;
+    padding: 0.35rem 0.25rem 0.5rem;
     overflow: visible;
   }
 
   body.staff-app #hrNavMobile .hr-nav-link {
-    flex: 1 1 calc(33.333% - 0.2rem);
-    max-width: calc(33.333% - 0.2rem);
+    flex: 1 1 0;
+    max-width: none;
     min-width: 0;
-    padding: 0.28rem 0.1rem;
+    padding: 0.28rem 0.05rem;
   }
 
   body.staff-app #hrNavMobile .hr-nav-link .material-symbols-outlined {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   body.staff-app #hrNavMobile .hr-nav-label {
-    font-size: 0.5rem;
+    font-size: 0.45rem;
     line-height: 1.05;
-    overflow-wrap: anywhere;
+    white-space: normal !important;
+    overflow-wrap: break-word;
     word-break: break-word;
   }
 
+  body.staff-app #docNavMobile {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0.1rem;
+    padding: 0.35rem 0.25rem 0.5rem;
+    overflow: visible;
+  }
+
+  body.staff-app #docNavMobile .nav-icon-link {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.1rem;
+    padding: 0.28rem 0.05rem;
+    text-align: center;
+  }
+
+  body.staff-app #docNavMobile .nav-icon-link .material-symbols-outlined {
+    font-size: 18px;
+  }
+
   body.staff-app #docNavMobile .staff-section-label {
-    display: none;
+    display: block;
+    width: 100%;
+    font-size: 0.45rem;
+    line-height: 1.05;
+    white-space: normal !important;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    text-align: center;
+  }
+
+  body.staff-app .gsa-bottom-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0.15rem 0.1rem;
+    min-height: auto;
+    padding: 0.35rem 0.2rem calc(0.35rem + env(safe-area-inset-bottom, 0));
+  }
+
+  body.staff-app .gsa-bottom-tab {
+    flex: 1 1 calc(33.333% - 0.15rem);
+    max-width: calc(33.333% - 0.15rem);
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    font-size: 0.6rem;
+    line-height: 1.05;
+    padding: 0.2rem 0.05rem;
   }
 }
 

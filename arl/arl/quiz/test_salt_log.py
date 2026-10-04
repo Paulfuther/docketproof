@@ -530,7 +530,8 @@ class SaltLogListPaginationTests(TestCase):
         self.assertContains(page, f">{total}<")
         self.assertContains(page, "tab=edit&page=2")
         self.assertContains(page, 'href="#start"')
-        self.assertContains(page, "Start salt log")
+        self.assertContains(page, "Create site salt log")
+        self.assertNotContains(page, "Start salt log")
 
     def test_second_page_keeps_filters_and_newest_first_order(self):
         total = SALT_LOG_PAGE_SIZE + 3

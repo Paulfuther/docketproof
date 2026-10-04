@@ -14,6 +14,7 @@ from arl.user.gsa_access import (
     gsa_actor,
     gsa_preview_blocks_mutation,
     is_gsa_account,
+    is_gsa_preview_active,
 )
 from arl.user.models import Store
 from arl.utils.images import normalize_to_jpeg
@@ -207,6 +208,34 @@ def _salt_log_page(request, queryset, page_param):
     return paginator.get_page(request.GET.get(page_param) or 1)
 
 
+def _draft_for_start_tab(request, actor):
+    """Reuse an open draft or create one so the Start tab can show the form."""
+    draft = (
+        salt_logs_for_user(actor)
+        .filter(status=SaltLog.STATUS_DRAFT)
+        .order_by("-hidden_timestamp", "-pk")
+        .first()
+    )
+    if draft or is_gsa_preview_active(request):
+        return draft
+
+    employer = getattr(actor, "employer", None)
+    if employer is None:
+        return None
+
+    date_salted, time_salted = _eastern_now()
+    draft = SaltLog(
+        user=actor,
+        user_employer=employer,
+        status=SaltLog.STATUS_DRAFT,
+        date_salted=date_salted,
+        time_salted=time_salted,
+    )
+    draft.ensure_image_folder()
+    draft.save()
+    return draft
+
+
 @login_required
 def salt_log_dashboard(request):
     """Salt Log Dashboard: start a log, or open an existing one.
@@ -236,6 +265,16 @@ def salt_log_dashboard(request):
         logs = logs.filter(store_id=int(store_filter))
 
     edit_page = _salt_log_page(request, logs, "page")
+    start_salt_log = _draft_for_start_tab(request, actor)
+    start_form = None
+    start_existing_images = []
+    start_show_exception = False
+    if start_salt_log:
+        start_form = SaltLogForm(instance=start_salt_log, user=actor)
+        start_existing_images = _salt_log_images(start_salt_log)
+        levels_value = start_form["levels_ok"].value()
+        start_show_exception = levels_value in ("no", False)
+
     return render(
         request,
         "quiz/salt_log_list.html",
@@ -246,6 +285,10 @@ def salt_log_dashboard(request):
             "stores": _stores_for_user(actor),
             "logs": edit_page,
             "log_count": edit_page.paginator.count,
+            "start_salt_log": start_salt_log,
+            "start_form": start_form,
+            "start_existing_images": start_existing_images,
+            "start_show_exception": start_show_exception,
         },
     )
 

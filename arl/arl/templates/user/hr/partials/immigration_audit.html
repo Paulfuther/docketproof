@@ -90,7 +90,7 @@
         Reset
       </button>
       <a
-        class="imm-btn imm-btn-download"
+        class="imm-btn imm-btn-ghost"
         href="{% url 'immigration_audit_export' %}"
         title="CSV of all active employees for this employer">
         Download spreadsheet
@@ -447,17 +447,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
-  padding: 0 14px;
+  min-height: 38px;
+  height: auto;
+  padding: 6px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
   background: #fff;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
+  text-align: center;
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .imm-btn-ghost {

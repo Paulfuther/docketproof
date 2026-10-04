@@ -1,7 +1,6 @@
 {% load waffle_tags %}
 <div class="app-more-panel d-lg-none" id="staffMorePanel" hidden>
   <div class="app-more-panel-inner">
-    <a class="app-more-link" href="{% url 'checklist_dashboard' %}">Checklists</a>
     <a class="app-more-link" href="{% url 'in_app_signing_dashboard' %}">In-app signing</a>
     <a class="app-more-link" href="{% url 'sales_targets:sales_target_dashboard_selector' %}">Targets</a>
     {% if user.is_dropbox %}

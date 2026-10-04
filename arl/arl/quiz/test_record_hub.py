@@ -81,13 +81,11 @@ class RecordHubChromeTests(TestCase):
         self.assertEqual(checklist_page.status_code, 200)
 
         self.assertNotContains(salt_page, 'class="record-hub-title"')
-        self.assertContains(salt_page, "Start salt log")
-        self.assertContains(salt_page, reverse("create_salt_log"))
+        self.assertContains(salt_page, "Create site salt log")
         self.assertContains(salt_page, 'href="#start"')
         self.assertContains(salt_page, 'href="#edit"')
-        self.assertContains(salt_page, "record-hub-create")
-        self.assertContains(salt_page, "btn-outline-secondary")
-        self.assertNotContains(salt_page, "btn-primary")
+        self.assertContains(salt_page, "Area salted")
+        self.assertNotContains(salt_page, "Start salt log")
         self.assertNotContains(salt_page, "Create site incident")
 
         self.assertNotContains(incident_page, 'class="record-hub-title"')
