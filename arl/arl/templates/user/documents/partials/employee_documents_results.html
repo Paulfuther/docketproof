@@ -1,0 +1,149 @@
+<div>
+  {# Mobile list #}
+  <div class="d-block d-sm-none mt-2">
+    {% for d in employee_documents %}
+      <div class="docs-list-item">
+        <div class="docs-list-text">
+          <div class="line-1 text-truncate">
+            {{ d.document_title|default:d.file_name }}
+          </div>
+          <div class="line-2 text-truncate">
+            {{ d.user.get_full_name|default:d.user.username }}
+            {% if d.user.email %} · {{ d.user.email }}{% endif %}
+          </div>
+          <div class="line-3 text-muted small">
+            ({{ d.file_name }}
+            {% if d.size_bytes %} • {{ d.size_bytes|filesizeformat }}
+            {% elif d.file_size_bytes %} • {{ d.file_size_bytes|filesizeformat }}
+            {% elif d.size %} • {{ d.size|filesizeformat }}{% endif %})
+          </div>
+          <div class="line-3">{{ d.uploaded_at|date:"Y-m-d H:i" }}</div>
+        </div>
+        <div class="docs-list-actions">
+          <a class="btn btn-sm btn-outline-primary"
+             href="{% url 'download_signed_document' doc_id=d.id %}">
+            Download
+          </a>
+        </div>
+      </div>
+    {% empty %}
+      <div class="p-3 text-muted">No documents.</div>
+    {% endfor %}
+  </div>
+
+  {# Desktop table #}
+  <div class="d-none d-sm-block">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle docs-table mt-2" style="table-layout: fixed; width: 100%;">
+        <colgroup>
+          <col style="width:24%;">
+          <col style="width:36%;">
+          <col style="width:20%;">
+          <col style="width:20%;">
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th>Employee</th>
+            <th>Title</th>
+            <th>Uploaded</th>
+            <th class="actions-col text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in employee_documents %}
+            <tr>
+              <td class="text-wrap">
+                <div class="fw-semibold">{{ d.user.get_full_name|default:d.user.username }}</div>
+                <div class="text-muted small">{{ d.user.email }}</div>
+              </td>
+              <td class="doc-name">
+                <div class="fw-semibold text-wrap">{{ d.document_title|default:d.file_name }}</div>
+                <div class="text-muted small">
+                  ({{ d.file_name }}
+                  {% if d.size_bytes %} • {{ d.size_bytes|filesizeformat }}
+                  {% elif d.file_size_bytes %} • {{ d.file_size_bytes|filesizeformat }}
+                  {% elif d.size %} • {{ d.size|filesizeformat }}{% endif %})
+                  {% if d.notes %} — {{ d.notes }}{% endif %}
+                </div>
+              </td>
+              <td class="upload-date">{{ d.uploaded_at|date:"Y-m-d H:i" }}</td>
+              <td class="actions-col text-end">
+                <a class="btn btn-sm btn-outline-primary d-inline-flex align-items-center"
+                   href="{% url 'download_signed_document' doc_id=d.id %}">
+                  Download
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-muted">No documents.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if employee_documents.has_other_pages %}
+    <nav class="mt-3" aria-label="Employee document pages">
+      <ul class="pagination pagination-sm justify-content-center">
+
+        {% if employee_documents.has_previous %}
+          <li class="page-item">
+            {% if doc_q %}
+            <a class="page-link"
+               href="#"
+               hx-get="{% url 'employee_docs_search' %}?doc_q={{ doc_q|urlencode }}&page={{ employee_documents.previous_page_number }}{% if include_inactive %}&include_inactive=1{% endif %}"
+               hx-target="#employee-results"
+               hx-swap="innerHTML">
+              Previous
+            </a>
+            {% else %}
+            <a class="page-link"
+               href="?tab=employee&page={{ employee_documents.previous_page_number }}">
+              Previous
+            </a>
+            {% endif %}
+          </li>
+        {% endif %}
+
+        {% for num in employee_documents.paginator.page_range %}
+          <li class="page-item {% if num == employee_documents.number %}active{% endif %}">
+            {% if doc_q %}
+            <a class="page-link"
+               href="#"
+               hx-get="{% url 'employee_docs_search' %}?doc_q={{ doc_q|urlencode }}&page={{ num }}{% if include_inactive %}&include_inactive=1{% endif %}"
+               hx-target="#employee-results"
+               hx-swap="innerHTML">
+              {{ num }}
+            </a>
+            {% else %}
+            <a class="page-link"
+               href="?tab=employee&page={{ num }}">
+              {{ num }}
+            </a>
+            {% endif %}
+          </li>
+        {% endfor %}
+
+        {% if employee_documents.has_next %}
+          <li class="page-item">
+            {% if doc_q %}
+            <a class="page-link"
+               href="#"
+               hx-get="{% url 'employee_docs_search' %}?doc_q={{ doc_q|urlencode }}&page={{ employee_documents.next_page_number }}{% if include_inactive %}&include_inactive=1{% endif %}"
+               hx-target="#employee-results"
+               hx-swap="innerHTML">
+              Next
+            </a>
+            {% else %}
+            <a class="page-link"
+               href="?tab=employee&page={{ employee_documents.next_page_number }}">
+              Next
+            </a>
+            {% endif %}
+          </li>
+        {% endif %}
+
+      </ul>
+    </nav>
+  {% endif %}
+</div>

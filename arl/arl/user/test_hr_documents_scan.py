@@ -493,14 +493,16 @@ class HRDocumentsScanTests(TestCase):
             "Document templates",
             "Invite a new hire",
             "User roles",
-            "Employee documents",
             "HR Documents",
         ):
             self.assertEqual(body.count(f'data-title="{label}"'), 1)
             self.assertEqual(body.count(f'title="{label}"'), 1)
             self.assertEqual(body.count(f'aria-label="{label}"'), 1)
+        self.assertEqual(body.count('data-title="Employee documents"'), 1)
 
         desktop_nav, mobile_nav = self._hr_nav_markup(body)
+        self.assertIn('href="#employee_docs"', mobile_nav)
+        self.assertIn("d-none d-lg-flex", mobile_nav)
         self.assertNotIn('id="hrNav"', body)
         self.assertIn('id="hrNavMobile"', body)
         self.assertEqual(desktop_nav, "")
@@ -511,7 +513,6 @@ class HRDocumentsScanTests(TestCase):
             "Document templates",
             "Invite a new hire",
             "User roles",
-            "Employee documents",
             "HR Documents",
         ):
             self.assertEqual(mobile_nav.count(f'class="hr-nav-label">{label}</span>'), 1)

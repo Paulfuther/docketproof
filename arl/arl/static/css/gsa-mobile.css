@@ -1186,18 +1186,10 @@ body.gsa-app .alert {
   }
 
   /* HR and Docs still use legacy container/row/col nesting. On phone that stacks
-     Bootstrap column gutters on top of container padding and leaves single-edge
-     scrollbar-gutter visually heavier on the right. Match the 1.25rem mobile
-     header inset with even side padding. */
-  html:has(#hrNavMobile),
-  html:has(#docNavMobile) {
-    scrollbar-gutter: stable both-edges !important;
-  }
-
+     Bootstrap column gutters on top of container padding. Zero the outer gutters
+     so content width matches Salt log / Incidents (default container inset). */
   body.staff-app .container:has(#hrNavMobile),
   body.staff-app .container:has(#docNavMobile) {
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
     --bs-gutter-x: 0;
   }
 

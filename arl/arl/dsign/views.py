@@ -941,19 +941,21 @@ def employee_docs_search(request):
         .order_by("-is_active", "first_name", "last_name")
     )
 
-    docs = (
+    docs_qs = (
         SignedDocumentFile.objects.filter(employer=employer, user__in=employees_results)
         .select_related("user")
         .order_by("-uploaded_at")
     )
+    paginator = Paginator(docs_qs, 10)
+    docs_page = paginator.get_page(request.GET.get("page", 1))
 
     return render(
         request,
-        "user/documents/partials/employee_results.html",
+        "user/documents/partials/employee_documents_results.html",
         {
             "doc_q": q,
-            "employees_results": employees_results,
-            "employee_documents": docs,
+            "include_inactive": include_inactive,
+            "employee_documents": docs_page,
         },
     )
 

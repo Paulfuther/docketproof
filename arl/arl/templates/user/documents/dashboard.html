@@ -425,8 +425,7 @@
 </div>
 
             <div class="card-body p-0" id="employee-results">
-            
-              {% include "user/documents/partials/employee_results.html" with employees_results=recent_employee_heads employee_documents=employee_documents doc_q="recent" %}
+              {% include "user/documents/partials/employee_documents_results.html" %}
             </div>
           </div>
         </div>
@@ -496,7 +495,7 @@
               </form>
             </div>
             <div class="card-body p-0" id="store-results" aria-live="polite">
-              {% include "user/documents/partials/store_results.html" with docs=recent_store_results %}
+              {% include "user/documents/partials/store_results.html" %}
             </div>
           </div>
         </div>
