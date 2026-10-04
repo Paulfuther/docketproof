@@ -82,9 +82,11 @@
         type="button"
         class="imm-btn imm-btn-ghost"
         hx-get="{% url 'immigration_audit_partial' %}"
-        hx-target="#immigration_audit"
-        hx-swap="innerHTML"
-        hx-indicator="#immigration-loading">
+        hx-target="#imm-list"
+        hx-select="#imm-list"
+        hx-swap="outerHTML"
+        hx-indicator="#immigration-loading"
+        onclick="var f=document.getElementById('imm-toolbar');if(f){var q=f.querySelector('[name=imm_q]');if(q)q.value='';var c=f.querySelector('[name=imm_flagged]');if(c)c.checked=false;var s=document.getElementById('imm_sort');if(s)s.value='';}">
         Reset
       </button>
       <a

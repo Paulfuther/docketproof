@@ -90,9 +90,11 @@
         type="button"
         class="hrdoc-btn hrdoc-btn-ghost"
         hx-get="{% url 'document_audit_log_partial' %}"
-        hx-target="#document_audit"
-        hx-swap="innerHTML"
-        hx-indicator="#hrdoc-loading">
+        hx-target="#hrdoc-list"
+        hx-select="#hrdoc-list"
+        hx-swap="outerHTML"
+        hx-indicator="#hrdoc-loading"
+        onclick="var f=document.getElementById('hrdoc-toolbar');if(f){var q=f.querySelector('[name=audit_q]');if(q)q.value='';var c=f.querySelector('[name=audit_incomplete]');if(c)c.checked=false;var s=document.getElementById('audit_sort');if(s)s.value='';}">
         Reset
       </button>
     </div>
