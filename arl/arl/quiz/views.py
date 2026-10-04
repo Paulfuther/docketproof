@@ -11,6 +11,7 @@ from arl.helpers import (
     upload_to_linode_object_storage,
 )
 from arl.user.gsa_access import (
+    gsa_actor,
     gsa_preview_blocks_mutation,
     is_gsa_account,
 )
@@ -168,6 +169,10 @@ def _sanitize_folder(value: str) -> str:
     return "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_", "/"))
 
 
+def _salt_log_actor(request):
+    return gsa_actor(request) or request.user
+
+
 def salt_logs_for_user(user):
     employer = getattr(user, "employer", None)
     if employer is None:
@@ -208,6 +213,7 @@ def salt_log_dashboard(request):
 
     Older Drafts, Submitted, and Completed links open the Edit list.
     """
+    actor = _salt_log_actor(request)
     q = (request.GET.get("q") or "").strip()
     store_filter = (request.GET.get("store") or "").strip()
     active_tab = (request.GET.get("tab") or "start").strip()
@@ -217,7 +223,7 @@ def salt_log_dashboard(request):
         active_tab = "start"
 
     logs = (
-        salt_logs_for_user(request.user)
+        salt_logs_for_user(actor)
         .select_related("store", "user", "submitted_by")
         .order_by("-hidden_timestamp", "-pk")
     )
@@ -237,7 +243,7 @@ def salt_log_dashboard(request):
             "q": q,
             "store_filter": store_filter,
             "active_tab": active_tab,
-            "stores": _stores_for_user(request.user),
+            "stores": _stores_for_user(actor),
             "logs": edit_page,
             "log_count": edit_page.paginator.count,
         },
@@ -247,18 +253,22 @@ def salt_log_dashboard(request):
 @login_required
 def salt_log_start(request):
     """Create the draft in this request so photos have a row to attach to."""
+    if request.method != "POST":
+        return redirect("salt_log_list")
+
     blocked = gsa_preview_blocks_mutation(request)
     if blocked:
         return blocked
 
-    employer = getattr(request.user, "employer", None)
+    actor = _salt_log_actor(request)
+    employer = getattr(actor, "employer", None)
     if employer is None:
         messages.error(request, "Your account has no company. Ask an admin to set one.")
         return redirect("salt_log_list")
 
     date_salted, time_salted = _eastern_now()
     salt_log = SaltLog(
-        user=request.user,
+        user=actor,
         user_employer=employer,
         status=SaltLog.STATUS_DRAFT,
         date_salted=date_salted,
@@ -284,7 +294,8 @@ def _lock_salt_form(form):
 
 @login_required
 def salt_log_edit(request, pk):
-    salt_log = get_object_or_404(salt_logs_for_user(request.user), pk=pk)
+    actor = _salt_log_actor(request)
+    salt_log = get_object_or_404(salt_logs_for_user(actor), pk=pk)
     editable = salt_log.status == SaltLog.STATUS_DRAFT
 
     if request.method == "POST":
@@ -305,18 +316,18 @@ def salt_log_edit(request, pk):
         form = SaltLogForm(
             request.POST,
             instance=salt_log,
-            user=request.user,
+            user=actor,
             validate_submit=(not is_autosave) and action == "submit",
         )
         if form.is_valid():
             saved = form.save(commit=False)
             if not saved.user_id:
-                saved.user = request.user
-            saved.user_employer = request.user.employer
+                saved.user = actor
+            saved.user_employer = actor.employer
             saved.ensure_image_folder()
             if action == "submit":
                 saved.status = SaltLog.STATUS_SUBMITTED
-                saved.submitted_by = request.user
+                saved.submitted_by = actor
                 saved.submitted_at = timezone.now()
             saved.save()
 
@@ -344,7 +355,7 @@ def salt_log_edit(request, pk):
         if is_autosave:
             return JsonResponse({"ok": False, "errors": form.errors}, status=422)
     else:
-        form = SaltLogForm(instance=salt_log, user=request.user)
+        form = SaltLogForm(instance=salt_log, user=actor)
 
     if not editable:
         _lock_salt_form(form)

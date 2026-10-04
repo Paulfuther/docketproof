@@ -339,7 +339,7 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertNotContains(home, "Coworker secret")
         self.assertContains(home, reverse("checklist_dashboard"))
         self.assertContains(home, reverse("employee_immigration_upload"))
-        self.assertContains(home, reverse("create_salt_log"))
+        self.assertContains(home, reverse("salt_log_list"))
         self.assertContains(home, reverse("incident_dashboard"))
         self.assertNotContains(home, "employee-section-links")
 
@@ -1064,7 +1064,7 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertFalse(self.employee.has_perm("incident.add_incident"))
         self.client.force_login(self.employee)
 
-        salt_log = self.client.get(reverse("create_salt_log"))
+        salt_log = self.client.get(reverse("salt_log_list"))
         incident = self.client.get(reverse("incident_dashboard"))
 
         self.assertEqual(salt_log.status_code, 200)
@@ -1073,7 +1073,7 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertContains(incident, "employee-page")
         self.assertContains(salt_log, "Back to documents")
         self.assertContains(incident, "Back to documents")
-        self.assertContains(salt_log, "Create salt log")
+        self.assertContains(salt_log, "Start salt log")
         self.assertContains(incident, "Incident dashboard")
         self.assertContains(incident, "New Incident")
         self.assertContains(incident, "Update Existing")
@@ -1107,7 +1107,12 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
 
     def test_gsa_salt_log_form_lists_only_company_stores(self):
         self.client.force_login(self.employee)
-        response = self.client.get(reverse("create_salt_log"))
+        started = self.client.post(reverse("create_salt_log"))
+        salt_log = SaltLog.objects.get(user=self.employee)
+        self.assertRedirects(
+            started, reverse("salt_log_edit", kwargs={"pk": salt_log.pk})
+        )
+        response = self.client.get(reverse("salt_log_edit", kwargs={"pk": salt_log.pk}))
         self.assertContains(response, str(self.store))
         self.assertNotContains(response, str(self.other_store))
 
@@ -1241,3 +1246,52 @@ class GsaPreviewTests(EmployeeTestCase):
         self.assertContains(denied, "not available for preview")
         blocked = self.client.get(reverse("employee_home"))
         self.assertRedirects(blocked, reverse("home"))
+
+    def test_staff_preview_shows_real_signed_file_names(self):
+        SignedDocumentFile.objects.create(
+            user=self.employee,
+            employer=self.employer,
+            envelope_id="generic-webhook",
+            file_name="Employee Handbook.pdf",
+            file_path="DOCUMENTS/acme/handbook.pdf",
+            template_name="New Hire File",
+        )
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        home = self.client.get(reverse("employee_home"))
+        self.assertContains(home, "Employee Handbook.pdf")
+        self.assertNotContains(home, "New Hire File")
+
+    def test_staff_preview_can_open_salt_log_dashboard(self):
+        SaltLog.objects.create(
+            user=self.employee,
+            user_employer=self.employer,
+            area_salted="Front walk",
+        )
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        salt_log = self.client.get(reverse("salt_log_list"))
+        self.assertEqual(salt_log.status_code, 200)
+        self.assertContains(salt_log, "Salt Log Dashboard")
+        self.assertContains(salt_log, "Front walk")
+        self.assertNotContains(salt_log, "GSA preview is read-only")
+
+        started = self.client.post(reverse("create_salt_log"))
+        self.assertRedirects(started, reverse("employee_home"))
+
+    def test_staff_preview_can_open_incident_dashboard(self):
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        incident = self.client.get(reverse("incident_dashboard"))
+        self.assertEqual(incident.status_code, 200)
+        self.assertContains(incident, "Incident dashboard")
+        self.assertNotContains(incident, "GSA preview is read-only")

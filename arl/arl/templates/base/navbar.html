@@ -109,7 +109,7 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'create_salt_log' %}">
+          <a class="nav-link employee-section {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'salt_log_list' %}">
             <i class="material-symbols-outlined">ac_unit</i> Salt log
           </a>
         </li>
