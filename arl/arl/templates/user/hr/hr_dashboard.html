@@ -257,7 +257,7 @@ html {
          title="Document templates"
          aria-label="Document templates">
         <i class="material-symbols-outlined" aria-hidden="true">draw</i>
-        <span class="hr-nav-label">Document templates</span>
+        <span class="hr-nav-label">Templates</span>
       </a>
 
       <a class="hr-nav-link {% if active_tab == 'employees' %}active{% endif %}"
@@ -282,7 +282,7 @@ html {
         <span class="hr-nav-label">User roles</span>
       </a>
 
-      <a class="hr-nav-link {% if active_tab == 'employee_docs' %}active{% endif %}"
+      <a class="hr-nav-link d-none d-lg-flex {% if active_tab == 'employee_docs' %}active{% endif %}"
          data-bs-toggle="tab"
          href="#employee_docs"
          role="tab"
@@ -312,7 +312,7 @@ html {
         title="Immigration Audit"
         aria-label="Immigration Audit">
         <i class="material-symbols-outlined" aria-hidden="true">badge</i>
-        <span class="hr-nav-label">Immigration Audit</span>
+        <span class="hr-nav-label">Immigration</span>
       </a>
       {% endif %}
     </div>

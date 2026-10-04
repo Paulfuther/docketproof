@@ -493,25 +493,26 @@ class HRDocumentsScanTests(TestCase):
             "Document templates",
             "Invite a new hire",
             "User roles",
-            "Employee documents",
             "HR Documents",
         ):
             self.assertEqual(body.count(f'data-title="{label}"'), 1)
             self.assertEqual(body.count(f'title="{label}"'), 1)
             self.assertEqual(body.count(f'aria-label="{label}"'), 1)
+        self.assertEqual(body.count('data-title="Employee documents"'), 1)
 
         desktop_nav, mobile_nav = self._hr_nav_markup(body)
+        self.assertIn('href="#employee_docs"', mobile_nav)
+        self.assertIn("d-none d-lg-flex", mobile_nav)
         self.assertNotIn('id="hrNav"', body)
         self.assertIn('id="hrNavMobile"', body)
         self.assertEqual(desktop_nav, "")
         self.assertNotIn("hr-nav-label", desktop_nav)
         self.assertIn("font-size: .45rem", body)
         self.assertIn("flex-wrap: nowrap", body)
+        self.assertEqual(mobile_nav.count('class="hr-nav-label">Templates</span>'), 1)
         for label in (
-            "Document templates",
             "Invite a new hire",
             "User roles",
-            "Employee documents",
             "HR Documents",
         ):
             self.assertEqual(mobile_nav.count(f'class="hr-nav-label">{label}</span>'), 1)
@@ -534,7 +535,7 @@ class HRDocumentsScanTests(TestCase):
         allowed_desktop, allowed_mobile = self._hr_nav_markup(allowed_body)
         self.assertNotIn("hr-nav-label", allowed_desktop)
         self.assertEqual(
-            allowed_mobile.count('class="hr-nav-label">Immigration Audit</span>'),
+            allowed_mobile.count('class="hr-nav-label">Immigration</span>'),
             1,
         )
 

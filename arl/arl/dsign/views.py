@@ -958,6 +958,25 @@ def employee_docs_search(request):
     )
 
 
+EMPLOYEE_DOCS_PANEL_PAGE_SIZE_DESKTOP = 10
+EMPLOYEE_DOCS_PANEL_PAGE_SIZE_MOBILE = 5
+
+
+def _employee_docs_panel_page_size(request):
+    raw = request.GET.get("per_page")
+    if raw is not None:
+        try:
+            per_page = int(raw)
+        except (TypeError, ValueError):
+            per_page = EMPLOYEE_DOCS_PANEL_PAGE_SIZE_DESKTOP
+        if per_page in (
+            EMPLOYEE_DOCS_PANEL_PAGE_SIZE_MOBILE,
+            EMPLOYEE_DOCS_PANEL_PAGE_SIZE_DESKTOP,
+        ):
+            return per_page
+    return EMPLOYEE_DOCS_PANEL_PAGE_SIZE_DESKTOP
+
+
 @login_required
 def employee_docs_panel(request, user_id):
     employer = getattr(request.user, "employer", None)
@@ -978,7 +997,7 @@ def employee_docs_panel(request, user_id):
     )
 
     page_number = request.GET.get("page", 1)
-    paginator = Paginator(qs, 10)
+    paginator = Paginator(qs, _employee_docs_panel_page_size(request))
     docs_page = paginator.get_page(page_number)
 
     return render(
