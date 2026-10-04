@@ -52,6 +52,7 @@ from arl.msg.email_utils import (
     sample_preview_context,
     sendgrid_id_for_template,
     wrap_in_app_email_html,
+    wrap_in_app_email_preview_fragment,
 )
 from arl.msg.helpers import (SMS_OPT_OUT_FOOTER, client, get_all_contact_lists,
                              get_uploaded_urls_from_request,
@@ -1322,14 +1323,22 @@ def email_template_preview(request, pk):
     raw_subject = resolve_email_subject(template=template, employer=employer)
     subject = render_merge_fields(raw_subject, context)
     context = {**context, "subject": subject}
+    fragment = request.GET.get("fragment") in ("1", "true", "yes")
     if template.is_in_app:
-        html = render_merge_fields(template.html_body, context)
-        html = wrap_in_app_email_html(
-            html,
+        rendered = render_merge_fields(template.html_body, context)
+        document_html = wrap_in_app_email_html(
+            rendered,
             template.header_image_url,
             header_display_width=template.header_display_width,
             header_space_below=getattr(template, "header_space_below", None),
         )
+        fragment_html = wrap_in_app_email_preview_fragment(
+            rendered,
+            template.header_image_url,
+            header_display_width=template.header_display_width,
+            header_space_below=getattr(template, "header_space_below", None),
+        )
+        html = fragment_html if fragment else document_html
     else:
         html = (
             "<p><em>This template is a legacy SendGrid dynamic template "

@@ -1,5 +1,9 @@
 <div class="incident-pills">
+  {% if can_edit_incident %}
   <a class="incident-pill incident-pill-edit" href="{% url 'update_incident' pk=incident.pk %}" title="Edit incident">Edit</a>
+  {% else %}
+  <a class="incident-pill incident-pill-edit" href="{% url 'generate_restricted_pdf_web' incident.pk %}" title="View incident">View</a>
+  {% endif %}
   <a class="incident-pill incident-pill-insurance" href="{% url 'tester' incident.pk %}" title="Insurance PDF">Insurance</a>
   <a class="incident-pill incident-pill-security" href="{% url 'email_significant_security_report' incident.pk %}" title="Security PDF">Security</a>
   {% if can_view_pdf %}

@@ -88,7 +88,8 @@
 }
 </style>
 
-    <!-- ===== Desktop Sidebar ===== -->
+    {% if not shows_staff_chrome %}
+    <!-- ===== Desktop Sidebar (legacy; hidden when staff app sidebar is active) ===== -->
     <aside class="d-none d-lg-block col-lg-1 px-0">
       <div id="commsNav" class="d-flex flex-column align-items-center py-3">
         <div class="sidebar-legend fw-semibold mb-3">
@@ -144,9 +145,10 @@
         </nav>
       </div>
     </aside>
+    {% endif %}
 
-    <!-- ===== Mobile Top Nav ===== -->
-    <div id="commsNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2"
+    <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
+    <div id="commsNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2"
           {% if comms_nav_mode == "page" %}role="navigation" aria-label="Communications"{% else %}role="tablist" aria-orientation="horizontal"{% endif %}>
       {% if can_send_email %}
         <a class="comms-nav-link {% if active_tab == 'email' %}active{% endif %}"

@@ -863,13 +863,13 @@ class InAppEmailTemplateViewTests(TestCase):
         list_response = self.client.get(reverse("email_template_list"))
         self.assertEqual(list_response.status_code, 200)
         html = list_response.content.decode()
-        self.assertIn('id="commsNav"', html)
+        self.assertNotIn('id="commsNav"', html)
         self.assertIn('id="commsNavMobile"', html)
         self.assertNotIn("Back to Comms", html)
         self.assertNotIn("btn-primary", html)
         self.assertIn(">New template</a>", html)
         self.assertIn("btn-outline-secondary", html)
-        self.assertEqual(html.count("comms-nav-link active"), 2)
+        self.assertEqual(html.count("comms-nav-link active"), 1)
         self.assertIn('href="/comms/?tab=email"', html)
         self.assertIn('data-title="Manage templates"', html)
         self.assertIn(
@@ -882,10 +882,10 @@ class InAppEmailTemplateViewTests(TestCase):
         form_response = self.client.get(reverse("email_template_create"))
         self.assertEqual(form_response.status_code, 200)
         form_html = form_response.content.decode()
-        self.assertIn('id="commsNav"', form_html)
+        self.assertNotIn('id="commsNav"', form_html)
         self.assertNotIn("Back to Comms", form_html)
         self.assertIn("All templates", form_html)
-        self.assertEqual(form_html.count("comms-nav-link active"), 2)
+        self.assertEqual(form_html.count("comms-nav-link active"), 1)
 
         template = EmailTemplate.objects.create(
             name="Welcome",
@@ -898,18 +898,18 @@ class InAppEmailTemplateViewTests(TestCase):
         )
         self.assertEqual(edit_response.status_code, 200)
         edit_html = edit_response.content.decode()
-        self.assertIn('id="commsNav"', edit_html)
+        self.assertNotIn('id="commsNav"', edit_html)
         self.assertNotIn("Back to Comms", edit_html)
-        self.assertEqual(edit_html.count("comms-nav-link active"), 2)
+        self.assertEqual(edit_html.count("comms-nav-link active"), 1)
 
         delete_response = self.client.get(
             reverse("email_template_delete", args=[template.pk])
         )
         self.assertEqual(delete_response.status_code, 200)
         delete_html = delete_response.content.decode()
-        self.assertIn('id="commsNav"', delete_html)
+        self.assertNotIn('id="commsNav"', delete_html)
         self.assertNotIn("Back to Comms", delete_html)
-        self.assertEqual(delete_html.count("comms-nav-link active"), 2)
+        self.assertEqual(delete_html.count("comms-nav-link active"), 1)
 
     def test_comms_library_link_says_manage_templates(self):
         templates_dir = Path(__file__).resolve().parent.parent / "templates" / "msg"
@@ -932,6 +932,10 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("comms-mode-toggle", send_form)
         self.assertIn("comms-manage-link", send_form)
         self.assertIn("comms-email-form", send_form)
+        self.assertIn("comms-email-form-shell", send_form)
+        self.assertIn("comms-email-preview", send_form)
+        self.assertIn("width: 640px", send_form)
+        self.assertIn("preview/?fragment=1", send_form)
         self.assertIn("Select Individuals", send_form)
         self.assertNotIn("toggle-email-group", send_form)
         self.assertNotIn("selected_group", send_form)
@@ -965,6 +969,27 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertEqual(data["subject"], "Hello Pat Doe")
         self.assertIn("Acme Co", data["html"])
         self.assertTrue(data["is_in_app"])
+
+    def test_preview_fragment_omits_document_wrapper(self):
+        template = EmailTemplate.objects.create(
+            name="Welcome",
+            subject="Hello {{name}}",
+            html_body="<p>From {{company_name}}</p>",
+            header_image_url="https://cdn.example/header.jpg",
+        )
+        template.employers.add(self.employer)
+        full = self.client.get(
+            reverse("email_template_preview", args=[template.pk])
+        ).json()["html"]
+        fragment = self.client.get(
+            reverse("email_template_preview", args=[template.pk]) + "?fragment=1"
+        ).json()["html"]
+        self.assertIn("<!DOCTYPE html>", full)
+        self.assertIn('name="viewport"', full)
+        self.assertNotIn("<!DOCTYPE html>", fragment)
+        self.assertNotIn("<html", fragment)
+        self.assertIn('data-dp-email="1"', fragment)
+        self.assertIn("https://cdn.example/header.jpg", fragment)
 
     @patch("arl.msg.views.master_email_send_task")
     def test_comms_template_send_passes_subject(self, mock_task):

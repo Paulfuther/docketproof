@@ -164,16 +164,26 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         check_code.assert_called_once()
         home = self.client.get(reverse("home"))
         self.assertNotContains(home, "nav-link employee-section")
-        self.assertNotContains(home, "scrollbar-gutter")
+        self.assertContains(home, "staff-app")
+        self.assertContains(home, "gsa-bottom-tabs")
+        self.assertNotContains(home, "navbar-toggler")
         self.assertContains(home, reverse("hr_dashboard"))
         self.assertContains(home, reverse("documents_dashboard"))
+        self.assertContains(home, reverse("checklist_dashboard"))
+        self.assertContains(home, ">Checklists<")
         hr_page = self.client.get(reverse("hr_dashboard"))
         self.assertEqual(hr_page.status_code, 200)
+        self.assertNotContains(hr_page, 'id="hrNav"')
+        self.assertContains(hr_page, 'id="hrNavMobile"')
         docs_page = self.client.get(reverse("documents_dashboard"))
+        self.assertNotContains(docs_page, 'id="docNav"')
+        self.assertContains(docs_page, 'id="docNavMobile"')
         self.assertEqual(docs_page.status_code, 200)
         self.assertEqual(self.client.get(reverse("hr_document_view")).status_code, 200)
         checklist = self.client.get(reverse("checklist_dashboard"))
-        self.assertContains(checklist, "col-lg-6")
+        self.assertContains(checklist, "staff-page-shell")
+        self.assertContains(checklist, "staff-section-nav")
+        self.assertNotContains(checklist, "col-lg-6")
         self.assertNotContains(checklist, "Back to documents")
         self.assertNotContains(checklist, "employee-page")
 
@@ -339,7 +349,7 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         self.assertNotContains(home, "Coworker secret")
         self.assertContains(home, reverse("checklist_dashboard"))
         self.assertContains(home, reverse("employee_immigration_upload"))
-        self.assertContains(home, reverse("create_salt_log"))
+        self.assertContains(home, reverse("salt_log_list"))
         self.assertContains(home, reverse("incident_dashboard"))
         self.assertNotContains(home, "employee-section-links")
 
@@ -677,13 +687,13 @@ class EmployeeLoginAccessTests(EmployeeTestCase):
         dashboard = self.client.get(reverse("checklist_dashboard"))
         self.assertEqual(dashboard.status_code, 200)
         self.assertContains(dashboard, "Opening checklist")
-        self.assertContains(dashboard, "Back to documents")
+        self.assertNotContains(dashboard, "Back to documents")
         self.assertContains(dashboard, "employee-page")
         self.assertNotContains(dashboard, "col-lg-6")
         documents = self.client.get(reverse("employee_home"))
         self.assertNotContains(documents, "Back to documents")
         immigration = self.client.get(reverse("employee_immigration_upload"))
-        self.assertContains(immigration, "Back to documents")
+        self.assertNotContains(immigration, "Back to documents")
 
         started = self.client.post(
             reverse("checklist_from_template", args=[template.id]),
@@ -1064,19 +1074,26 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
         self.assertFalse(self.employee.has_perm("incident.add_incident"))
         self.client.force_login(self.employee)
 
-        salt_log = self.client.get(reverse("create_salt_log"))
+        salt_log = self.client.get(reverse("salt_log_list"))
         incident = self.client.get(reverse("incident_dashboard"))
 
         self.assertEqual(salt_log.status_code, 200)
         self.assertEqual(incident.status_code, 200)
         self.assertContains(salt_log, "employee-page")
+        self.assertContains(salt_log, "gsa-bottom-tabs")
+        self.assertContains(salt_log, "gsa-mobile-header")
+        self.assertNotContains(salt_log, "navbar-toggler")
         self.assertContains(incident, "employee-page")
-        self.assertContains(salt_log, "Back to documents")
-        self.assertContains(incident, "Back to documents")
-        self.assertContains(salt_log, "Create salt log")
+        self.assertNotContains(salt_log, "Back to documents")
+        self.assertNotContains(incident, "Back to documents")
+        self.assertContains(salt_log, "Create site salt log")
+        self.assertContains(salt_log, "Area salted")
         self.assertContains(incident, "Incident dashboard")
-        self.assertContains(incident, "New Incident")
-        self.assertContains(incident, "Update Existing")
+        self.assertContains(incident, 'href="#start"')
+        self.assertContains(incident, 'href="#edit"')
+        self.assertContains(incident, "Create site incident")
+        self.assertContains(incident, "record-list")
+        self.assertContains(incident, "incident-pills")
 
     @patch("arl.incident.views.process_new_incident_reports_task.delay")
     def test_gsa_incident_dashboard_lists_only_company_incidents(self, _process_incident):
@@ -1096,9 +1113,55 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
             user_employer=self.other_employer,
         )
         self.client.force_login(self.employee)
-        response = self.client.get(reverse("incident_dashboard"))
+        response = self.client.get(
+            reverse("incident_dashboard"), {"tab": "edit"}
+        )
         self.assertContains(response, "Our spill")
         self.assertNotContains(response, "Other company")
+
+    def test_gsa_incident_dashboard_shows_view_not_edit_and_blocks_updates(self):
+        from arl.incident.models import Incident
+
+        incident = Incident.objects.create(
+            store=self.store,
+            brief_description="Fuel spill",
+            eventdetails="Fuel on pad",
+            user_employer=self.employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(
+            reverse("incident_dashboard"), {"tab": "edit"}
+        )
+        self.assertContains(response, ">View<")
+        self.assertNotContains(response, ">Edit<")
+        self.assertContains(
+            response,
+            reverse("generate_restricted_pdf_web", args=[incident.pk]),
+        )
+        denied = self.client.get(
+            reverse("update_incident", kwargs={"pk": incident.pk})
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_gsa_incident_edit_list_supports_search(self):
+        from arl.incident.models import Incident
+
+        Incident.objects.create(
+            store=self.store,
+            brief_description="Fuel spill",
+            eventdetails="Fuel on pad",
+            user_employer=self.employer,
+        )
+        Incident.objects.create(
+            store=self.store,
+            brief_description="Slip near door",
+            eventdetails="Wet floor",
+            user_employer=self.employer,
+        )
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("gsa_incident_edit_list"), {"q": "Fuel"})
+        self.assertContains(response, "Fuel spill")
+        self.assertNotContains(response, "Slip near door")
 
     def test_non_gsa_still_needs_incident_permission(self):
         self.client.force_login(self.manager)
@@ -1107,7 +1170,12 @@ class EmployeeFormsAccessTests(EmployeeTestCase):
 
     def test_gsa_salt_log_form_lists_only_company_stores(self):
         self.client.force_login(self.employee)
-        response = self.client.get(reverse("create_salt_log"))
+        started = self.client.post(reverse("create_salt_log"))
+        salt_log = SaltLog.objects.get(user=self.employee)
+        self.assertRedirects(
+            started, reverse("salt_log_edit", kwargs={"pk": salt_log.pk})
+        )
+        response = self.client.get(reverse("salt_log_edit", kwargs={"pk": salt_log.pk}))
         self.assertContains(response, str(self.store))
         self.assertNotContains(response, str(self.other_store))
 
@@ -1241,3 +1309,52 @@ class GsaPreviewTests(EmployeeTestCase):
         self.assertContains(denied, "not available for preview")
         blocked = self.client.get(reverse("employee_home"))
         self.assertRedirects(blocked, reverse("home"))
+
+    def test_staff_preview_shows_real_signed_file_names(self):
+        SignedDocumentFile.objects.create(
+            user=self.employee,
+            employer=self.employer,
+            envelope_id="generic-webhook",
+            file_name="Employee Handbook.pdf",
+            file_path="DOCUMENTS/acme/handbook.pdf",
+            template_name="New Hire File",
+        )
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        home = self.client.get(reverse("employee_home"))
+        self.assertContains(home, "Employee Handbook.pdf")
+        self.assertNotContains(home, "New Hire File")
+
+    def test_staff_preview_can_open_salt_log_dashboard(self):
+        SaltLog.objects.create(
+            user=self.employee,
+            user_employer=self.employer,
+            area_salted="Front walk",
+        )
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        salt_log = self.client.get(reverse("salt_log_list"))
+        self.assertEqual(salt_log.status_code, 200)
+        self.assertContains(salt_log, "Salt Log Dashboard")
+        self.assertContains(salt_log, "Front walk")
+        self.assertNotContains(salt_log, "GSA preview is read-only")
+
+        started = self.client.post(reverse("create_salt_log"))
+        self.assertRedirects(started, reverse("employee_home"))
+
+    def test_staff_preview_can_open_incident_dashboard(self):
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse("gsa_preview_select"),
+            {"gsa_user_id": self.employee.id},
+        )
+        incident = self.client.get(reverse("incident_dashboard"))
+        self.assertEqual(incident.status_code, 200)
+        self.assertContains(incident, "Incident dashboard")
+        self.assertNotContains(incident, "GSA preview is read-only")

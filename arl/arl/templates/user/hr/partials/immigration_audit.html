@@ -90,7 +90,7 @@
         Reset
       </button>
       <a
-        class="imm-btn imm-btn-download"
+        class="imm-btn imm-btn-ghost"
         href="{% url 'immigration_audit_export' %}"
         title="CSV of all active employees for this employer">
         Download spreadsheet
@@ -295,9 +295,7 @@
 
 <style>
 .imm-audit {
-  background: #f4f6fb;
-  border-radius: 18px;
-  padding: 20px 18px 28px;
+  padding: 0;
   color: #1a1f36;
 }
 
@@ -449,17 +447,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
-  padding: 0 14px;
+  min-height: 38px;
+  height: auto;
+  padding: 6px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
   background: #fff;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
+  text-align: center;
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .imm-btn-ghost {
@@ -613,17 +616,20 @@
 
 .imm-chip {
   box-sizing: border-box;
-  width: 164px;
-  height: 30px;
-  padding: 0 10px;
+  width: 100%;
+  max-width: 164px;
+  min-width: 0;
+  height: auto;
+  min-height: 30px;
+  padding: 4px 8px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.15;
   overflow: hidden;
 }
 
@@ -636,9 +642,12 @@
 
 .imm-chip-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .imm-chip.is-ok {
@@ -966,9 +975,20 @@
   .imm-chip-overall { grid-area: pill; }
 
   .imm-chip {
-    width: auto;
+    width: 100%;
     max-width: 100%;
     min-width: 0;
+    height: auto;
+    min-height: 30px;
+    padding: 4px 8px;
+  }
+
+  .imm-chip-label {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    font-size: 10px;
+    line-height: 1.15;
   }
 
   /* Email, then store. Status pill and days-left value share the next row at equal width. */

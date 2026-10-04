@@ -4,12 +4,11 @@
 {% block template %}
 {% include "base/navbar.html" %}
 
-<div class="container employee-page">
-  <div class="pt-5 mt-4 mb-3">
-    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
-    <h1 class="h4 mt-2 mb-1">Update immigration documents</h1>
-    <p class="text-muted mb-0">This updates your existing immigration record, including status, dates, and the file.</p>
-  </div>
+<main class="container gsa-main employee-page">
+  <header class="gsa-page-header">
+    <h1 class="gsa-page-title">Update immigration</h1>
+    <p class="gsa-page-subtitle">Updates your existing record, status, dates, and file.</p>
+  </header>
 
   {% if messages %}
     {% for message in messages %}
@@ -17,162 +16,135 @@
     {% endfor %}
   {% endif %}
 
-  <div class="card shadow-sm border-0 mb-3">
-    <div class="card-body">
-      <h2 class="h6 mb-3">Current tracker</h2>
-      <dl class="row g-2 mb-0 employee-tracker-details">
-        <dt class="col-sm-5 text-muted">Overall status</dt>
-        <dd class="col-sm-7 mb-0">
-          <span class="imm-status-badge imm-status-badge--{{ overall_badge.tone }}" title="{{ overall_badge.title }}">
-            {{ overall_badge.label }}
-          </span>
-        </dd>
+  <div class="gsa-card">
+    <h2 class="gsa-card-title">Current tracker</h2>
+    <div class="gsa-tracker-layout">
+      <span class="gsa-tracker-label">Overall status</span>
+      <div class="gsa-tracker-pill-slot gsa-tracker-pill-slot--anchor">
+        <span class="gsa-tracker-pill-align-guide" aria-hidden="true">Work permit expiration</span>
+        <div class="gsa-tracker-pill-rail-wrap">
+          <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+          <div class="gsa-tracker-pill-rail">
+            <span class="gsa-status-pill gsa-status-pill--{% if overall_badge.tone == 'auth' %}accent{% elif overall_badge.tone == 'muted' %}muted{% else %}{{ overall_badge.tone }}{% endif %}" title="{{ overall_badge.title }}">
+              {{ overall_badge.label }}
+            </span>
+          </div>
+        </div>
+      </div>
 
-        <dt class="col-sm-5 text-muted">Latest status</dt>
-        <dd class="col-sm-7 mb-0">
-          {% if latest_event %}{{ latest_event.get_status_type_display }}{% else %}Not on file{% endif %}
-        </dd>
+      {% if latest_event %}
+        <span class="gsa-tracker-label">Latest status</span>
+        <div class="gsa-tracker-pill-slot">
+          <div class="gsa-tracker-pill-rail-wrap">
+            <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+            <div class="gsa-tracker-pill-rail">
+              <span class="gsa-status-pill gsa-status-pill--muted">{{ latest_event.get_status_type_display }}</span>
+            </div>
+          </div>
+        </div>
+      {% endif %}
 
-        <dt class="col-sm-5 text-muted">Effective date</dt>
-        <dd class="col-sm-7 mb-0">
+      <div class="gsa-tracker-item">
+        <span class="gsa-tracker-label">Effective date</span>
+        <div class="gsa-tracker-value">
           {% if latest_event.effective_date %}{{ latest_event.effective_date|date:"F j, Y" }}{% else %}Not on file{% endif %}
-        </dd>
+        </div>
+      </div>
+      <div class="gsa-tracker-item">
+        <span class="gsa-tracker-label">Work permit expiration</span>
+        {% if permit_badge %}
+          <div class="gsa-tracker-pill-slot">
+            <div class="gsa-tracker-pill-rail-wrap">
+              <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+              <div class="gsa-tracker-pill-rail">
+                <span class="gsa-status-pill gsa-status-pill--{% if permit_badge.tone == 'auth' %}accent{% else %}{{ permit_badge.tone }}{% endif %}" title="{{ permit_badge.title }}">{{ permit_badge.label }}</span>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+        <div class="gsa-tracker-value-rail">
+          <div class="gsa-tracker-value">
+            {% if work_permit_expiration %}{{ work_permit_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+          </div>
+        </div>
+      </div>
 
-        <dt class="col-sm-5 text-muted">Reference number</dt>
-        <dd class="col-sm-7 mb-0">
+      <div class="gsa-tracker-item">
+        <span class="gsa-tracker-label">Reference</span>
+        <div class="gsa-tracker-value">
           {% if latest_event.reference_number %}{{ latest_event.reference_number }}{% else %}Not on file{% endif %}
-        </dd>
+        </div>
+      </div>
+      <div class="gsa-tracker-item">
+        <span class="gsa-tracker-label gsa-tracker-label--align-end">SIN expiration</span>
+        {% if sin_badge %}
+          <div class="gsa-tracker-pill-slot">
+            <div class="gsa-tracker-pill-rail-wrap">
+              <span class="gsa-tracker-pill-size-guide" aria-hidden="true">Studies Completed</span>
+              <div class="gsa-tracker-pill-rail">
+                <span class="gsa-status-pill gsa-status-pill--{% if sin_badge.tone == 'auth' %}accent{% else %}{{ sin_badge.tone }}{% endif %}" title="{{ sin_badge.title }}">{{ sin_badge.label }}</span>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+        <div class="gsa-tracker-value-rail">
+          <div class="gsa-tracker-value">
+            {% if sin_expiration %}{{ sin_expiration|date:"F j, Y" }}{% else %}Not on file{% endif %}
+          </div>
+        </div>
+      </div>
 
-        <dt class="col-sm-5 text-muted">SIN expiration</dt>
-        <dd class="col-sm-7 mb-0">
-          {% if sin_expiration %}
-            {{ sin_expiration|date:"F j, Y" }}
-          {% else %}
-            Not on file
-          {% endif %}
-          {% if sin_badge %}
-            <span class="imm-status-badge imm-status-badge--{{ sin_badge.tone }}" title="{{ sin_badge.title }}">
-              {{ sin_badge.label }}
-            </span>
-          {% endif %}
-        </dd>
-
-        <dt class="col-sm-5 text-muted">Work permit expiration</dt>
-        <dd class="col-sm-7 mb-0">
-          {% if work_permit_expiration %}
-            {{ work_permit_expiration|date:"F j, Y" }}
-          {% else %}
-            Not on file
-          {% endif %}
-          {% if permit_badge %}
-            <span class="imm-status-badge imm-status-badge--{{ permit_badge.tone }}" title="{{ permit_badge.title }}">
-              {{ permit_badge.label }}
-            </span>
-          {% endif %}
-        </dd>
-      </dl>
       {% if extension_requested %}
-        <p class="text-muted small mt-3 mb-0">
-          Extension requested{% if extension_date %} {{ extension_date|date:"F j, Y" }}{% else %} (date not on file){% endif %}
-        </p>
+        <div class="gsa-tracker-item gsa-tracker-item--span-left">
+          <span class="gsa-tracker-label">Extension requested</span>
+          <div class="gsa-tracker-value">
+            {% if extension_date %}{{ extension_date|date:"F j, Y" }}{% else %}Date not on file{% endif %}
+          </div>
+        </div>
       {% endif %}
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-      <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="mb-3">
-          <label class="form-label" for="document_title">Document title</label>
-          <input class="form-control" id="document_title" name="document_title" type="text" required>
+  <div class="gsa-card mb-4">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label" for="document_title">Document title</label>
+        <input class="form-control" id="document_title" name="document_title" type="text" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="immigration_status_type">Immigration status</label>
+        <select class="form-select" id="immigration_status_type" name="immigration_status_type" required>
+          <option value="">Select a status</option>
+          {% for code, label in status_choices %}
+            <option value="{{ code }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="immigration_effective_date">Effective date</label>
+          <input class="form-control" id="immigration_effective_date" name="immigration_effective_date" type="date">
         </div>
-        <div class="mb-3">
-          <label class="form-label" for="immigration_status_type">Immigration status</label>
-          <select class="form-select" id="immigration_status_type" name="immigration_status_type" required>
-            <option value="">Select a status</option>
-            {% for code, label in status_choices %}
-              <option value="{{ code }}">{{ label }}</option>
-            {% endfor %}
-          </select>
+        <div class="col-md-6">
+          <label class="form-label" for="immigration_expiry_date">Expiry date</label>
+          <input class="form-control" id="immigration_expiry_date" name="immigration_expiry_date" type="date">
         </div>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label" for="immigration_effective_date">Effective date</label>
-            <input class="form-control" id="immigration_effective_date" name="immigration_effective_date" type="date">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="immigration_expiry_date">Expiry date</label>
-            <input class="form-control" id="immigration_expiry_date" name="immigration_expiry_date" type="date">
-          </div>
-        </div>
-        <div class="mb-3 mt-3">
-          <label class="form-label" for="immigration_reference_number">Reference number</label>
-          <input class="form-control" id="immigration_reference_number" name="immigration_reference_number" type="text" placeholder="IRCC file or application number">
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="notes">Notes</label>
-          <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="file">File</label>
-          <input class="form-control" id="file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif,application/pdf,image/*" required>
-        </div>
-        <button class="btn btn-immigration-save" type="submit">Save to immigration tracker</button>
-      </form>
-    </div>
+      </div>
+      <div class="mb-3 mt-3">
+        <label class="form-label" for="immigration_reference_number">Reference number</label>
+        <input class="form-control" id="immigration_reference_number" name="immigration_reference_number" type="text" placeholder="IRCC file or application number">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="notes">Notes</label>
+        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="file">Attach file</label>
+        <input class="form-control gsa-file-input" id="file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif,application/pdf,image/*" required>
+      </div>
+      <button class="gsa-btn-primary btn-immigration-save" type="submit">Save update</button>
+    </form>
   </div>
-</div>
-
-<style>
-  .employee-page { max-width: 860px; }
-  .employee-tracker-details dt { font-weight: 500; }
-  .imm-status-badge {
-    display: inline-block;
-    margin-left: 0.45rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    line-height: 1.35;
-    vertical-align: middle;
-  }
-  .imm-status-badge--watch {
-    background: #fef3c7;
-    color: #b45309;
-  }
-  .imm-status-badge--ok {
-    background: #d1fae5;
-    color: #047857;
-  }
-  .imm-status-badge--urgent {
-    background: #fee2e2;
-    color: #b91c1c;
-  }
-  .imm-status-badge--auth {
-    background: #dbeafe;
-    color: #1e3a5f;
-  }
-  .imm-status-badge--muted {
-    background: #f3f4f6;
-    color: #6b7280;
-  }
-  .btn-immigration-save {
-    display: inline-block;
-    background: #fff;
-    border: 1px solid #c5cad1;
-    color: #3d4450;
-    font-weight: 600;
-    padding: 0.55rem 1rem;
-    border-radius: 0.375rem;
-    white-space: nowrap;
-    line-height: 1.25;
-  }
-  .btn-immigration-save:hover,
-  .btn-immigration-save:focus {
-    background: #f8f9fa;
-    border-color: #adb5bd;
-    color: #2b3038;
-  }
-</style>
+</main>
 {% endblock %}

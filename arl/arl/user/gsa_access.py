@@ -6,11 +6,11 @@ from django.urls import reverse_lazy
 
 SESSION_GSA_PREVIEW_USER_ID = "gsa_preview_user_id"
 
-# Multi-tenant hub routes keep record-hub markup and manager nav even when the
-# signed-in user is also in the GSA group (e.g. test fixtures without invites).
+# Staff incident hub routes keep manager nav. Pure GSA accounts use employee
+# chrome on salt log (list + edit); managers reach the same URLs without
+# is_employee_account, so they keep the staff layout automatically.
 STAFF_HUB_URL_NAMES = frozenset(
     {
-        "salt_log_list",
         "incidents",
         "incident_edit_list",
         "incident_list",
@@ -87,6 +87,13 @@ def shows_gsa_chrome(request):
     if request.user.has_perm("incident.add_incident"):
         return False
     return True
+
+
+def shows_staff_chrome(request):
+    """Manager, employer, HR, and staff shell (not GSA, not guest)."""
+    if not request.user.is_authenticated:
+        return False
+    return not shows_gsa_chrome(request)
 
 
 def gsa_actor(request):

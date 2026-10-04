@@ -1,0 +1,6 @@
+{% if user.is_authenticated %}
+<span class="gsa-identity">
+  {{ user.username|upper }}
+  {{ user.get_full_name|default:user.username }}
+</span>
+{% endif %}

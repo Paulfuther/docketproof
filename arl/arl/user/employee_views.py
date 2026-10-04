@@ -88,13 +88,38 @@ def _extension_for(uploaded, content_type):
     return ""
 
 
+def _envelope_specific_label(envelope):
+    step = envelope.flow_step if envelope.flow_step_id else None
+    if step:
+        name = getattr(step, "display_name", None) or step.label
+        if name:
+            return name
+    template = envelope.template if envelope.template_id else None
+    if template and template.template_name:
+        return template.template_name
+    return ""
+
+
 def _document_label(envelope):
-    if envelope.flow_step_id and getattr(envelope.flow_step, "label", ""):
-        return envelope.flow_step.label
+    specific = _envelope_specific_label(envelope)
+    if specific:
+        return specific
     if envelope.template_name:
         return envelope.template_name
-    if envelope.template_id and envelope.template:
-        return envelope.template.template_name
+    return "Document"
+
+
+def _signed_document_name(document, envelope=None):
+    if document.document_title:
+        return document.document_title
+    if envelope is not None:
+        label = _document_label(envelope)
+        if label and label != "Document":
+            return label
+    if document.file_name:
+        return document.file_name
+    if document.template_name:
+        return document.template_name
     return "Document"
 
 
@@ -166,9 +191,7 @@ def _employee_signed_entries(actor):
             completed_at = document.uploaded_at
         entries.append(
             {
-                "name": document.document_title
-                or document.template_name
-                or document.file_name,
+                "name": _signed_document_name(document, envelope),
                 "completed_at": completed_at,
                 "download_id": document.id,
             }

@@ -49,40 +49,50 @@
   font-size: .8125rem;
 }
 
-/* ===== Mobile nav ===== */
+/* ===== Mobile nav: fit all tabs without horizontal scroll ===== */
 #hrNavMobile {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-wrap: nowrap;
   align-items: stretch;
-  padding-left: 0;
-  padding-right: 0;
-  overflow-x: auto;
+  justify-content: space-between;
+  gap: 0.1rem;
+  padding: 0.35rem 0.25rem 0.5rem;
+  overflow: visible;
 }
 #hrNavMobile .hr-nav-link {
   flex: 1 1 0;
-  /* Floor keeps "Immigration" on one line at .65rem. */
-  min-width: 3.95rem;
+  max-width: none;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: .15rem;
-  padding: .35rem 0;
+  gap: .1rem;
+  padding: .28rem 0.1rem;
   border-radius: .5rem;
   text-decoration: none;
   text-align: center;
   color: inherit;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 #hrNavMobile .hr-nav-link .material-symbols-outlined {
   flex-shrink: 0;
+  font-size: 20px;
 }
 #hrNavMobile .hr-nav-label {
   display: block;
+  width: 100%;
   max-width: 100%;
-  font-size: .65rem;
-  line-height: 1.1;
+  font-size: .45rem;
+  line-height: 1.05;
   text-align: center;
-  white-space: normal;
-  overflow-wrap: normal;
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
 }
 #hrNavMobile .hr-nav-link.active,
 #hrNavMobile .hr-nav-link:hover {
@@ -161,7 +171,8 @@ html {
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
 
-    <!-- ===== Desktop Sidebar ===== -->
+    {% if not shows_staff_chrome %}
+    <!-- ===== Desktop Sidebar (legacy; hidden when staff app sidebar is active) ===== -->
     <aside class="d-none d-lg-block col-lg-1 px-0">
       <div id="hrNav" class="d-flex flex-column align-items-center py-3">
         <div class="sidebar-legend fw-semibold mb-3">
@@ -232,9 +243,10 @@ html {
         </nav>
       </div>
     </aside>
+    {% endif %}
 
-    <!-- ===== Mobile Top Nav ===== -->
-    <div id="hrNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2"
+    <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
+    <div id="hrNavMobile" class="col-12 px-0 d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom"
          role="tablist"
          aria-orientation="horizontal">
       <a class="hr-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
@@ -306,7 +318,7 @@ html {
     </div>
 
     <!-- ===== Content ===== -->
-    <section class="col-12 col-lg-11">
+    <section class="col-12{% if not shows_staff_chrome %} col-lg-11{% endif %}">
       <div class="tab-content mt-2" id="hrTabContent">
 
         <div id="docusign" class="tab-pane fade {% if active_tab == 'docusign' %}show active{% endif %}">
@@ -391,22 +403,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("blur", function () { tip.hide(); });
     el.addEventListener("click", function () { tip.hide(); });
   });
-});
-</script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tabEl) {
-    tabEl.addEventListener("shown.bs.tab", function (event) {
-      const href = event.target.getAttribute("href");
-      if (!href || !href.startsWith("#")) return;
 
-      const tabName = href.replace("#", "");
-      const url = new URL(window.location);
-
-      url.searchParams.set("tab", tabName);
-      window.history.replaceState({}, "", url);
-    });
-  });
 });
 </script>
 <script>

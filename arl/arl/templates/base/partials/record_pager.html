@@ -6,7 +6,13 @@
   </div>
   <div class="btn-group">
     {% if page.has_previous %}
-      {% if pager == "incident" %}
+      {% if pager == "gsa_incident" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{{ hub_url }}?tab=edit&page={{ page.previous_page_number }}&q={{ q|urlencode }}"
+           hx-get="{{ list_partial_url }}?page={{ page.previous_page_number }}&q={{ q|urlencode }}"
+           hx-target="#incident-list"
+           hx-swap="outerHTML">Prev</a>
+      {% elif pager == "incident" %}
         <a class="btn btn-sm btn-outline-secondary"
            href="{% url 'incidents' %}?tab=edit&page={{ page.previous_page_number }}&q={{ q|urlencode }}"
            hx-get="{% url 'incident_edit_list' %}?page={{ page.previous_page_number }}&q={{ q|urlencode }}"
@@ -21,7 +27,13 @@
       {% endif %}
     {% endif %}
     {% if page.has_next %}
-      {% if pager == "incident" %}
+      {% if pager == "gsa_incident" %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{{ hub_url }}?tab=edit&page={{ page.next_page_number }}&q={{ q|urlencode }}"
+           hx-get="{{ list_partial_url }}?page={{ page.next_page_number }}&q={{ q|urlencode }}"
+           hx-target="#incident-list"
+           hx-swap="outerHTML">Next</a>
+      {% elif pager == "incident" %}
         <a class="btn btn-sm btn-outline-secondary"
            href="{% url 'incidents' %}?tab=edit&page={{ page.next_page_number }}&q={{ q|urlencode }}"
            hx-get="{% url 'incident_edit_list' %}?page={{ page.next_page_number }}&q={{ q|urlencode }}"

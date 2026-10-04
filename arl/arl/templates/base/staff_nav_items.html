@@ -1,0 +1,83 @@
+{% load waffle_tags %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'hr_dashboard' %}active{% endif %}" href="{% url 'hr_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">group</span>
+    <span class="gsa-nav-label">HR</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'documents_dashboard' %}active{% endif %}" href="{% url 'documents_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">description</span>
+    <span class="gsa-nav-label">Docs</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}active{% endif %}" href="{% url 'salt_log_list' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">ac_unit</span>
+    <span class="gsa-nav-label">Salt log</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'incidents' or request.resolver_match.url_name == 'create_incident' or request.resolver_match.url_name == 'incident_edit_list' or request.resolver_match.url_name == 'incident_list' or request.resolver_match.url_name == 'update_incident' %}active{% endif %}" href="{% url 'incidents' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">report</span>
+    <span class="gsa-nav-label">Incidents</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}active{% endif %}" href="{% url 'checklist_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">checklist</span>
+    <span class="gsa-nav-label">Checklists</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'in_app_signing_dashboard' %}active{% endif %}" href="{% url 'in_app_signing_dashboard' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">draw</span>
+    <span class="gsa-nav-label">In-app signing</span>
+  </a>
+</li>
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.namespace == 'sales_targets' %}active{% endif %}" href="{% url 'sales_targets:sales_target_dashboard_selector' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">monitoring</span>
+    <span class="gsa-nav-label">Targets</span>
+  </a>
+</li>
+{% if user.is_dropbox %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'list_folders' %}active{% endif %}" href="{% url 'list_folders' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">cloud</span>
+    <span class="gsa-nav-label">Dropbox</span>
+  </a>
+</li>
+{% endif %}
+{% if user.is_comms %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'comms' %}active{% endif %}" href="{% url 'comms' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">sms</span>
+    <span class="gsa-nav-label">Communications</span>
+  </a>
+</li>
+{% endif %}
+{% flag 'enable_nav_link' %}
+<li class="nav-item">
+  <a class="nav-link staff-section gsa-nav-link {% if request.resolver_match.url_name == 'quiz_list' %}active{% endif %}" href="{% url 'quiz_list' %}">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">quiz</span>
+    <span class="gsa-nav-label">Quiz</span>
+  </a>
+</li>
+{% endflag %}
+{% if user.is_staff %}
+<li class="nav-item staff-admin-tools-item">
+  <button type="button"
+          class="gsa-nav-link staff-admin-tools-toggle"
+          id="staffAdminToolsToggle"
+          aria-expanded="false"
+          aria-controls="staffAdminToolsPanel">
+    <span class="material-symbols-outlined gsa-nav-icon" aria-hidden="true">grid_view</span>
+    <span class="gsa-nav-label">Admin tools</span>
+    <span class="material-symbols-outlined staff-admin-tools-chevron" aria-hidden="true">chevron_right</span>
+  </button>
+  <div class="staff-admin-tools-panel" id="staffAdminToolsPanel" hidden>
+    {% include "base/staff_admin_tools_links.html" %}
+  </div>
+</li>
+{% endif %}

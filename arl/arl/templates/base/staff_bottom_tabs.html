@@ -1,0 +1,40 @@
+{% include "base/staff_more_panel.html" %}
+<nav class="gsa-bottom-tabs app-mobile-chrome d-lg-none" aria-label="Staff sections">
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'hr_dashboard' %}is-active{% endif %}"
+     href="{% url 'hr_dashboard' %}">HR</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'documents_dashboard' %}is-active{% endif %}"
+     href="{% url 'documents_dashboard' %}">Docs</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'salt_log_list' or request.resolver_match.url_name == 'create_salt_log' or request.resolver_match.url_name == 'salt_log_edit' or request.resolver_match.url_name == 'salt_log_update' %}is-active{% endif %}"
+     href="{% url 'salt_log_list' %}">Salt log</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'incidents' or request.resolver_match.url_name == 'create_incident' or request.resolver_match.url_name == 'incident_edit_list' or request.resolver_match.url_name == 'update_incident' %}is-active{% endif %}"
+     href="{% url 'incidents' %}">Incidents</a>
+  <a class="gsa-bottom-tab {% if request.resolver_match.url_name == 'checklist_dashboard' or request.resolver_match.url_name == 'checklist_edit' or request.resolver_match.url_name == 'checklist_detail' or request.resolver_match.url_name == 'checklist_from_template' %}is-active{% endif %}"
+     href="{% url 'checklist_dashboard' %}">Checklists</a>
+  <button type="button" class="gsa-bottom-tab app-more-toggle" id="staffMoreToggle" aria-expanded="false" aria-controls="staffMorePanel">More</button>
+</nav>
+<script>
+(function () {
+  var toggle = document.getElementById('staffMoreToggle');
+  var panel = document.getElementById('staffMorePanel');
+  if (!toggle || !panel) return;
+  toggle.addEventListener('click', function () {
+    var open = panel.hasAttribute('hidden');
+    if (open) {
+      panel.removeAttribute('hidden');
+      toggle.classList.add('is-active');
+      toggle.setAttribute('aria-expanded', 'true');
+    } else {
+      panel.setAttribute('hidden', 'hidden');
+      toggle.classList.remove('is-active');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('click', function (event) {
+    if (panel.hasAttribute('hidden')) return;
+    if (panel.contains(event.target) || toggle.contains(event.target)) return;
+    panel.setAttribute('hidden', 'hidden');
+    toggle.classList.remove('is-active');
+    toggle.setAttribute('aria-expanded', 'false');
+  });
+})();
+</script>

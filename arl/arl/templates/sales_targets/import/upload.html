@@ -8,11 +8,15 @@
   .page-container {
     max-width: 1180px;
     margin: 0 auto;
-    padding-top: 6rem;   /* same offset below fixed navbar */
-}
+    padding-top: 6rem;
+  }
+  body.staff-app .page-container {
+    padding-top: 1.5rem;
+  }
 </style>
 
 <div class="page-container">
+    {% include "base/partials/staff_targets_section_nav.html" with targets_section="import" period=target_period %}
 
     <div class="card shadow-sm">
         <div class="card-body p-4">

@@ -9,7 +9,10 @@
 .page-container {
     max-width: 1180px;
     margin: 0 auto;
-    padding-top: 6rem;   /* same offset below fixed navbar */
+    padding-top: 6rem;
+}
+body.staff-app .page-container {
+    padding-top: 1.5rem;
 }
 
 .dashboard-title {
@@ -23,10 +26,12 @@
 </style>
 
 <div class="page-container">
-    
+    {% include "base/partials/staff_targets_section_nav.html" with targets_section="campaigns" %}
 
     <div class="mb-4">
+        {% if not shows_staff_chrome %}
         <legend class="mb-1">Sales Target Dashboard</legend>
+        {% endif %}
         <div class="text-muted">
             Select a campaign to view the dashboard.
         </div>

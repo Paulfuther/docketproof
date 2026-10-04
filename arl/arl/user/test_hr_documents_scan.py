@@ -474,8 +474,12 @@ class HRDocumentsScanTests(TestCase):
         self.assertNotIn('hx-target="#document_audit"', dashboard_body)
 
     def _hr_nav_markup(self, body):
-        after_desktop = body.split('id="hrNav"', 1)[1]
-        desktop_nav, after_mobile = after_desktop.split('id="hrNavMobile"', 1)
+        if 'id="hrNav"' in body:
+            after_desktop = body.split('id="hrNav"', 1)[1]
+            desktop_nav, after_mobile = after_desktop.split('id="hrNavMobile"', 1)
+        else:
+            desktop_nav = ""
+            after_mobile = body.split('id="hrNavMobile"', 1)[1]
         mobile_nav = after_mobile.split('id="hrTabContent"', 1)[0]
         return desktop_nav, mobile_nav
 
@@ -492,14 +496,17 @@ class HRDocumentsScanTests(TestCase):
             "Employee documents",
             "HR Documents",
         ):
-            self.assertEqual(body.count(f'data-title="{label}"'), 2)
-            self.assertEqual(body.count(f'title="{label}"'), 2)
-            self.assertEqual(body.count(f'aria-label="{label}"'), 2)
+            self.assertEqual(body.count(f'data-title="{label}"'), 1)
+            self.assertEqual(body.count(f'title="{label}"'), 1)
+            self.assertEqual(body.count(f'aria-label="{label}"'), 1)
 
         desktop_nav, mobile_nav = self._hr_nav_markup(body)
+        self.assertNotIn('id="hrNav"', body)
+        self.assertIn('id="hrNavMobile"', body)
+        self.assertEqual(desktop_nav, "")
         self.assertNotIn("hr-nav-label", desktop_nav)
-        self.assertIn("font-size: .65rem", body)
-        self.assertIn("line-height: 1.1", body)
+        self.assertIn("font-size: .45rem", body)
+        self.assertIn("flex-wrap: nowrap", body)
         for label in (
             "Document templates",
             "Invite a new hire",
@@ -509,6 +516,8 @@ class HRDocumentsScanTests(TestCase):
         ):
             self.assertEqual(mobile_nav.count(f'class="hr-nav-label">{label}</span>'), 1)
         self.assertNotIn("Immigration Audit", mobile_nav)
+        self.assertIn("min-width: 0", body)
+        self.assertIn('class="col-12 px-0 d-flex', body)
 
         self.assertNotIn('data-title="Immigration"', body)
         self.assertNotIn('data-title="Templates"', body)
@@ -519,9 +528,9 @@ class HRDocumentsScanTests(TestCase):
         self.hr.groups.add(immigration)
         allowed = self.client.get(reverse("hr_dashboard"))
         allowed_body = allowed.content.decode()
-        self.assertEqual(allowed_body.count('data-title="Immigration Audit"'), 2)
-        self.assertEqual(allowed_body.count('title="Immigration Audit"'), 2)
-        self.assertEqual(allowed_body.count('aria-label="Immigration Audit"'), 2)
+        self.assertEqual(allowed_body.count('data-title="Immigration Audit"'), 1)
+        self.assertEqual(allowed_body.count('title="Immigration Audit"'), 1)
+        self.assertEqual(allowed_body.count('aria-label="Immigration Audit"'), 1)
         allowed_desktop, allowed_mobile = self._hr_nav_markup(allowed_body)
         self.assertNotIn("hr-nav-label", allowed_desktop)
         self.assertEqual(

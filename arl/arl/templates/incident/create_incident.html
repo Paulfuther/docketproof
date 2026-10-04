@@ -8,10 +8,9 @@
 
 <div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
 {% if shows_gsa_chrome %}
-  <div class="pt-5 mt-4 mb-3">
-    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
-    <h1 class="h4 mt-2 mb-1">Edit site incident</h1>
-  </div>
+  <header class="gsa-page-header">
+    <h1 class="gsa-page-title">Edit site incident</h1>
+  </header>
 {% else %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">

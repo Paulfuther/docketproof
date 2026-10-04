@@ -1,0 +1,14 @@
+{% if shows_staff_chrome %}
+<nav class="staff-section-nav d-none d-lg-flex" aria-label="Salt log sections" role="tablist">
+  <a class="staff-section-link{% if active_tab == 'start' %} active{% endif %}"
+     data-bs-toggle="tab" href="#start" role="tab" aria-label="Start">
+    <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+    <span class="staff-section-label">Start</span>
+  </a>
+  <a class="staff-section-link{% if active_tab == 'edit' %} active{% endif %}"
+     data-bs-toggle="tab" href="#edit" role="tab" aria-label="Edit">
+    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+    <span class="staff-section-label">Edit</span>
+  </a>
+</nav>
+{% endif %}

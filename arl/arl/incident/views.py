@@ -26,7 +26,10 @@ from PIL import Image
 from arl.helpers import get_s3_images_for_incident, upload_to_linode_object_storage
 from arl.user.gsa_access import (
     GSAOrPermissionRequiredMixin,
+    gsa_actor,
     gsa_preview_blocks_mutation,
+    is_gsa_account,
+    is_gsa_preview_active,
     post_form_success_url,
 )
 
@@ -47,6 +50,21 @@ incident_updated = Signal()
 logger = logging.getLogger(__name__)
 
 INCIDENT_PAGE_SIZE = 10
+
+
+def _incident_hub_return_url(request):
+    if is_gsa_account(request.user) or is_gsa_preview_active(request):
+        return f"{reverse('incident_dashboard')}?tab=edit"
+    return f"{reverse('incidents')}?tab=edit"
+
+
+def _incident_actor(request):
+    return gsa_actor(request) or request.user
+
+
+def _incident_employer(request):
+    actor = _incident_actor(request)
+    return getattr(actor, "employer", None)
 
 
 # Custom decorator to check if the user belongs to abm_incident_report group
@@ -103,11 +121,40 @@ def _hub_list_context(request):
         "active_tab": tab,
         "can_add": can_add,
         "can_view": can_view,
+        "can_edit_incident": user.has_perm("incident.add_incident"),
         "can_view_pdf": is_abm_incident_pdf(user),
         "page_obj": page_obj,
         "incident_count": incident_count,
         "q": query,
         "form_action": reverse("create_incident"),
+        "list_partial_url": reverse("incident_edit_list"),
+        "hub_url": reverse("incidents"),
+    }
+
+
+def _gsa_dashboard_list_context(request):
+    """Start | Edit tab list for the GSA incident dashboard."""
+    user = _incident_actor(request)
+    query = (request.GET.get("q") or "").strip()
+    paginator = Paginator(
+        _incident_list_for_user(user, query), INCIDENT_PAGE_SIZE
+    )
+    page_obj = paginator.get_page(request.GET.get("page"))
+    tab = request.GET.get("tab") or "start"
+    if tab not in ("start", "edit"):
+        tab = "start"
+    return {
+        "active_tab": tab,
+        "can_add": True,
+        "can_view": True,
+        "can_edit_incident": False,
+        "can_view_pdf": is_abm_incident_pdf(request.user),
+        "page_obj": page_obj,
+        "incident_count": paginator.count,
+        "q": query,
+        "list_partial_url": reverse("gsa_incident_edit_list"),
+        "hub_url": reverse("incident_dashboard"),
+        "incident_pager": "gsa_incident",
     }
 
 
@@ -117,6 +164,18 @@ def incident_edit_list(request):
     if not request.user.has_perm("incident.view_incident"):
         return render(request, "incident/403.html", status=403)
     context = _hub_list_context(request)
+    context["live_search"] = True
+    context["list_partial_url"] = reverse("incident_edit_list")
+    context["hub_url"] = reverse("incidents")
+    return render(request, "incident/partials/incident_edit_list.html", context)
+
+
+@login_required(login_url="/login/")
+def gsa_incident_edit_list(request):
+    """GSA dashboard list rows for live search."""
+    if not (is_gsa_account(request.user) or is_gsa_preview_active(request)):
+        return render(request, "incident/403.html", status=403)
+    context = _gsa_dashboard_list_context(request)
     context["live_search"] = True
     return render(request, "incident/partials/incident_edit_list.html", context)
 
@@ -468,9 +527,8 @@ def htmx_edit_incident(request, pk):
 
 
 @login_required
-# @permission_required("incident.view_incident", raise_exception=True)
 def incident_dashboard(request):
-    user = request.user
+    user = _incident_actor(request)
     form = IncidentForm(request.POST or None, request.FILES or None, user=user)
 
     if request.method == "POST":
@@ -491,11 +549,17 @@ def incident_dashboard(request):
             messages.success(request, "PDF generation started. Check your email.")
             return redirect("incident_dashboard")
 
-    # Grab incident list for dashboard tab
+    if is_gsa_account(request.user) or is_gsa_preview_active(request):
+        context = {
+            "form": form,
+            "existing_images": [],
+        }
+        context.update(_gsa_dashboard_list_context(request))
+        return render(request, "incident/incident_dashboard.html", context)
+
     incidents = Incident.objects.filter(user_employer=user.employer).order_by(
         "-eventdate"
     )
-
     return render(
         request,
         "incident/incident_dashboard.html",
@@ -633,13 +697,22 @@ def generate_pdf(request, incident_id):
 # email it to the user
 
 
+@login_required
 def generate_incident_pdf_email(request, incident_id):
+    employer = _incident_employer(request)
+    if employer is None:
+        raise Http404
+    incident = get_object_or_404(
+        Incident,
+        pk=incident_id,
+        user_employer=employer,
+    )
     user_email = request.user.email
-    generate_pdf_email_to_user_task.delay(incident_id, user_email)
+    generate_pdf_email_to_user_task.delay(incident.pk, user_email)
     messages.success(
         request, "PDF generation started. Check your email for the attached file."
     )
-    return redirect("home")
+    return redirect(_incident_hub_return_url(request))
 
 
 # this route is used to email a resricted incident report to a user
@@ -674,22 +747,21 @@ def generate_pdf_web(request, incident_id):
     return render(request, "incident/major_incident_form_pdf.html", context)
 
 
+@login_required
 def generate_restricted_pdf_web(request, incident_id):
-    # Fetch incident data based on incident_id
-    try:
-        incident = Incident.objects.get(pk=incident_id)
-    except ObjectDoesNotExist:
-        raise ValueError("Incident with ID {} does not exist.".format(incident_id))
-
+    employer = _incident_employer(request)
+    if employer is None:
+        raise Http404
+    incident = get_object_or_404(
+        Incident.objects.select_related("store"),
+        pk=incident_id,
+        user_employer=employer,
+    )
     context = {"incident": incident}
     return render(request, "incident/restricted_incident_form_pdf.html", context)
 
 
 @login_required
-@permission_required(
-    "incident.view_incident",
-    raise_exception=True,
-)
 def email_significant_security_report(
     request,
     incident_id,
@@ -698,10 +770,20 @@ def email_significant_security_report(
     Queue the Significant Security Incident Report for email
     to the current user.
     """
+    if not (
+        request.user.has_perm("incident.view_incident")
+        or is_gsa_account(request.user)
+        or is_gsa_preview_active(request)
+    ):
+        return render(request, "incident/403.html", status=403)
+
+    employer = _incident_employer(request)
+    if employer is None:
+        raise Http404
     incident = get_object_or_404(
         Incident,
         pk=incident_id,
-        user_employer=request.user.employer,
+        user_employer=employer,
     )
 
     if not request.user.email:
@@ -710,7 +792,7 @@ def email_significant_security_report(
             "Your account does not have an email address.",
         )
 
-        return redirect(f"{reverse('incidents')}?tab=edit")
+        return redirect(_incident_hub_return_url(request))
 
     generate_significant_security_pdf_email_task.delay(
         incident.pk,
@@ -725,7 +807,7 @@ def email_significant_security_report(
         ),
     )
 
-    return redirect(f"{reverse('incidents')}?tab=edit")
+    return redirect(_incident_hub_return_url(request))
 
 
 class IncidentListView(LoginRequiredMixin, View):

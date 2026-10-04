@@ -84,7 +84,9 @@ class IncidentHubTests(TestCase):
         self.assertNotIn("Edit Incident Form", body)
         self.assertNotIn("DataTable(", body)
         self.assertNotIn('id="table_id"', body)
-        self.assertEqual(body.count('href="%s"' % reverse("incidents")), 1)
+        incidents_href = 'href="%s"' % reverse("incidents")
+        self.assertGreaterEqual(body.count(incidents_href), 1)
+        self.assertLessEqual(body.count(incidents_href), 2)
 
     def test_edit_tab_lists_only_this_employer_and_links_to_the_form(self):
         own = self._incident("Fuel spill")

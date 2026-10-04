@@ -11,6 +11,10 @@
     padding-top: 6rem;
   }
 
+  body.staff-app .page-container {
+    padding-top: 1.5rem;
+  }
+
   .dashboard-title {
     font-weight: 600;
     font-size: 1.45rem;
@@ -121,12 +125,15 @@
 </style>
 
 <div class="page-container">
+  {% include "base/partials/staff_targets_section_nav.html" with targets_section="dashboard" period=period %}
 
   <!-- Dashboard heading -->
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
 
     <div>
+      {% if not shows_staff_chrome %}
       <legend class="mb-1">Sales Target Dashboard</legend>
+      {% endif %}
 
       <div class="dashboard-meta">
         {{ period.name }} · {{ period.start_date }} to {{ period.end_date }}

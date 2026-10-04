@@ -143,7 +143,8 @@
 }
 .nav-icon-link.active,
 .nav-icon-link:hover {
-  color: #0d6efd;
+  color: inherit;
+  background: #f1f5ff;
 }
 
 /* ==============================
@@ -152,12 +153,56 @@
 .container-95vh{min-height:95vh}
 
 /* Mobile top tab bar */
-#docNavMobile{
-  position: sticky; top: 0; z-index: 1020; /* stay visible while scrolling */
-  background: #fff;
+#docNavMobile {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 0.1rem;
+  padding: 0.35rem 0.25rem 0.5rem;
+  overflow: visible;
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  background: transparent;
+  border-bottom: 1px solid #dee2e6;
 }
 #docNavMobile .nav-icon-link{
-  padding: .75rem;       /* bigger touch target */
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.1rem;
+  padding: 0.28rem 0.05rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  color: inherit;
+  text-decoration: none;
+}
+#docNavMobile .nav-icon-link.active,
+#docNavMobile .nav-icon-link:hover {
+  color: inherit;
+  background: #f1f5ff;
+}
+#docNavMobile .nav-icon-link .material-symbols-outlined {
+  font-size: 20px;
+  color: inherit;
+}
+#docNavMobile .staff-section-label {
+  display: block;
+  width: 100%;
+  font-size: 0.45rem;
+  line-height: 1.05;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  text-align: center;
+  color: inherit;
 }
 @media (hover:none){
   /* On touch devices, ignore hover color changes */
@@ -183,7 +228,8 @@
 
      <div class="row g-3">
 
-        <!-- Sidebar -->
+        {% if not shows_staff_chrome %}
+        <!-- Sidebar (legacy; hidden when staff app sidebar is active) -->
        <aside class="d-none d-lg-block col-lg-1 px-0">
         <div id="docNav" class="d-flex flex-column align-items-start py-3">
           <div class="sidebar-legend fw-semibold">
@@ -208,29 +254,32 @@
           </nav>
         </div>
       </aside>
+      {% endif %}
 
-      <!--  Mobile Nav  -->
-        <!-- Top nav (mobile) -->
-      <div id="docNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2 mb-3" role="tablist">
+      <!-- Section tabs (mobile; also used on staff desktop) -->
+      <div id="docNavMobile" class="col-12 px-0 d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} border-bottom mb-3" role="tablist">
         <a class="nav-icon-link {% if active_tab == 'employee' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-employee" role="tab"
-          data-title="Employee Docs">
-          <i class="material-symbols-outlined">person_apron</i>
+          data-title="Employee Docs" aria-label="Employee documents">
+          <i class="material-symbols-outlined" aria-hidden="true">person_apron</i>
+          <span class="staff-section-label hr-nav-label">Employee documents</span>
         </a>
         <a class="nav-icon-link {% if active_tab == 'store' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-store" role="tab"
-          data-title="Store Docs">
-          <i class="material-symbols-outlined">location_on</i>
+          data-title="Store Docs" aria-label="Store documents">
+          <i class="material-symbols-outlined" aria-hidden="true">location_on</i>
+          <span class="staff-section-label hr-nav-label">Store documents</span>
         </a>
         <a class="nav-icon-link {% if active_tab == 'company' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-company" role="tab"
-          data-title="Company Docs">
-          <i class="material-symbols-outlined">business_center</i>
+          data-title="Company Docs" aria-label="Company documents">
+          <i class="material-symbols-outlined" aria-hidden="true">business_center</i>
+          <span class="staff-section-label hr-nav-label">Company documents</span>
         </a>
       </div>
 
       <!-- Content -->
-        <section class="col-12 col-lg-9">
+        <section class="col-12{% if not shows_staff_chrome %} col-lg-9{% endif %}">
           <div class="tab-content" id="docTabContent">
 
         {# ================= EMPLOYEE TAB ================= #}

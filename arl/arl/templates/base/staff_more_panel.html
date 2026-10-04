@@ -1,0 +1,20 @@
+{% load waffle_tags %}
+<div class="app-more-panel d-lg-none" id="staffMorePanel" hidden>
+  <div class="app-more-panel-inner">
+    <a class="app-more-link" href="{% url 'in_app_signing_dashboard' %}">In-app signing</a>
+    <a class="app-more-link" href="{% url 'sales_targets:sales_target_dashboard_selector' %}">Targets</a>
+    {% if user.is_dropbox %}
+    <a class="app-more-link" href="{% url 'list_folders' %}">Dropbox</a>
+    {% endif %}
+    {% if user.is_comms %}
+    <a class="app-more-link" href="{% url 'comms' %}">Communications</a>
+    {% endif %}
+    {% flag 'enable_nav_link' %}
+    <a class="app-more-link" href="{% url 'quiz_list' %}">Quiz</a>
+    {% endflag %}
+    {% if user.is_staff %}
+    <span class="app-more-heading">Admin tools</span>
+    {% include "base/staff_admin_tools_links.html" %}
+    {% endif %}
+  </div>
+</div>

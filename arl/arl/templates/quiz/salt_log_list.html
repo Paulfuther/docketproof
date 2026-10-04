@@ -4,13 +4,12 @@
 {% block template %}
 {% include "../base/navbar.html" %}
 
-<div class="container record-hub{% if shows_gsa_chrome %} employee-page{% endif %}">
+<div class="container record-hub{% if shows_gsa_chrome %} gsa-main employee-page{% elif shows_staff_chrome %} staff-page-shell{% endif %}">
 {% if shows_gsa_chrome %}
-  <div class="pt-5 mt-4 mb-3">
-    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
-    <h1 class="h4 mt-2 mb-1">Salt Log Dashboard</h1>
-  </div>
-{% else %}
+  <header class="gsa-page-header">
+    <h1 class="gsa-page-title">Salt Log Dashboard</h1>
+  </header>
+{% elif not shows_staff_chrome %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
     <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-6">
@@ -29,9 +28,11 @@
         </div>
       {% endif %}
 
-      {% if not shows_gsa_chrome %}
+      {% if not shows_gsa_chrome and not shows_staff_chrome %}
       <h1 class="record-hub-title">Salt Log Dashboard</h1>
       {% endif %}
+
+      {% include "base/partials/staff_salt_section_nav.html" %}
 
       <ul class="nav nav-tabs record-hub-tabs text-center" id="saltLogTabs">
         <li class="nav-item">
@@ -49,10 +50,11 @@
 
       <div class="tab-content record-hub-card">
         <div class="tab-pane fade{% if active_tab == 'start' %} show active{% endif %}" id="start" role="tabpanel">
-          <form method="post" action="{% url 'create_salt_log' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-secondary record-hub-create">Start salt log</button>
-          </form>
+          {% if start_form %}
+            {% include "quiz/partials/salt_log_hub_start_form.html" %}
+          {% else %}
+            <p class="text-muted mb-0">Your account has no company. Ask an admin to set one before starting a salt log.</p>
+          {% endif %}
         </div>
 
         <div class="tab-pane fade{% if active_tab == 'edit' %} show active{% endif %}" id="edit" role="tabpanel">
@@ -76,16 +78,11 @@
           {% include "quiz/salt_log_rows.html" with rows=logs tab="edit" page_param="page" %}
         </div>
       </div>
-{% if shows_gsa_chrome %}
+{% if shows_gsa_chrome or shows_staff_chrome %}
 </div>
 {% else %}
     </div>
   </div>
 </div>
-{% endif %}
-{% if shows_gsa_chrome %}
-<style>
-  .employee-page { max-width: 860px; }
-</style>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,19 @@
+{% if shows_staff_chrome %}
+<nav class="staff-section-nav d-none d-lg-flex" aria-label="Checklist sections" role="tablist">
+  <a class="staff-section-link{% if active_tab == 'start' %} active{% endif %}"
+     data-bs-toggle="tab" href="#start" role="tab" aria-label="Start">
+    <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+    <span class="staff-section-label">Start</span>
+  </a>
+  <a class="staff-section-link{% if active_tab == 'inprogress' %} active{% endif %}"
+     data-bs-toggle="tab" href="#inprogress" role="tab" aria-label="In progress">
+    <span class="material-symbols-outlined" aria-hidden="true">pending</span>
+    <span class="staff-section-label">In progress</span>
+  </a>
+  <a class="staff-section-link{% if active_tab == 'submitted' %} active{% endif %}"
+     data-bs-toggle="tab" href="#submitted" role="tab" aria-label="Submitted">
+    <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+    <span class="staff-section-label">Submitted</span>
+  </a>
+</nav>
+{% endif %}
