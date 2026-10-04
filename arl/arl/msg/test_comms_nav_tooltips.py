@@ -66,14 +66,13 @@ class CommsNavTooltipTests(TestCase):
             body,
             re.S,
         )
-        self.assertIsNotNone(desktop)
+        self.assertIsNone(desktop)
         self.assertIsNotNone(mobile)
-        desktop_html = desktop.group(0)
+        desktop_html = ""
         mobile_html = mobile.group(0)
 
-        self.assertNotIn("comms-nav-label", desktop_html)
         for label in VISIBLE_LABELS:
-            for chunk, where in ((desktop_html, "desktop"), (mobile_html, "mobile")):
+            for chunk, where in ((mobile_html, "mobile"),):
                 for attr in ("data-title", "title", "aria-label"):
                     self.assertEqual(
                         _attr_count(chunk, attr, label),
@@ -83,7 +82,7 @@ class CommsNavTooltipTests(TestCase):
             for attr in ("data-title", "title", "aria-label"):
                 self.assertEqual(
                     _attr_count(body, attr, label),
-                    2,
+                    1,
                     f"page {attr}={label}",
                 )
             self.assertIn(
@@ -105,11 +104,9 @@ class CommsNavTooltipTests(TestCase):
         self.assertIn(":focus-visible", body)
         self.assertIn("removeAttribute(\"title\")", body)
         self.assertIn('url.searchParams.set("tab", tabName)', body)
-        self.assertIn('aria-hidden="true"', desktop_html)
         self.assertIn('aria-hidden="true"', mobile_html)
-        self.assertIn('data-bs-toggle="tab"', desktop_html)
-        self.assertIn('href="#email"', desktop_html)
-        self.assertEqual(body.count("comms-nav-link active"), 2)
+        self.assertIn('href="', mobile_html)
+        self.assertEqual(body.count("comms-nav-link active"), 1)
 
         templates_dir = (
             Path(__file__).resolve().parent.parent / "templates" / "msg"

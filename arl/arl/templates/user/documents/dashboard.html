@@ -183,7 +183,8 @@
 
      <div class="row g-3">
 
-        <!-- Sidebar -->
+        {% if not shows_staff_chrome %}
+        <!-- Sidebar (legacy; hidden when staff app sidebar is active) -->
        <aside class="d-none d-lg-block col-lg-1 px-0">
         <div id="docNav" class="d-flex flex-column align-items-start py-3">
           <div class="sidebar-legend fw-semibold">
@@ -208,10 +209,10 @@
           </nav>
         </div>
       </aside>
+      {% endif %}
 
-      <!--  Mobile Nav  -->
-        <!-- Top nav (mobile) -->
-      <div id="docNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2 mb-3" role="tablist">
+      <!-- Section tabs (mobile; also used on staff desktop) -->
+      <div id="docNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2 mb-3" role="tablist">
         <a class="nav-icon-link {% if active_tab == 'employee' %}active{% endif %}"
           data-bs-toggle="tab" href="#tab-employee" role="tab"
           data-title="Employee Docs">
@@ -230,7 +231,7 @@
       </div>
 
       <!-- Content -->
-        <section class="col-12 col-lg-9">
+        <section class="col-12{% if not shows_staff_chrome %} col-lg-9{% endif %}">
           <div class="tab-content" id="docTabContent">
 
         {# ================= EMPLOYEE TAB ================= #}

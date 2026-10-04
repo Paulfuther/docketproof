@@ -722,6 +722,16 @@ body.gsa-app .alert {
 }
 
 @media (min-width: 992px) {
+  body.staff-app #hrNavMobile,
+  body.staff-app #docNavMobile,
+  body.staff-app #commsNavMobile {
+    position: sticky;
+    top: 0;
+    z-index: 1010;
+    background: var(--gsa-bg);
+    margin-bottom: 0.75rem;
+  }
+
   body.staff-app {
     margin-left: var(--gsa-sidebar-width);
   }

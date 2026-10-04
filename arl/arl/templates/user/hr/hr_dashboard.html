@@ -161,7 +161,8 @@ html {
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
 
-    <!-- ===== Desktop Sidebar ===== -->
+    {% if not shows_staff_chrome %}
+    <!-- ===== Desktop Sidebar (legacy; hidden when staff app sidebar is active) ===== -->
     <aside class="d-none d-lg-block col-lg-1 px-0">
       <div id="hrNav" class="d-flex flex-column align-items-center py-3">
         <div class="sidebar-legend fw-semibold mb-3">
@@ -232,9 +233,10 @@ html {
         </nav>
       </div>
     </aside>
+    {% endif %}
 
-    <!-- ===== Mobile Top Nav ===== -->
-    <div id="hrNavMobile" class="d-flex d-lg-none justify-content-around border-bottom py-2"
+    <!-- ===== Section tabs (mobile; also used on staff desktop) ===== -->
+    <div id="hrNavMobile" class="d-flex {% if not shows_staff_chrome %}d-lg-none{% endif %} justify-content-around border-bottom py-2"
          role="tablist"
          aria-orientation="horizontal">
       <a class="hr-nav-link {% if active_tab == 'docusign' %}active{% endif %}"
@@ -306,7 +308,7 @@ html {
     </div>
 
     <!-- ===== Content ===== -->
-    <section class="col-12 col-lg-11">
+    <section class="col-12{% if not shows_staff_chrome %} col-lg-11{% endif %}">
       <div class="tab-content mt-2" id="hrTabContent">
 
         <div id="docusign" class="tab-pane fade {% if active_tab == 'docusign' %}show active{% endif %}">

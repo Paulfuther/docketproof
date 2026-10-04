@@ -9,7 +9,7 @@
   <div class="row justify-content-center">
 
     {% include "msg/partials/comms_side_nav.html" %}
-    <section class="col-12 col-lg-11">
+    <section class="col-12{% if not shows_staff_chrome %} col-lg-11{% endif %}">
       <div class="tab-content mt-2" id="commsTabContent">
         {% if can_send_email %}
           <div id="email" class="tab-pane fade {% if active_tab == 'email' %}show active{% endif %}">
