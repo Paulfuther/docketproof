@@ -424,6 +424,12 @@
   </div>
 </div>
 
+            <input type="hidden"
+                   id="employee-docs-per-page"
+                   name="per_page"
+                   value="10"
+                   aria-hidden="true">
+
             <div class="card-body p-0" id="employee-results">
               {% include "user/documents/partials/employee_results.html" with employees_results=recent_employee_heads employee_documents=employee_documents doc_q="recent" %}
             </div>
@@ -596,18 +602,13 @@
 </script>
 
 <script>
-document.body.addEventListener('htmx:configRequest', function (event) {
-  var path = event.detail.pathInfo.requestPath || '';
-  if (path.indexOf('/documents/employee/') === -1 || path.indexOf('/panel/') === -1) {
-    return;
-  }
-  if (event.detail.parameters.per_page) {
-    return;
-  }
-  event.detail.parameters.per_page = window.matchMedia('(max-width: 575.98px)').matches
-    ? 5
-    : 10;
-});
+function syncEmployeeDocsPerPage() {
+  var input = document.getElementById('employee-docs-per-page');
+  if (!input) return;
+  input.value = window.matchMedia('(max-width: 575.98px)').matches ? '5' : '10';
+}
+syncEmployeeDocsPerPage();
+window.addEventListener('resize', syncEmployeeDocsPerPage);
 </script>
 
 <script>

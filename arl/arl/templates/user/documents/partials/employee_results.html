@@ -48,6 +48,7 @@
             <div id="emp-body-{{ u.id }}"
                  class="accordion-body p-0"
                  hx-get="{% url 'employee_docs_panel' u.id %}"
+                 hx-include="#employee-docs-per-page"
                  hx-trigger="revealed"
                  hx-target="this"
                  hx-swap="innerHTML">
