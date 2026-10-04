@@ -612,11 +612,26 @@ class SaltLogListPaginationTests(TestCase):
         counts = [
             sql
             for sql in selects
-            if "COUNT" in sql.upper()
+            if sql.lstrip().upper().startswith("SELECT COUNT")
         ]
         pages = [sql for sql in selects if sql not in counts]
-        self.assertGreaterEqual(len(counts), 1)
-        self.assertTrue(pages)
+        self.assertGreaterEqual(
+            len(counts),
+            1,
+            msg=f"Expected SELECT COUNT against quiz_saltlog, got selects={selects!r}",
+        )
+        self.assertTrue(
+            pages,
+            f"Expected paginated SELECT against quiz_saltlog, got selects={selects!r}",
+        )
         for sql in pages:
-            self.assertIn("LIMIT", sql.upper())
-            self.assertIn(str(SALT_LOG_PAGE_SIZE), sql)
+            self.assertIn(
+                "LIMIT",
+                sql.upper(),
+                msg=f"Missing LIMIT in paginated query: {sql}",
+            )
+            self.assertIn(
+                str(SALT_LOG_PAGE_SIZE),
+                sql,
+                msg=f"Missing page size in paginated query: {sql}",
+            )
