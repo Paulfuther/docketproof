@@ -363,28 +363,6 @@ body.gsa-app .card.shadow-sm {
 
 /* ---- Status pills ---- */
 
-.gsa-pill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem 1rem;
-  margin-bottom: 1rem;
-}
-
-.gsa-pill-row > div {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.gsa-pill-row .gsa-tracker-label {
-  font-size: 0.75rem;
-  color: var(--gsa-text-muted);
-  font-weight: 500;
-  line-height: 1.2;
-  margin: 0;
-}
-
 .gsa-status-pill {
   display: inline-block;
   padding: 0.25rem 0.7rem;
@@ -426,10 +404,69 @@ body.gsa-app .card.shadow-sm {
 
 /* ---- Tracker grid ---- */
 
-.gsa-tracker-grid {
+.gsa-tracker-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.85rem 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  row-gap: 0.65rem;
+  align-items: start;
+}
+
+.gsa-tracker-layout > .gsa-tracker-label {
+  font-size: 0.75rem;
+  color: var(--gsa-text-muted);
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 0;
+  align-self: center;
+}
+
+.gsa-tracker-pill-slot {
+  justify-self: end;
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.gsa-tracker-pill-slot--anchor {
+  width: auto;
+  min-width: 0;
+}
+
+.gsa-tracker-pill-align-guide {
+  display: block;
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.gsa-tracker-pill-rail {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.gsa-tracker-pill-rail .gsa-status-pill {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.gsa-tracker-item .gsa-tracker-pill-slot {
+  margin-top: 0.2rem;
+}
+
+.gsa-tracker-item {
+  min-width: 0;
 }
 
 .gsa-tracker-item label,
@@ -448,9 +485,8 @@ body.gsa-app .card.shadow-sm {
   line-height: 1.35;
 }
 
-.gsa-tracker-item .gsa-status-pill {
-  margin-left: 0;
-  margin-top: 0.2rem;
+.gsa-tracker-item--span-left {
+  grid-column: 1;
 }
 
 /* ---- Forms ---- */
