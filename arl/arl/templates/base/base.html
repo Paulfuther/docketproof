@@ -8,6 +8,7 @@
   /* Reserve scrollbar space so the GSA nav does not shift between pages. */
   html, body { scrollbar-gutter: stable; }
 </style>
+<link rel="stylesheet" href="{% static 'css/gsa-mobile.css' %}">
 {% endif %}
 
 <style>
@@ -83,7 +84,7 @@
   
 </head>
 
-<body>
+<body{% if shows_gsa_chrome %} class="gsa-app{% if gsa_preview_active %} gsa-preview-active{% endif %}"{% endif %}>
 
   
 

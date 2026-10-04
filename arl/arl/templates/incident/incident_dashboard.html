@@ -7,12 +7,15 @@
 {{ form|as_crispy_errors }}
 
 
-<div class="container{% if shows_gsa_chrome %} employee-page{% endif %}">
+<div class="container{% if shows_gsa_chrome %} gsa-main employee-page{% endif %}">
 {% if shows_gsa_chrome %}
-  <div class="pt-5 mt-4 mb-3">
-    <a class="small text-decoration-none" href="{% url 'employee_home' %}">Back to documents</a>
-    <h1 class="h4 mt-2 mb-1">Incident dashboard</h1>
-  </div>
+  <header class="gsa-page-header">
+    <a class="gsa-back-link" href="{% url 'employee_home' %}">
+      <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">chevron_left</span>
+      Back to documents
+    </a>
+    <h1 class="gsa-page-title">Incident dashboard</h1>
+  </header>
 {% else %}
   <div class="row justify-content-center pt-5 mt-5"></div>
   <div class="row justify-content-center">
@@ -255,12 +258,6 @@
 </div>
 {% endif %}
 </div>
-
-{% if shows_gsa_chrome %}
-<style>
-  .employee-page { max-width: 860px; }
-</style>
-{% endif %}
 
 <style>
 
