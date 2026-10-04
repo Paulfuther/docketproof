@@ -734,6 +734,19 @@ body.gsa-app .alert {
     margin-bottom: 0.75rem;
   }
 
+  body.staff-app #hrNavMobile {
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0 0.85rem;
+    border-bottom: 1px solid var(--gsa-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  body.staff-app #hrNavMobile::-webkit-scrollbar {
+    display: none;
+  }
+
   body.staff-app {
     margin-left: var(--gsa-sidebar-width);
   }
@@ -917,7 +930,7 @@ body.gsa-app .alert {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    scroll-snap-type: x proximity;
+    scroll-snap-type: x mandatory;
     scroll-padding-inline: 0.75rem;
   }
 
@@ -930,6 +943,7 @@ body.gsa-app .alert {
     min-width: 4.25rem;
     max-width: 5.75rem;
     scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 
   body.staff-app #docNavMobile .staff-section-label {

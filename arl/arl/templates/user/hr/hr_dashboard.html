@@ -60,7 +60,7 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: x mandatory;
   scroll-padding-inline: 0.75rem;
 }
 #hrNavMobile::-webkit-scrollbar {
@@ -71,6 +71,7 @@
   min-width: 4.25rem;
   max-width: 5.75rem;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
@@ -405,13 +406,44 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   var mobileNav = document.getElementById("hrNavMobile");
-  if (mobileNav) {
-    var activeLink = mobileNav.querySelector(".hr-nav-link.active");
-    if (activeLink) {
-      activeLink.scrollIntoView({ block: "nearest", inline: "center" });
-    }
+  if (mobileNav && window.matchMedia("(max-width: 991.98px)").matches) {
+    mobileNav.scrollLeft = 0;
+    requestAnimationFrame(function () {
+      syncHrMobileNavScroll(mobileNav);
+    });
   }
 });
+
+function snapHrNavLeftEdge(mobileNav) {
+  var navRect = mobileNav.getBoundingClientRect();
+  var links = mobileNav.querySelectorAll(".hr-nav-link");
+  for (var i = 0; i < links.length; i++) {
+    var rect = links[i].getBoundingClientRect();
+    if (rect.right <= navRect.left + 1) continue;
+    if (rect.left < navRect.left - 1) {
+      mobileNav.scrollLeft += rect.left - navRect.left;
+    }
+    break;
+  }
+}
+
+function syncHrMobileNavScroll(mobileNav) {
+  if (!mobileNav) return;
+  var activeLink = mobileNav.querySelector(".hr-nav-link.active");
+  if (!activeLink) return;
+
+  var pad = 4;
+  var navRect = mobileNav.getBoundingClientRect();
+  var linkRect = activeLink.getBoundingClientRect();
+
+  if (linkRect.right > navRect.right - pad) {
+    mobileNav.scrollLeft += linkRect.right - navRect.right + pad;
+  } else if (linkRect.left < navRect.left + pad) {
+    mobileNav.scrollLeft -= navRect.left - linkRect.left + pad;
+  }
+
+  snapHrNavLeftEdge(mobileNav);
+}
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -425,6 +457,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
       url.searchParams.set("tab", tabName);
       window.history.replaceState({}, "", url);
+
+      var mobileNav = document.getElementById("hrNavMobile");
+      if (mobileNav && window.matchMedia("(max-width: 991.98px)").matches) {
+        requestAnimationFrame(function () {
+          syncHrMobileNavScroll(mobileNav);
+        });
+      }
 
       if (tabName === "immigration_audit") {
         const pane = document.querySelector("#immigration_audit");

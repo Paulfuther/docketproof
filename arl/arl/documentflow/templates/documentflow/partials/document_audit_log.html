@@ -711,7 +711,7 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
   overflow: hidden;
 }
 
@@ -720,18 +720,21 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
 }
 
 .hrdoc-chip-kicker {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  white-space: normal;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  line-height: 1.2;
+  line-height: 1.15;
   opacity: 0.85;
 }
 
@@ -744,10 +747,11 @@
 
 .hrdoc-chip-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .hrdoc-chip.is-ok {
@@ -1143,23 +1147,29 @@
     width: 100%;
     min-width: 0;
     overflow: hidden;
+    gap: 1px;
   }
 
   .hrdoc-chip-kicker {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 10px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    white-space: normal;
+    font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    line-height: 1.2;
+    line-height: 1.15;
     opacity: 0.85;
   }
 
   .hrdoc-chip-label {
-    line-height: 1.2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    font-size: 11px;
+    line-height: 1.15;
   }
 
   .hrdoc-actions-mobile .hrdoc-details-toggle {
