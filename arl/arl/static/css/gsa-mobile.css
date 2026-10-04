@@ -1173,9 +1173,9 @@ body.gsa-app .alert {
     max-width: none;
     min-width: 0;
     white-space: nowrap;
-    font-size: 0.5625rem;
-    line-height: 1.1;
-    padding: 0.15rem 0.02rem;
+    font-size: 0.6875rem;
+    line-height: 1.15;
+    padding: 0.18rem 0.04rem;
     overflow: hidden;
     text-overflow: ellipsis;
   }
