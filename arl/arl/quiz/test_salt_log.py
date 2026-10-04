@@ -602,7 +602,7 @@ class SaltLogListPaginationTests(TestCase):
         salt_sql = [
             query["sql"]
             for query in captured.captured_queries
-            if "quiz_saltlog" in query["sql"]
+            if "quiz_saltlog" in query["sql"].lower()
         ]
         selects = [
             sql
