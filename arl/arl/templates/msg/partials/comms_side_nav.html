@@ -30,8 +30,18 @@
 }
 .comms-nav-link.active,
 .comms-nav-link:hover {
-  color: #0d6efd;
-  background: #f1f5ff;
+  color: #2c3338;
+  background: rgba(45, 69, 78, 0.06);
+}
+.comms-nav-link:active {
+  color: #2c3338;
+  background: rgba(45, 69, 78, 0.06);
+}
+@media (hover: none) {
+  .comms-nav-link:not(.active):hover {
+    color: inherit;
+    background: transparent;
+  }
 }
 
 /* Tooltip is appended to body so the narrow sidebar does not clip it.
@@ -45,9 +55,9 @@
 
 /* ===== Mobile nav (icons across top, short label under each) ===== */
 #commsNavMobile {
-  gap: .2rem;
+  gap: 0.35rem;
   align-items: flex-start;
-  justify-content: space-evenly;
+  justify-content: center;
   flex-wrap: nowrap;
   overflow-x: auto;
   padding-left: .35rem;
@@ -58,16 +68,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: .15rem;
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 4.75rem;
-  padding: .35rem .1rem;
-  border-radius: .5rem;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+  min-width: 4.25rem;
+  max-width: 6.5rem;
+  padding: 0.45rem 0.35rem;
+  border-radius: 10px;
   text-decoration: none;
-  color: inherit;
+  color: #6b7280;
   text-align: center;
-  line-height: 1.05;
+  line-height: 1.1;
+  -webkit-tap-highlight-color: transparent;
 }
 #commsNavMobile .comms-nav-link .material-symbols-outlined {
   font-size: 24px;
@@ -83,8 +94,18 @@
 }
 #commsNavMobile .comms-nav-link.active,
 #commsNavMobile .comms-nav-link:hover {
-  color: #0d6efd;
-  background: #f1f5ff;
+  color: #2c3338;
+  background: rgba(45, 69, 78, 0.06);
+}
+#commsNavMobile .comms-nav-link:active {
+  color: #2c3338;
+  background: rgba(45, 69, 78, 0.06);
+}
+@media (hover: none) {
+  #commsNavMobile .comms-nav-link:not(.active):hover {
+    color: inherit;
+    background: transparent;
+  }
 }
 </style>
 
