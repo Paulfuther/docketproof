@@ -932,6 +932,8 @@ class InAppEmailTemplateViewTests(TestCase):
         self.assertIn("comms-mode-toggle", send_form)
         self.assertIn("comms-manage-link", send_form)
         self.assertIn("comms-email-form", send_form)
+        self.assertIn("comms-email-preview", send_form)
+        self.assertIn("max-width: 640px", send_form)
         self.assertIn("Select Individuals", send_form)
         self.assertNotIn("toggle-email-group", send_form)
         self.assertNotIn("selected_group", send_form)

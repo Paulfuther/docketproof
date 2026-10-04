@@ -898,6 +898,12 @@ body.gsa-app .alert {
     color: var(--gsa-text);
     background: rgba(45, 69, 78, 0.06);
   }
+
+  body.staff-app #commsTabContent,
+  body.staff-app #commsTabContent > .tab-pane {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 991.98px) {
