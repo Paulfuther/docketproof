@@ -68,7 +68,7 @@
         {% for num in docs_page.paginator.page_range %}
           <li class="page-item {% if num == docs_page.number %}active{% endif %}">
             <a class="page-link"
-               hx-get="{% url 'employee_docs_panel' user_id %}?page={{ num }}"
+               hx-get="{% url 'employee_docs_panel' user_id %}?page={{ num }}&per_page={{ docs_page.paginator.per_page }}"
                hx-target="closest .accordion-body"
                hx-swap="innerHTML"
                href="#">

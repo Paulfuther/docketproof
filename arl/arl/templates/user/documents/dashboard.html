@@ -596,6 +596,21 @@
 </script>
 
 <script>
+document.body.addEventListener('htmx:configRequest', function (event) {
+  var path = event.detail.pathInfo.requestPath || '';
+  if (path.indexOf('/documents/employee/') === -1 || path.indexOf('/panel/') === -1) {
+    return;
+  }
+  if (event.detail.parameters.per_page) {
+    return;
+  }
+  event.detail.parameters.per_page = window.matchMedia('(max-width: 575.98px)').matches
+    ? 5
+    : 10;
+});
+</script>
+
+<script>
 document.addEventListener("DOMContentLoaded", function () {
   // ---- Choose initial tab from hash or server active_tab
   const defaultHash = `#tab-{{ active_tab|default:'employee' }}`;
