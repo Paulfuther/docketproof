@@ -740,16 +740,26 @@ body.gsa-app .alert {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    flex-wrap: nowrap;
     justify-content: center;
     gap: 0.35rem;
     padding: 0.35rem 0 0.85rem;
     border-bottom: 1px solid var(--gsa-border);
-    overflow-x: auto;
-    scrollbar-width: none;
+    overflow: visible;
   }
 
-  body.staff-app #hrNavMobile::-webkit-scrollbar {
-    display: none;
+  body.staff-app #hrNavMobile .hr-nav-link {
+    flex: 0 0 auto;
+    max-width: 6.5rem;
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-link .material-symbols-outlined {
+    font-size: 24px;
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-label {
+    font-size: 0.65rem;
+    line-height: 1.1;
   }
 
   body.staff-app {
@@ -928,32 +938,29 @@ body.gsa-app .alert {
 
 @media (max-width: 991.98px) {
   body.staff-app #hrNavMobile {
-    flex: 0 0 100%;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    justify-content: flex-start;
-    gap: 0.35rem;
-    padding: 0.35rem 0.75rem 0.65rem;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 0.75rem;
-  }
-
-  body.staff-app #hrNavMobile::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.2rem 0.1rem;
+    padding: 0.35rem 0.35rem 0.5rem;
+    overflow: visible;
   }
 
   body.staff-app #hrNavMobile .hr-nav-link {
-    flex: 0 0 auto;
-    min-width: 4.25rem;
-    max-width: 5.75rem;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
+    flex: 1 1 calc(33.333% - 0.2rem);
+    max-width: calc(33.333% - 0.2rem);
+    min-width: 0;
+    padding: 0.28rem 0.1rem;
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-link .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  body.staff-app #hrNavMobile .hr-nav-label {
+    font-size: 0.5rem;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   body.staff-app #docNavMobile .staff-section-label {

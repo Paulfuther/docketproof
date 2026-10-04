@@ -611,17 +611,20 @@
 
 .imm-chip {
   box-sizing: border-box;
-  width: 164px;
-  height: 30px;
-  padding: 0 10px;
+  width: 100%;
+  max-width: 164px;
+  min-width: 0;
+  height: auto;
+  min-height: 30px;
+  padding: 4px 8px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.15;
   overflow: hidden;
 }
 
@@ -634,9 +637,12 @@
 
 .imm-chip-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .imm-chip.is-ok {
@@ -964,9 +970,20 @@
   .imm-chip-overall { grid-area: pill; }
 
   .imm-chip {
-    width: auto;
+    width: 100%;
     max-width: 100%;
     min-width: 0;
+    height: auto;
+    min-height: 30px;
+    padding: 4px 8px;
+  }
+
+  .imm-chip-label {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    font-size: 10px;
+    line-height: 1.15;
   }
 
   /* Email, then store. Status pill and days-left value share the next row at equal width. */

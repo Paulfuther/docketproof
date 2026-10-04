@@ -49,60 +49,50 @@
   font-size: .8125rem;
 }
 
-/* ===== Mobile nav ===== */
+/* ===== Mobile nav: fit all tabs without horizontal scroll ===== */
 #hrNavMobile {
   flex: 0 0 100%;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: stretch;
-  justify-content: flex-start;
-  gap: 0.35rem;
-  padding: 0.35rem 0.75rem 0.65rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 0.75rem;
-}
-#hrNavMobile::after {
-  content: "";
-  flex: 0 0 0.35rem;
-}
-#hrNavMobile::-webkit-scrollbar {
-  display: none;
+  justify-content: center;
+  gap: 0.2rem 0.1rem;
+  padding: 0.35rem 0.35rem 0.5rem;
+  overflow: visible;
 }
 #hrNavMobile .hr-nav-link {
-  flex: 0 0 auto;
-  min-width: 4.25rem;
-  max-width: 5.75rem;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  flex: 1 1 calc(33.333% - 0.2rem);
+  max-width: calc(33.333% - 0.2rem);
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: .15rem;
-  padding: .35rem 0;
+  gap: .1rem;
+  padding: .28rem 0.1rem;
   border-radius: .5rem;
   text-decoration: none;
   text-align: center;
   color: inherit;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 #hrNavMobile .hr-nav-link .material-symbols-outlined {
   flex-shrink: 0;
+  font-size: 20px;
 }
 #hrNavMobile .hr-nav-label {
   display: block;
+  width: 100%;
   max-width: 100%;
-  font-size: .65rem;
-  line-height: 1.1;
+  font-size: .5rem;
+  line-height: 1.05;
   text-align: center;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 #hrNavMobile .hr-nav-link.active,
 #hrNavMobile .hr-nav-link:hover {
@@ -414,45 +404,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("click", function () { tip.hide(); });
   });
 
-  var mobileNav = document.getElementById("hrNavMobile");
-  if (mobileNav && window.matchMedia("(max-width: 991.98px)").matches) {
-    mobileNav.scrollLeft = 0;
-    requestAnimationFrame(function () {
-      syncHrMobileNavScroll(mobileNav);
-    });
-  }
 });
-
-function snapHrNavLeftEdge(mobileNav) {
-  var navRect = mobileNav.getBoundingClientRect();
-  var links = mobileNav.querySelectorAll(".hr-nav-link");
-  for (var i = 0; i < links.length; i++) {
-    var rect = links[i].getBoundingClientRect();
-    if (rect.right <= navRect.left + 1) continue;
-    if (rect.left < navRect.left - 1) {
-      mobileNav.scrollLeft += rect.left - navRect.left;
-    }
-    break;
-  }
-}
-
-function syncHrMobileNavScroll(mobileNav) {
-  if (!mobileNav) return;
-  var activeLink = mobileNav.querySelector(".hr-nav-link.active");
-  if (!activeLink) return;
-
-  var pad = 4;
-  var navRect = mobileNav.getBoundingClientRect();
-  var linkRect = activeLink.getBoundingClientRect();
-
-  if (linkRect.right > navRect.right - pad) {
-    mobileNav.scrollLeft += linkRect.right - navRect.right + pad;
-  } else if (linkRect.left < navRect.left + pad) {
-    mobileNav.scrollLeft -= navRect.left - linkRect.left + pad;
-  }
-
-  snapHrNavLeftEdge(mobileNav);
-}
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -466,13 +418,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
       url.searchParams.set("tab", tabName);
       window.history.replaceState({}, "", url);
-
-      var mobileNav = document.getElementById("hrNavMobile");
-      if (mobileNav && window.matchMedia("(max-width: 991.98px)").matches) {
-        requestAnimationFrame(function () {
-          syncHrMobileNavScroll(mobileNav);
-        });
-      }
 
       if (tabName === "immigration_audit") {
         const pane = document.querySelector("#immigration_audit");

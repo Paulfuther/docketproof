@@ -505,8 +505,8 @@ class HRDocumentsScanTests(TestCase):
         self.assertIn('id="hrNavMobile"', body)
         self.assertEqual(desktop_nav, "")
         self.assertNotIn("hr-nav-label", desktop_nav)
-        self.assertIn("font-size: .65rem", body)
-        self.assertIn("line-height: 1.1", body)
+        self.assertIn("font-size: .5rem", body)
+        self.assertIn("flex-wrap: wrap", body)
         for label in (
             "Document templates",
             "Invite a new hire",
